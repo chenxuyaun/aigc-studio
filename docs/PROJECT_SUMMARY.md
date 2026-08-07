@@ -221,7 +221,7 @@ aigc-studio/
 9. **注册机本地化**：groksapi 账号续期/健康监测由本地注册机承担，云上无冗余
 10. **C 盘 vhdx 膨胀**（32G）：可 `docker builder prune -f` 定期清理；深度压缩需管理员 diskpart compact
 11. **Docker Desktop 偶发崩溃**：根因 C 盘 90%，注意磁盘水位；容器建议统一 `--restart unless-stopped`
-12. **grok2api 上游限流**（外部依赖）：高频调用后 grok.com 账号冷却（chat 请求 120s 超时、healthz 仍 200）；恢复靠等待冷却；记忆 L1 抽取依赖它，限流期间记忆管道挂起（memory-core 自动重试补齐）
+12. **grok2api 上游会话失效**（外部依赖，2026-08-07 排查确认）：高频调用后 grok.com 对账号会话限流/失效（chat 502 upstream_network_error、quota 刷新失败、本地账号状态仍 active、网络/容器重建均无法解决）；恢复靠新账号（注册机补号）或会话冷却（可能数小时-24h）；记忆 L1 抽取依赖它，期间记忆管道挂起（memory-core 自动重试补齐）；排查要点：面板 API（/api/admin/v1/accounts）查账号、refresh-quota 验证会话、egress 节点勿乱禁用
 13. **memory-core L1 锁死**（已修复 2026-08-07）：Docker 崩溃残留 pipeline 锁导致 L1 无限 Lock conflict 重试；重启 memory-core 清锁即恢复
 14. **注册批次被 drain 误杀**（已修复 2026-08-07）：story_tasks drain（beat 15s 扫 queued）把 task_type=register 当媒体任务执行 → run_media_task 报"暂无真实 Provider"覆盖状态（历史注册批次全 failed，自动补号长期失效）；drain 增加 register 分支转交注册机执行器
 
