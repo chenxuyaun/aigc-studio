@@ -68,6 +68,7 @@ export function LoginPage() {
               key={id}
               src={`${R2}/${id}.jpg`}
               alt=""
+              aria-hidden
               loading="lazy"
               className="animate-enter h-full w-full rounded-xl bg-secondary object-cover"
               style={{ "--stagger": `${idx * 60}ms` } as CSSProperties}

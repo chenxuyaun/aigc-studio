@@ -34,11 +34,14 @@
   --font-display: "Fraunces Variable", "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", "Noto Sans SC", serif;
   --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --radius-button: 12px;
 }
 
 [data-aigc-studio-root] {
   --shadow-soft: 0 1px 2px rgba(28, 27, 24, 0.04), 0 10px 30px -14px rgba(28, 27, 24, 0.14);
   --shadow-lift: 0 2px 4px rgba(28, 27, 24, 0.05), 0 18px 44px -16px rgba(28, 27, 24, 0.22);
+  --shadow-pop: 0 4px 12px rgba(28, 27, 24, 0.08), 0 24px 64px -20px rgba(28, 27, 24, 0.28);
   color: var(--color-foreground);
   background: var(--color-background);
   min-height: 100dvh;
@@ -68,6 +71,7 @@
     --color-muted-foreground: #9c968a;
     --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 34px -18px rgba(0, 0, 0, 0.7);
     --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.45), 0 20px 48px -16px rgba(0, 0, 0, 0.75);
+    --shadow-pop: 0 4px 12px rgba(0, 0, 0, 0.5), 0 28px 72px -20px rgba(0, 0, 0, 0.8);
     color-scheme: dark;
   }
 }
@@ -90,6 +94,7 @@
   --color-muted-foreground: #9c968a;
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 34px -18px rgba(0, 0, 0, 0.7);
   --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.45), 0 20px 48px -16px rgba(0, 0, 0, 0.75);
+  --shadow-pop: 0 4px 12px rgba(0, 0, 0, 0.5), 0 28px 72px -20px rgba(0, 0, 0, 0.8);
   color-scheme: dark;
 }
 
@@ -229,6 +234,28 @@ body {
 }
 .hover-lift:active {
   transform: translateY(0);
+}
+
+/* 按压缩放（按钮/可点卡片） */
+.press-scale {
+  transition: transform 0.15s var(--ease-spring);
+}
+.press-scale:active {
+  transform: scale(0.98);
+}
+
+/* 键盘焦点环：所有可交互元素统一可见焦点态 */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-ring);
+}
+
+/* 琥珀渐变文字（大标题点缀） */
+.gradient-text-amber {
+  background: linear-gradient(120deg, var(--color-primary) 0%, #f2b45e 55%, var(--color-primary-hover) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 ::selection {
