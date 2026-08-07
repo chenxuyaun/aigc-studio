@@ -349,7 +349,8 @@ async def unfavorite_work(
 @router.get("/favorites")
 async def list_favorites(
     page: int = Query(1, ge=1),
-    page_size: int = Query(24, ge=1, le=100),
+    # 收藏页前端一次拉全量（page_size=200），上限与前端约定对齐
+    page_size: int = Query(24, ge=1, le=200),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:

@@ -29,6 +29,7 @@ import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { apiClient } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
+import { useAuthStore } from "@/stores/auth";
 
 type CreateType = "image" | "text" | "video" | "audio";
 
@@ -67,6 +68,8 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [idea, setIdea] = useState("");
   const [type, setType] = useState<CreateType>("image");
+  // 巡检接口仅 admin 可访问（安全加固）；普通用户不查询，避免 403 控制台噪音
+  const isAdmin = useAuthStore((s) => s.user?.role === "admin");
 
   const featured = useQuery({
     queryKey: ["dashboard", "featured"],
@@ -93,6 +96,7 @@ export function DashboardPage() {
         "/dashboard/inspections/latest",
       ),
     staleTime: 60_000,
+    enabled: isAdmin,
   });
 
   function generate() {

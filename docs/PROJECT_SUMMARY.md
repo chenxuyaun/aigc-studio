@@ -172,6 +172,7 @@ aigc-studio/
 - 新增 `DB_ECHO` 独立开关（默认关）：SQL 语句不再刷日志；与 APP_DEBUG 解耦，/docs 保持可用
 - 根目录 27 个 GUI 测试产物移出版本控制（保留于 .cowork-temp/test-artifacts/）
 - 演示账号 brother1-3 密码轮换为随机值并逐个验证登录
+- 控制台错误清零（CSP/媒体/接口对齐）：`img-src/media-src` 加 `blob:`（本地媒体预览）；`font-src` 白名单 at.alicdn.com、cdn.yiban.io（AI 内容第三方字体）；`/asmr/favorites` 上限 100→200 对齐前端；MarkdownContent 新增 SmartImg（`/api/` 私有图带鉴权取 blob 渲染，不再 401 破图）；Dashboard 巡检查询仅 admin 发起（普通用户不再 403）
 
 ## 10. 部署经验与教训
 
