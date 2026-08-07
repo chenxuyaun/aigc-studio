@@ -31,6 +31,7 @@ from app.providers.mock import media
 from app.providers.registry import ProviderRegistry
 from app.services.call_logger import log_call
 from app.storage import choose_write_backend, get_storage
+from app.services.media_access import sign_content_url
 
 logger = structlog.get_logger()
 
@@ -624,7 +625,7 @@ async def run_media_task(task_id: str) -> None:
                         {
                             "index": pindex,
                             "asset_id": passet.id,
-                            "url": f"/api/v1/assets/{passet.id}/content",
+                            "url": sign_content_url(str(passet.id)),
                             "scene": str(p.get("scene") or ""),
                             "dialogue": str(p.get("dialogue") or ""),
                         }
@@ -652,7 +653,7 @@ async def run_media_task(task_id: str) -> None:
                     await db.flush()
                     cover_asset = {
                         "asset_id": casset.id,
-                        "url": f"/api/v1/assets/{casset.id}/content",
+                        "url": sign_content_url(str(casset.id)),
                     }
 
             asset = Asset(
@@ -682,7 +683,7 @@ async def run_media_task(task_id: str) -> None:
                 task.result = json.dumps(
                     {
                         "asset_id": asset.id,
-                        "url": f"/api/v1/assets/{asset.id}/content",
+                        "url": sign_content_url(str(asset.id)),
                         "access_url_endpoint": f"/api/v1/assets/{asset.id}/access-url",
                         "mime": mime,
                         "is_real": used_real,

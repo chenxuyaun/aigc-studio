@@ -19,6 +19,7 @@ from app.models.asset import Asset
 from app.models.generation_task import GenerationTask
 from app.models.prompt import Prompt
 from app.tasks.register_batch import _create_task_record, schedule_register_batch
+from app.services.media_access import sign_content_url
 
 mcp = FastMCP("aigc-studio", streamable_http_path="/")
 
@@ -139,7 +140,7 @@ async def list_assets(limit: int = 20) -> list[dict[str, Any]]:
                 "filename": a.filename,
                 "mime_type": a.mime_type,
                 "size_bytes": a.size_bytes,
-                "url": f"/api/v1/assets/{a.id}/content",
+                "url": sign_content_url(str(a.id)),
                 "task_id": a.task_id,
             }
             for a in rows
@@ -160,7 +161,7 @@ async def get_asset(asset_id: str) -> dict[str, Any]:
             "filename": a.filename,
             "mime_type": a.mime_type,
             "size_bytes": a.size_bytes,
-            "url": f"/api/v1/assets/{a.id}/content",
+            "url": sign_content_url(str(a.id)),
             "task_id": a.task_id,
         }
 

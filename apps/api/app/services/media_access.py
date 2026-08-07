@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import os
+import time
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -17,6 +21,33 @@ logger = structlog.get_logger()
 class MediaAccess(BaseModel):
     url: str
     expires_at: datetime
+
+
+# 旧字段 url / 头像 / 生成结果等直接 <img> 渲染场景的签名有效期（无 JWT、能力型 URL）
+_CONTENT_SIG_TTL = int(os.environ.get("ASSET_SIGNED_TTL_SECONDS", "14400"))  # 默认 4h
+
+
+def sign_content_url(object_id: str) -> str:
+    """为本地资产 content 端点签发短期 HMAC 签名 URL（无需 JWT 即可在 <img> 加载）。"""
+    exp = int(time.time()) + _CONTENT_SIG_TTL
+    sig = hmac.new(
+        settings.APP_SECRET_KEY.encode(),
+        f"{object_id}:{exp}".encode(),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+    return f"/api/v1/assets/{object_id}/content?exp={exp}&sig={sig}"
+
+
+def verify_content_signature(object_id: str, exp: int, sig: str) -> bool:
+    """校验签名 URL 的时效与完整性（HMAC 常量时间比较）。"""
+    if int(time.time()) > exp:
+        return False
+    expected = hmac.new(
+        settings.APP_SECRET_KEY.encode(),
+        f"{object_id}:{exp}".encode(),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+    return hmac.compare_digest(expected, sig)
 
 
 async def issue_media_access(

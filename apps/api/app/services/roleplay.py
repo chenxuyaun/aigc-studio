@@ -28,6 +28,7 @@ from app.services.character_card import parse_character_card
 from app.services.macros import substitute as substitute_macros
 from app.services.provider_resolver import resolve_text_provider
 from app.services.worldbook import match_worldbook
+from app.services.media_access import sign_content_url
 
 # 保留后台任务引用，避免被 GC 回收
 _memory_tasks: set[asyncio.Task[Any]] = set()
@@ -79,7 +80,7 @@ async def list_characters(db: AsyncSession, user_id: str) -> list[dict[str, Any]
         {
             "asset_id": a.id,
             "filename": a.filename,
-            "url": f"/api/v1/assets/{a.id}/content",
+            "url": sign_content_url(str(a.id)),
             "created_at": str(a.created_at) if a.created_at else "",
         }
         for a in rows

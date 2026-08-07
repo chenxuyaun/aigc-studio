@@ -27,6 +27,7 @@ from app.models.user import User
 from app.security.auth import get_current_user
 from app.services import sessions
 from app.services.roleplay import list_characters, roleplay_chat, roleplay_chat_stream
+from app.services.media_access import sign_content_url
 
 router = APIRouter()
 
@@ -250,7 +251,7 @@ async def character_detail(
         row = await db.get(RoleplayCharacter, asset_id)
     if row is None:
         raise HTTPException(status_code=404, detail="角色卡同步失败")
-    return {"asset": {**_character_dict(row), "url": f"/api/v1/assets/{asset_id}/content"}}
+    return {"asset": {**_character_dict(row), "url": sign_content_url(str(asset_id))}}
 
 
 @router.put("/characters/{asset_id}")

@@ -10,8 +10,13 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.asset import Asset
 from app.models.user import User
-from app.security.auth import get_current_user
-from app.services.media_access import MediaAccess, issue_media_access
+from app.security.auth import get_current_user, get_optional_user
+from app.services.media_access import (
+    MediaAccess,
+    issue_media_access,
+    sign_content_url,
+    verify_content_signature,
+)
 from app.storage import choose_write_backend, get_storage
 
 router = APIRouter()
@@ -94,7 +99,7 @@ def _serialize(a: Asset) -> dict[str, object]:
         "storage_backend": getattr(a, "storage_backend", None) or "local",
         "created_at": a.created_at.isoformat() if a.created_at else None,
         # 兼容旧客户端：仍指向 content；新客户端优先 access_url_endpoint
-        "url": f"/api/v1/assets/{a.id}/content",
+        "url": sign_content_url(str(a.id)),
         "access_url_endpoint": f"/api/v1/assets/{a.id}/access-url",
     }
 
@@ -221,7 +226,7 @@ async def get_asset_access_url(
 ) -> MediaAccess:
     asset = await _get_owned_asset(asset_id, db, user)
     backend = getattr(asset, "storage_backend", None) or "local"
-    content_path = f"/api/v1/assets/{asset.id}/content"
+    content_path = sign_content_url(str(asset.id))
     return await issue_media_access(
         storage_backend=backend,
         storage_key=asset.storage_key,
@@ -232,16 +237,31 @@ async def get_asset_access_url(
 
 @router.get("/{asset_id}/content")
 async def get_asset_content(
-    asset_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+    asset_id: str,
+    exp: int | None = Query(default=None),
+    sig: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ) -> Response:
-    asset = await _get_owned_asset(asset_id, db, user)
+    if user is None:
+        # 签名访问：能力型短时 URL（旧字段 url / 角色头像 / 生成结果直接渲染用）。
+        # 无 JWT 时校验 HMAC 签名与过期时间；有 JWT 走原有归属校验。
+        asset = await db.get(Asset, asset_id)
+        if asset is None or not (
+            exp is not None
+            and sig is not None
+            and verify_content_signature(asset_id, exp, sig)
+        ):
+            raise HTTPException(status_code=401, detail="无效或过期的访问签名")
+    else:
+        asset = await _get_owned_asset(asset_id, db, user)
     backend = getattr(asset, "storage_backend", None) or "local"
     if backend != "local":
         # R2：307 到短时预签名，避免 API 中转大文件
         access = await issue_media_access(
             storage_backend=backend,
             storage_key=asset.storage_key,
-            content_path=f"/api/v1/assets/{asset.id}/content",
+            content_path=sign_content_url(str(asset.id)),
             object_id=asset.id,
         )
         return Response(

@@ -30,6 +30,23 @@ async def get_current_user(
     return user
 
 
+async def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """可空用户：带有效 token 返回用户，否则返回 None（供签名 URL 等双通道端点用）。"""
+    if not credentials:
+        return None
+    payload = verify_token(credentials.credentials)
+    if not payload or payload.get("type") != "access":
+        return None
+    result = await db.execute(select(User).where(User.id == payload.get("sub")))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        return None
+    return user
+
+
 def require_role(role: str) -> Callable[..., Awaitable[User]]:
     async def checker(user: User = Depends(get_current_user)) -> User:
         if user.role != role:
