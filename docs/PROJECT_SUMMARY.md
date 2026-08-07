@@ -199,23 +199,28 @@ aigc-studio/
 
 ## 11. 当前状态
 
-- ✅ 本地 11 容器全绿，AI 对话/生成/记忆/蒸馏全链路可用
-- ✅ 数据完整（62k ASMR / 14k prompt），每日自动备份
-- ✅ 217+ 测试通过，ruff/mypy/tsc 全绿
-- ✅ 已有 git 版本控制（2026-08-07 `git init` + 首次提交，main 分支）
-- 🔶 C 盘清理后需持续关注磁盘
+- ✅ 本地 14 容器全绿，AI 对话/生成/记忆/蒸馏全链路可用
+- ✅ 数据完整（62k ASMR / 13,464 条提示词，已治理去重），每日自动备份
+- ✅ GUI 自动化测试 9 个全绿（e2e/）+ 217+ 单元测试，tsc/ruff/mypy 全绿
+- ✅ git 版本控制（main 分支，历史 12+ 提交）
+- ✅ 图片/视频生成真实链路（provider_configs 含 grok-imagine-* 匹配行）
+- ✅ 图片生成页「从提示词库选择」入口
+- ✅ 每日巡检含连载项目停滞告警（SERIAL_STALL_DAYS 可配）
+- 🔶 C 盘 90%（vhdx 32G），需持续关注磁盘
 
 ## 12. 已知问题 / 优化候选（供接手者）
 
-1. ~~**无版本控制**~~（已解决 2026-08-07）：git init + 首次提交完成；SillyTavern/、TencentDB-Agent-Memory/（第三方克隆）、.cpolar-data/ 已入 .gitignore
+1. ~~**无版本控制**~~（已解决 2026-08-07）：git init + 首次提交完成；SillyTavern/、TencentDB-Agent-Memory/（第三方克隆）、.cpolar-data/、apps/web/e2e/.auth/（含 token）已入 .gitignore
 2. ~~**api/worker 日志噪音**~~（已解决 2026-08-07）：worker 服务设 `DB_POOL_CLASS=null`（compose.yaml），database.py 按环境变量切 NullPool——asyncio.run 每任务新 loop，现连现关，不再跨 loop 复用连接；API 进程保持 QueuePool 不变
-3. **cpolar 免费隧道**：域名重启后变化、限速 1Mbps；长期分享需付费版或自建 frp
+3. **cpolar 免费隧道**：域名重启后变化（.top/.cn 随机）、限速 1Mbps；已设 `--restart unless-stopped`；长期分享需付费版或自建 frp
 4. **本地 API 端口 8002** 与 grok2api 8000 并存，文档/脚本中需区分；建议统一通过 nginx 反代访问
 5. **云端数据无增量同步**（当前为一次性快照；云端已退，本地为唯一源）
-6. **内存敏感**：本地 2G 级内存跑 11 容器，任务并发高时注意 OOM；swap 已兜底
+6. **内存敏感**：本地 2G 级内存跑 14 容器，任务并发高时注意 OOM；swap 已兜底
 7. **SillyTavern 公网暴露风险**（演示隧道只穿 5000，无此问题；但 8001 若开公网需改默认密码）
 8. **Caddy HTTPS**：deploy/cloud/ 配置保留，等真实域名后启用
 9. **注册机本地化**：groksapi 账号续期/健康监测由本地注册机承担，云上无冗余
+10. **C 盘 vhdx 膨胀**（32G）：可 `docker builder prune -f` 定期清理；深度压缩需管理员 diskpart compact
+11. **Docker Desktop 偶发崩溃**：根因 C 盘 90%，注意磁盘水位；容器建议统一 `--restart unless-stopped`
 
 ## 13. 常用命令速查
 
@@ -234,12 +239,16 @@ docker exec aigc-studio-memory-core-1 ls /data/tdai-memory   # L0-L3 数据
 
 # 穿透
 docker start cpolar-tunnel            # 开隧道
-docker exec cpolar-tunnel wget -qO- http://127.0.0.1:4040/ | grep -oE "[a-z0-9]+\.r[0-9]+\.cpolar\.top" | head -1   # 查当前公网域名
+scripts/tunnel-url.sh                 # 查当前公网域名（兼容 .top/.cn/.com）
 docker stop cpolar-tunnel             # 关隧道
 
 # 测试
 cd apps/api && uv run pytest          # 后端测试
 cd apps/web && npx tsc --noEmit       # 前端类型检查
+cd apps/web && node_modules/.bin/playwright test --config playwright.config.ts --grep-invert @heavy   # GUI 全套（需 E2E_BASE_URL/E2E_ADMIN_USER/E2E_ADMIN_PASS）
+
+# 磁盘
+docker builder prune -f               # 清理构建缓存（C 盘紧张时执行）
 ```
 
 ## 14. 安全边界（红线）
