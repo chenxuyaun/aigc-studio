@@ -1,0 +1,707 @@
+[
+  {
+    "name": "image-to-code-skill",
+    "author": "yuzhworkhard-wq",
+    "oneLiner": "将 UI 图片、截图或 Figma 导出稿还原为自适应代码，并导出高清透明 PNG 资源。",
+    "tags": [
+      "图片转代码",
+      "设计还原",
+      "前端",
+      "Figma",
+      "image-to-code"
+    ],
+    "prerequisites": [
+      "图片理解 Agent",
+      "本地图片处理脚本",
+      "清晰 UI 图或 Figma 导出稿"
+    ],
+    "useCases": [
+      "UI 图转代码",
+      "移动端页面复刻",
+      "高清透明 PNG 切图",
+      "Figma 可编辑图层导出"
+    ],
+    "limitations": [
+      "输出质量依赖源图清晰度和 manifest 完整度",
+      "Figma 输出通常需要额外生成 layer spec 或本地 importer",
+      "核心目标是严格视觉还原，不是重新设计"
+    ],
+    "detail": "docs/skills/image-to-code-skill.md",
+    "repository": "https://github.com/yuzhworkhard-wq/image-to-code",
+    "stars": "https://github.com/yuzhworkhard-wq/image-to-code/stargazers",
+    "source": "https://linux.do/t/topic/2314994",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "variant-clone-factory",
+    "author": "lulistart",
+    "oneLiner": "把 Variant 共享模板链接复刻为 React 工程，导出 ZIP，并可进行像素级视觉验收。",
+    "tags": [
+      "网页复刻",
+      "Variant",
+      "React",
+      "Playwright",
+      "代码生成",
+      "视觉验收",
+      "Docker"
+    ],
+    "prerequisites": [
+      "Variant 共享模板链接",
+      "Docker 或 Node.js/npm",
+      "可访问 variant.com 的网络",
+      "Chromium/Playwright 运行环境"
+    ],
+    "useCases": [
+      "Variant 模板转 React 工程",
+      "有权模板的二次开发或原型搭建",
+      "仪表盘/营销页/登录页复刻",
+      "像素差异验收",
+      "Web UI 或 CLI 执行复刻任务"
+    ],
+    "limitations": [
+      "只面向 Variant 共享链接",
+      "当前仅输出 React，尚未适配 Vue",
+      "目标访问、代理和 Playwright 状态会影响执行",
+      "应只处理有权使用的模板"
+    ],
+    "detail": "docs/skills/variant-clone-factory.md",
+    "repository": "https://github.com/lulistart/variant-clone-factory",
+    "stars": "https://github.com/lulistart/variant-clone-factory/stargazers",
+    "source": "https://linux.do/t/topic/2642041",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "guizang-ppt-skill",
+    "author": "op7418",
+    "oneLiner": "生成单文件 HTML 横向翻页演示稿，并支持电子杂志风、瑞士风、配图和多平台封面。",
+    "tags": [
+      "网页 PPT",
+      "HTML 演示稿",
+      "设计排版",
+      "瑞士风",
+      "电子杂志风",
+      "封面生成",
+      "配图"
+    ],
+    "prerequisites": [
+      "浏览器预览环境",
+      "可编辑 HTML/CSS",
+      "文章、大纲或演讲素材"
+    ],
+    "useCases": [
+      "文章转演讲稿",
+      "技术分享 PPT",
+      "产品发布演示",
+      "网页横向翻页 deck",
+      "多平台封面"
+    ],
+    "limitations": [
+      "更适合 6 到 10 页左右的观点型或发布型演示",
+      "核心交付是 HTML deck，不是原生 PPTX",
+      "不适合大段表格数据或超高信息密度培训课件"
+    ],
+    "detail": "docs/skills/guizang-ppt-skill.md",
+    "repository": "https://github.com/op7418/guizang-ppt-skill",
+    "stars": "https://github.com/op7418/guizang-ppt-skill/stargazers",
+    "source": "https://linux.do/t/topic/2275626",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "awesome-ppt-skills",
+    "author": "stevenjinlong",
+    "oneLiner": "从一句提示词生成带完整视觉设计和文字的整页图片版 PPTX，并提供实验性可编辑重建流程。",
+    "tags": [
+      "PPTX",
+      "图片版 PPT",
+      "整页成图",
+      "gpt-image-2",
+      "可编辑重建",
+      "ppt-master",
+      "演示稿"
+    ],
+    "prerequisites": [
+      "gpt-image/imagegen",
+      "PPTX 打包脚本",
+      "可编辑模式需 ppt-master"
+    ],
+    "useCases": [
+      "一句话生成 PPTX",
+      "技术分享 PPT",
+      "产品发布演示稿",
+      "整页图片版 PPT",
+      "可编辑 PPT 实验重建"
+    ],
+    "limitations": [
+      "标准流程的可见文字默认烘焙在整页图片里",
+      "可编辑流程不是无损位图转矢量",
+      "密集表格或逐字审计内容不适合默认图片优先流程"
+    ],
+    "detail": "docs/skills/awesome-ppt-skills.md",
+    "repository": "https://github.com/stevenjinlong/awesome-ppt-skills",
+    "stars": "https://github.com/stevenjinlong/awesome-ppt-skills/stargazers",
+    "source": "https://linux.do/t/topic/2090997",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "ppt-master",
+    "author": "hugohe3",
+    "oneLiner": "将 PDF、DOCX、URL 或 Markdown 等素材转成高质量 SVG 页面，并导出为原生可编辑 PPTX。",
+    "tags": [
+      "PPTX",
+      "原生可编辑",
+      "SVG",
+      "文档转演示稿",
+      "DrawingML",
+      "模板复用",
+      "演示稿"
+    ],
+    "prerequisites": [
+      "Python 本地脚本环境",
+      "SVG 到 PPTX 导出链路",
+      "分阶段生成和检查"
+    ],
+    "useCases": [
+      "PDF 转演示稿",
+      "DOCX 转 PPTX",
+      "网页或 Markdown 转 PPT",
+      "原生可编辑 PowerPoint",
+      "模板复用和品牌化演示"
+    ],
+    "limitations": [
+      "复杂材料仍需要明确输入、逐步执行和人工复核",
+      "需要本地 Python 脚本、项目目录和连续工作流",
+      "高精度合规、财务或法律材料仍需人工校对"
+    ],
+    "detail": "docs/skills/ppt-master.md",
+    "repository": "https://github.com/hugohe3/ppt-master",
+    "stars": "https://github.com/hugohe3/ppt-master/stargazers",
+    "source": "https://linux.do/t/topic/1432693",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "gpt-image2-ppt-skills",
+    "author": "JuneYaooo",
+    "oneLiner": "用 gpt-image-2 生成视觉完成度高的图片型 PPTX，支持 10 套风格、模板克隆和自然语言改页。",
+    "tags": [
+      "PPTX",
+      "图片型 PPT",
+      "gpt-image-2",
+      "模板克隆",
+      "自然语言编辑",
+      "真实素材保真",
+      "Markdown 编排"
+    ],
+    "prerequisites": [
+      "gpt-image-2 图像生成能力",
+      "PPTX 渲染/打包脚本",
+      "模板克隆需可渲染 PPTX"
+    ],
+    "useCases": [
+      "一句话生成图片型 PPTX",
+      "按 PPTX 模板仿版式换内容",
+      "融资路演和产品介绍",
+      "自然语言修改指定页",
+      "真实图片和 Logo 保真嵌入"
+    ],
+    "limitations": [
+      "背景和文字本质上仍是整页图片",
+      "密集表格、数字和小字需要人工核对",
+      "模板克隆效果依赖渲染后端、参考图和模型表现"
+    ],
+    "detail": "docs/skills/gpt-image2-ppt-skills.md",
+    "repository": "https://github.com/JuneYaooo/gpt-image2-ppt-skills",
+    "stars": "https://github.com/JuneYaooo/gpt-image2-ppt-skills/stargazers",
+    "source": "https://linux.do/t/topic/2053515",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "banana-slides",
+    "author": "Anionex",
+    "oneLiner": "基于 nano banana pro 的一站式 AI PPT 应用，从想法生成演示稿，支持模板素材、框选编辑和 PPTX/PDF/视频导出。",
+    "tags": [
+      "PPTX",
+      "AI PPT 应用",
+      "nano banana pro",
+      "Vibe PPT",
+      "自然语言编辑",
+      "素材工具箱",
+      "CLI"
+    ],
+    "prerequisites": [
+      "nano banana pro 或兼容模型",
+      "在线服务或本地后端",
+      "本地部署需 Docker 或 Python/Node"
+    ],
+    "useCases": [
+      "从想法生成 Vibe PPT",
+      "上传模板或素材生成演示稿",
+      "框选区域自然语言编辑",
+      "翻新已有 PPT 或 PDF",
+      "导出 PPTX/PDF/图片/讲解视频"
+    ],
+    "limitations": [
+      "部署和配置成本高于轻量 skill",
+      "模型可用性和额度会直接影响体验",
+      "不主打 PowerPoint 原生对象级编辑"
+    ],
+    "detail": "docs/skills/banana-slides.md",
+    "repository": "https://github.com/Anionex/banana-slides",
+    "stars": "https://github.com/Anionex/banana-slides/stargazers",
+    "source": "https://linux.do/t/topic/1285413",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "thesis-defense-pptx-skill",
+    "author": "zouchenzhen",
+    "oneLiner": "从论文 PDF/LaTeX 和学校或学院 PPTX 模板生成原生可编辑答辩 PPT，并做逐页导出、文字溢出和旧模板词检查。",
+    "tags": [
+      "PPTX",
+      "论文答辩",
+      "模板保真",
+      "原生可编辑",
+      "PowerPoint COM",
+      "LaTeX",
+      "质量检查"
+    ],
+    "prerequisites": [
+      "论文 PDF 或 LaTeX 项目",
+      "用户提供的 PPTX 答辩模板",
+      "完整质量检查推荐 Windows + PowerPoint"
+    ],
+    "useCases": [
+      "本科或研究生毕业答辩 PPT",
+      "学院或学校模板严格套用",
+      "实验室或品牌学术汇报",
+      "旧版答辩 PPT 翻新但保留模板",
+      "本地私密论文项目生成 PPTX"
+    ],
+    "limitations": [
+      "主要服务论文答辩和模板保真",
+      "完整质量门依赖 Windows + Microsoft PowerPoint COM",
+      "Word DOCX 结构化提取尚未实现"
+    ],
+    "detail": "docs/skills/thesis-defense-pptx-skill.md",
+    "repository": "https://github.com/zouchenzhen/thesis-defense-pptx-skill",
+    "stars": "https://github.com/zouchenzhen/thesis-defense-pptx-skill/stargazers",
+    "source": "https://linux.do/t/topic/2091089",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "GordenPPTSkill",
+    "author": "GordenSun",
+    "oneLiner": "用内置中文商务 PPTX 模板或用户自带模板生成真实可编辑 PPTX，只替换文字并尽量不破坏原排版。",
+    "tags": [
+      "PPTX",
+      "中文模板",
+      "商务汇报",
+      "模板保真",
+      "原生可编辑",
+      "非破坏编辑",
+      "自动更新"
+    ],
+    "prerequisites": [
+      "Python 3 与 python-pptx 1.0+",
+      "首次使用需运行自动更新脚本",
+      "预览渲染需 LibreOffice + Poppler"
+    ],
+    "useCases": [
+      "国企或互联网大厂风格商务汇报",
+      "年终总结和季度复盘",
+      "述职竞聘和项目复盘",
+      "商务提案和教学课件",
+      "按用户自带 PPTX 模板换内容"
+    ],
+    "limitations": [
+      "内置模板仅限个人学习研究，禁止商业使用或二次分发",
+      "核心策略是非破坏式文字替换",
+      "装饰性图形不会因文字数值变化自动同步"
+    ],
+    "detail": "docs/skills/gorden-ppt-skill.md",
+    "repository": "https://github.com/GordenSun/GordenPPTSkill",
+    "stars": "https://github.com/GordenSun/GordenPPTSkill/stargazers",
+    "source": "https://linux.do/t/topic/2278294",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "karpathy-llm-wiki",
+    "author": "Astro-Han",
+    "oneLiner": "把 Karpathy LLM 课程、论文、博客和实验材料整理成可持续维护的 Markdown 知识库，并基于 wiki 带引用回答问题。",
+    "tags": [
+      "知识库",
+      "LLM 学习",
+      "Karpathy",
+      "Markdown Wiki",
+      "引用问答",
+      "资料整理",
+      "lint"
+    ],
+    "prerequisites": [
+      "课程、论文、博客或笔记等原始资料",
+      "Markdown 资料维护习惯",
+      "Node 可选用于 wiki lint 检查"
+    ],
+    "useCases": [
+      "整理 Karpathy LLM 课程笔记",
+      "把论文、博客和链接编译成 wiki",
+      "基于知识库回答 LLM 问题",
+      "带引用输出学习资料摘要",
+      "检查 wiki 健康状态"
+    ],
+    "limitations": [
+      "主要服务 Karpathy LLM 学习资料整理",
+      "回答质量依赖 wiki 覆盖率和来源质量",
+      "实时新闻、价格和 API 变更仍需联网核验"
+    ],
+    "detail": "docs/skills/karpathy-llm-wiki.md",
+    "repository": "https://github.com/Astro-Han/karpathy-llm-wiki",
+    "stars": "https://github.com/Astro-Han/karpathy-llm-wiki/stargazers",
+    "source": "https://linux.do/t/topic/1945700/10",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "graphify",
+    "author": "safishamsi",
+    "oneLiner": "把代码库、文档、PDF、图片和视频转成 Neo4j 知识图谱，并通过 GraphRAG 做结构化问答和架构理解。",
+    "tags": [
+      "知识图谱",
+      "GraphRAG",
+      "代码库理解",
+      "多模态资料",
+      "Neo4j",
+      "Gemini",
+      "架构问答"
+    ],
+    "prerequisites": [
+      "Google Gemini API Key",
+      "Neo4j 5.20+ 数据库",
+      "Python、Node/React 与 Docker 可选"
+    ],
+    "useCases": [
+      "代码库结构理解",
+      "项目架构问答",
+      "文档/PDF/图片/视频知识抽取",
+      "把仓库和资料转 Neo4j 图谱",
+      "GraphRAG 检索增强问答"
+    ],
+    "limitations": [
+      "需要 Gemini API Key 和可用额度",
+      "部署和维护成本高于普通 Markdown wiki",
+      "大型仓库或多模态资料可能带来图谱噪音"
+    ],
+    "detail": "docs/skills/graphify.md",
+    "repository": "https://github.com/safishamsi/graphify",
+    "stars": "https://github.com/safishamsi/graphify/stargazers",
+    "source": "https://linux.do/t/topic/1907342",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "deep-research",
+    "author": "hoolulu",
+    "oneLiner": "通过 /research 自动生成多语言深度调研报告，支持在线搜索、本地资料、多 Agent 并行撰写和质量检查。",
+    "tags": [
+      "深度调研",
+      "研究报告",
+      "多语言",
+      "多 Agent",
+      "SearXNG",
+      "Scrapling",
+      "本地资料",
+      "质量检查"
+    ],
+    "prerequisites": [
+      "LLM 运行时或可适配 Agent 工具",
+      "在线模式需 Scrapling 与网络访问",
+      "默认使用内置 SearXNG 搜索端点",
+      "本地资料支持 MD/TXT/PDF/DOCX"
+    ],
+    "useCases": [
+      "行业研究和公开资料调研",
+      "竞品、市场、政策或技术主题分析",
+      "把本地资料整理成结构化报告",
+      "生成带引用的 Markdown 报告",
+      "多语言研究报告输出"
+    ],
+    "limitations": [
+      "在线模式需要 Scrapling、网络访问和可用搜索链路",
+      "非 OpenCode 环境需要适配命令入口和多 Agent 编排",
+      "长报告仍需人工复核事实、引用和数据口径"
+    ],
+    "detail": "docs/skills/deep-research.md",
+    "repository": "https://github.com/hoolulu/deep-research",
+    "stars": "https://github.com/hoolulu/deep-research/stargazers",
+    "source": "https://linux.do/t/topic/2312664",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "wechat-article-reader",
+    "author": "jeffchan813",
+    "oneLiner": "读取微信公众号文章链接，提取正文、摘要、图片链接或原始 HTML，适合快速理解和归档公众号内容。",
+    "tags": [
+      "微信公众号",
+      "文章读取",
+      "内容提取",
+      "curl",
+      "Python",
+      "摘要提取",
+      "图片链接"
+    ],
+    "prerequisites": [
+      "curl 命令行工具",
+      "Python 3.6+",
+      "可访问的微信公众号文章链接",
+      "网络可访问 mp.weixin.qq.com"
+    ],
+    "useCases": [
+      "读取微信公众号文章正文",
+      "快速生成文章摘要",
+      "提取文章图片链接",
+      "保存原始 HTML 用于调试",
+      "批量处理公众号文章链接"
+    ],
+    "limitations": [
+      "微信页面结构或反爬策略变化可能导致提取失败",
+      "只适合可访问的微信公众号文章链接",
+      "复杂排版、视频、小程序卡片等内容可能丢失"
+    ],
+    "detail": "docs/skills/wechat-article-reader.md",
+    "repository": "https://github.com/jeffchan813/wechat-article-reader",
+    "stars": "https://github.com/jeffchan813/wechat-article-reader/stargazers",
+    "source": "https://linux.do/t/topic/1956732/34",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "agents-progressive-disclosure",
+    "author": "Caph-dev",
+    "oneLiner": "把臃肿的 AGENTS.md、CLAUDE.md 等 Agent 指令文件重构成精简入口和按需读取文档，降低常驻上下文负担。",
+    "tags": [
+      "Agent 指令",
+      "渐进式披露",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "上下文治理",
+      "文档路由",
+      "规则重构",
+      "元技能"
+    ],
+    "prerequisites": [
+      "已有 AGENTS.md/CLAUDE.md/GEMINI.md",
+      "可编辑项目文档或规则目录",
+      "建议具备 Git 或备份能力",
+      "冲突规则可能需要人工确认"
+    ],
+    "useCases": [
+      "重构过长的 Agent 指令文件",
+      "把低频规则移动到按需文档",
+      "降低常驻上下文成本",
+      "梳理团队工具和部署规则",
+      "检测并处理规则冲突"
+    ],
+    "limitations": [
+      "它处理的是 Agent 指令文件结构，不直接生成业务代码或报告",
+      "含糊或冲突规则可能需要人工确认",
+      "安全和工具优先级等关键规则仍应保留在入口文件"
+    ],
+    "detail": "docs/skills/agents-progressive-disclosure.md",
+    "repository": "https://github.com/Caph-dev/agents-progressive-disclosure",
+    "stars": "https://github.com/Caph-dev/agents-progressive-disclosure/stargazers",
+    "source": "https://linux.do/t/topic/2263095",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "agent-cli-creator",
+    "author": "better-world-ai",
+    "oneLiner": "为特定网站生成可复用 CLI，让 Agent 通过真实 Chrome 登录态执行网页读写操作。",
+    "tags": [
+      "网页 CLI",
+      "浏览器自动化",
+      "kimi-webbridge",
+      "CLI 生成",
+      "Chrome 登录态",
+      "站点考古",
+      "工具生成",
+      "伴随 Skill",
+      "元技能"
+    ],
+    "prerequisites": [
+      "目标网站 URL 和首批 1-3 个功能",
+      "kimi-webbridge 浏览器插件与本地 skill",
+      "已登录目标网站的 Chrome 会话",
+      "Go/Python/Node 等 CLI 实现语言"
+    ],
+    "useCases": [
+      "为特定网站生成可复用 CLI",
+      "复用真实 Chrome 登录态完成网页操作",
+      "把读取、搜索和详情页封装为命令",
+      "把发帖、评论、收藏等写操作封装为命令",
+      "为生成出的 CLI 再创建伴随 skill"
+    ],
+    "limitations": [
+      "不是万能接口挖掘器，不承诺穷举网站所有交互",
+      "强依赖 kimi-webbridge、Chrome 扩展和用户真实登录态",
+      "站点结构、反爬策略、权限和前端实现变化都可能导致 CLI 失效",
+      "写操作有真实副作用，需要逐项确认和验证"
+    ],
+    "detail": "docs/skills/agent-cli-creator.md",
+    "repository": "https://github.com/better-world-ai/agent-cli-creator",
+    "stars": "https://github.com/better-world-ai/agent-cli-creator/stargazers",
+    "source": "https://linux.do/t/topic/2269051",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "OpenCLI",
+    "author": "jackwener",
+    "oneLiner": "把网站、真实浏览器会话、Electron 应用和本地工具统一封装成 Agent 可调用的 CLI。",
+    "tags": [
+      "网页 CLI",
+      "浏览器自动化",
+      "真实浏览器",
+      "CLI 枢纽",
+      "站点适配器",
+      "Browser Bridge",
+      "桌面应用",
+      "Agent 工具链",
+      "元技能"
+    ],
+    "prerequisites": [
+      "Node.js 20+",
+      "OpenCLI npm 包",
+      "Browser Bridge Chrome 扩展",
+      "需要登录态时先在真实浏览器登录"
+    ],
+    "useCases": [
+      "调用 100+ 站点命令",
+      "用真实 Chrome 登录态操作网页",
+      "为新网站创建 adapter",
+      "接入外部 CLI 和 Electron 应用",
+      "用网络捕获和 sitemap 辅助站点自动化"
+    ],
+    "limitations": [
+      "依赖 Node.js、OpenCLI 和浏览器扩展连通性",
+      "真实登录态写操作有实际副作用",
+      "站点 adapter 会随网站结构和登录状态变化失效",
+      "高质量 adapter 需要字段核对和 verify"
+    ],
+    "detail": "docs/skills/opencli.md",
+    "repository": "https://github.com/jackwener/OpenCLI",
+    "stars": "https://github.com/jackwener/OpenCLI/stargazers",
+    "source": "https://linux.do/t/topic/2269051",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "CLI-Anything",
+    "author": "HKUDS",
+    "oneLiner": "把专业软件能力包装为 Agent 原生 CLI，并通过 CLI-Hub 搜索、安装和组合跨工具工作流。",
+    "tags": [
+      "软件 CLI",
+      "CLI Hub",
+      "Agent Native",
+      "专业软件",
+      "工作流矩阵",
+      "CLI 市场",
+      "Python",
+      "Agent 工具链",
+      "元技能"
+    ],
+    "prerequisites": [
+      "Python 与 pip",
+      "cli-anything-hub",
+      "具体软件或后端依赖",
+      "按任务安装对应 CLI"
+    ],
+    "useCases": [
+      "搜索专业软件 CLI",
+      "按 capability 最小化安装工具",
+      "组合 matrix 工作流",
+      "用 JSON 输出驱动自动化",
+      "为软件补齐 Agent 可调用接口"
+    ],
+    "limitations": [
+      "不同 CLI 依赖不同软件、包、系统库或云服务",
+      "复杂 matrix 需要先 preflight",
+      "部分专业软件需要本机安装、授权或 GUI/渲染环境",
+      "实时目录和包生态会变化"
+    ],
+    "detail": "docs/skills/cli-anything.md",
+    "repository": "https://github.com/HKUDS/CLI-Anything",
+    "stars": "https://github.com/HKUDS/CLI-Anything/stargazers",
+    "source": "https://linux.do/t/topic/2269051",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "bb-browser",
+    "author": "epiral",
+    "oneLiner": "把真实 Chrome 登录态变成 CLI 和 MCP，让 Agent 直接读取网页、带登录态请求和操作页面。",
+    "tags": [
+      "浏览器自动化",
+      "真实浏览器",
+      "登录态",
+      "Browser API",
+      "MCP",
+      "网页 CLI",
+      "站点适配器",
+      "信息提取",
+      "Agent 工具链"
+    ],
+    "prerequisites": [
+      "Node.js 18+",
+      "bb-browser npm 包",
+      "可连接的真实 Chrome",
+      "需要私域数据时先登录对应网站"
+    ],
+    "useCases": [
+      "用真实浏览器登录态获取网页信息",
+      "执行点击、填写、截图等浏览器操作",
+      "运行 site adapter",
+      "在浏览器上下文执行带 Cookie 的 fetch",
+      "通过 MCP 接入 AI 工具"
+    ],
+    "limitations": [
+      "依赖真实浏览器、本地 daemon 或 MCP 运行状态",
+      "私域数据和写操作需要明确授权",
+      "site adapter 会受网页结构和权限变化影响",
+      "复杂新站点 CLI 化仍需要维护"
+    ],
+    "detail": "docs/skills/bb-browser.md",
+    "repository": "https://github.com/epiral/bb-browser",
+    "stars": "https://github.com/epiral/bb-browser/stargazers",
+    "source": "https://linux.do/t/topic/2269051",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  },
+  {
+    "name": "GenericAgent",
+    "author": "lsdefine",
+    "oneLiner": "自进化 Agent 框架，不提供单个可安装 skill，而是让 Agent 自动沉淀 SOP、生成技能树并迭代能力。",
+    "tags": [
+      "元技能",
+      "Self-evolving Agent",
+      "技能树",
+      "反思沉淀",
+      "记忆系统",
+      "Agent 框架",
+      "浏览器自动化"
+    ],
+    "prerequisites": [
+      "Python 3.11/3.12",
+      "LLM API Key",
+      "本地终端与文件系统权限",
+      "可选真实浏览器/桌面端环境"
+    ],
+    "useCases": [
+      "研究 Agent 如何自我沉淀技能",
+      "构建个人长期技能树和 SOP 记忆",
+      "长程任务自动化与经验复用",
+      "真实浏览器和本地系统控制实验",
+      "探索低 token 开销的 Agent 设计"
+    ],
+    "limitations": [
+      "它不是单条开箱即用的 skill，本索引将其作为元技能/方法论收录",
+      "部署和使用门槛高于普通脚本型 skill",
+      "自我生成的技能质量依赖任务验证和反思质量"
+    ],
+    "detail": "docs/skills/generic-agent.md",
+    "repository": "https://github.com/lsdefine/GenericAgent",
+    "stars": "https://github.com/lsdefine/GenericAgent/stargazers",
+    "source": "https://linux.do/t/topic/1962519",
+    "forumIcon": "https://cdn3.ldstatic.com/optimized/4X/c/c/d/ccd8c210609d498cbeb3d5201d4c259348447562_2_32x32.png"
+  }
+]

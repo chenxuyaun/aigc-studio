@@ -1,0 +1,11 @@
+# 构建上下文清理：避免把开发数据/依赖打入镜像
+.venv/
+__pycache__/
+*.pyc
+aigc_studio.db
+storage/
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/

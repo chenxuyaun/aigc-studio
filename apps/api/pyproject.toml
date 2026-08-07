@@ -1,0 +1,90 @@
+[project]
+name = "aigc-studio-api"
+version = "0.1.0"
+description = "AIGC Studio - AI 创作中心 后端 API"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.118.0",
+    "uvicorn[standard]>=0.34.0",
+    "PyYAML>=6.0.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiomysql>=0.2.0",
+    "aiosqlite>=0.20.0",
+    "greenlet>=3.1.0",
+    "alembic>=1.14.0",
+    "celery[redis]>=5.4.0",
+    "redis>=5.2.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "python-jose[cryptography]>=3.3.0",
+    "argon2-cffi>=23.1.0",
+    "httpx>=0.28.0",
+    "structlog>=24.4.0",
+    "python-multipart>=0.0.12",
+    "aiofiles>=24.1.0",
+    "pillow>=11.0.0",
+    "boto3>=1.35.0",
+    "edge-tts>=7.0.0",
+    "PyMySQL>=1.1.0",
+    "mcp>=1.2.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "types-aiofiles>=24.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "ASYNC", "C4", "DTZ", "PIE", "PT", "RET", "SIM", "T20", "RUF"]
+ignore = [
+    "B008",   # FastAPI Depends() in argument defaults is idiomatic
+    "UP046",  # pydantic v2 generic models use Generic[T] intentionally
+    "UP047",
+    "RUF001", # 中文全角标点是有意的（本项目界面/文案为中文）
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/**" = ["E501", "F401"]
+"tests/**" = ["S101"]
+"scripts/**" = ["T201"]  # 运维脚本允许 print 输出进度
+"app/storage/local_provider.py" = ["ASYNC240"]  # 本地文件驱动仅用于开发；生产用 S3
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+warn_unused_configs = true
+show_error_codes = true
+pretty = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["yaml"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["jose.*", "passlib.*", "celery.*", "aiomysql.*", "boto3.*", "botocore.*", "edge_tts", "pymysql"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,55 @@
+# MemoryCore gateway 配置（角色陪伴多层记忆）
+# 挂载为 /data/config/tdai-gateway.yaml
+deployMode: standalone
+stateBackend: "local"
+
+server:
+  port: 8420
+  host: "0.0.0.0"            # 容器内必须 0.0.0.0 才能从宿主机/其他容器访问
+  apiKey: "${TDAI_MEMORY_API_KEY}"
+
+data:
+  baseDir: "/data/tdai-memory"
+
+# LLM：复用 grok2api OpenAI 兼容网关（compose 注入 host.docker.internal）
+llm:
+  baseUrl: "${TDAI_LLM_BASE_URL}"
+  apiKey: "${TDAI_LLM_API_KEY}"
+  model: "${TDAI_LLM_MODEL}"
+  maxTokens: 4096
+  timeoutMs: 120000
+
+memory:
+  storeBackend: "sqlite"
+  bm25:
+    enabled: true
+    language: "zh"
+  embedding:
+    provider: "openai"
+    baseUrl: "http://api:8000/v1"
+    apiKey: "local"           # 本地 n-gram 向量端点（匿名），换真实向量服务时改 baseUrl
+    model: "local-ngram"
+    dimensions: 512
+  capture:
+    enabled: true
+  extraction:
+    enabled: true
+    enableDedup: true
+    maxMemoriesPerSession: 20
+  pipeline:
+    everyNConversations: 5    # 每 5 轮 user 消息触发 L1
+    enableWarmup: true
+    l1IdleTimeoutSeconds: 600
+    l2DelayAfterL1Seconds: 10
+    l2MinIntervalSeconds: 900
+    l2MaxIntervalSeconds: 3600
+  recall:
+    maxResults: 5
+    scoreThreshold: 0.3
+    strategy: "hybrid"        # 无 embedding 时自动落到 FTS
+    timeoutMs: 5000
+  persona:
+    triggerEveryN: 50
+    maxScenes: 15
+    backupCount: 3
+    sceneBackupCount: 10

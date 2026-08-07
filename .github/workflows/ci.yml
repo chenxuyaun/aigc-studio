@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: API (lint + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install
+        run: uv sync --all-extras
+      - name: Lint (ruff)
+        run: uv run ruff check app tests
+      - name: Type check (mypy)
+        run: uv run mypy app
+      - name: Test (pytest)
+        run: uv run pytest tests/ -q
+
+  frontend:
+    name: Web (lint + typecheck + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: Lint (eslint)
+        run: pnpm exec eslint src --max-warnings 0
+      - name: Type check
+        run: pnpm exec tsc --noEmit
+      - name: Test (vitest)
+        run: pnpm exec vitest run
+
+  build:
+    name: Docker build smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f apps/api/Dockerfile -t aigc-api .
+      - name: Build Web image
+        run: docker build -f apps/web/Dockerfile -t aigc-web .

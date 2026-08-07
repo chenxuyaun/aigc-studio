@@ -1,0 +1,19 @@
+# 构建上下文排除项：node_modules/dist 必须排除（本地是 Windows symlink，
+# 拷进 Linux 容器会破坏 pnpm install 生成的依赖结构）；敏感文件不进镜像。
+# 注意：deploy/ 不能排除（web Dockerfile 引用 deploy/nginx/nginx.conf）。
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+*.db
+*.db.bak-*
+.git
+.env
+*.log
+tests
+docs
+*.png
+*.jpg
+# logo 是前端品牌资源，必须进构建上下文（排除 *.png 时显式放回）
+!apps/web/public/logo.png

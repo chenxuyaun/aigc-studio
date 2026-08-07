@@ -1,0 +1,55 @@
+{
+  "id": "32a36d2e-d113-4d36-8f57-a03b7f6020dc",
+  "ok": true,
+  "result": {
+    "snapshot": {
+      "id": "922656a7-3d2d-4cd0-b9fb-3f1217fd883d",
+      "app": {
+        "name": "chrome",
+        "bundleId": "chrome",
+        "pid": 29964
+      },
+      "window": {
+        "title": "noVNC - Google Chrome",
+        "id": 2493556,
+        "index": null,
+        "x": -13,
+        "y": -13,
+        "width": 2906,
+        "height": 1730,
+        "isMinimized": null,
+        "isOffscreen": null,
+        "screenIndex": null
+      },
+      "coordinateSpace": "window",
+      "treeText": "App=chrome (pid 29964)\nWindow: \"noVNC - Google Chrome\", App: chrome.\n\n0 窗口 noVNC - Google Chrome\n\t1 窗格\n\t2 区域 noVNC - Google Chrome - 朋\n\t\t3 区域\n\t\t\t4 区域\n\t\t\t\t5 区域\n\t\t\t\t\t6 按钮 最小化\n\t\t\t\t\t7 按钮 恢复\n\t\t\t\t\t8 按钮 关闭\n\t\t\t\t9 区域\n\t\t\t\t\t10 区域\n\t\t\t\t\t\t11 工具栏 view_1000\n\t\t\t\t\t\t\t12 按钮 返回\n\t\t\t\t\t\t\t13 按钮 前进\n\t\t\t\t\t\t\t14 按钮 重新加载\n\t\t\t\t\t\t\t15 组\n\t\t\t\t\t\t\t\t16 按钮 不安全\n\t\t\t\t\t\t\t\t17 编辑 地址和搜索栏, Value: acela.proxy.rlwy.net:30903/vnc.html, Secondary Actions: SetValue\n\t\t\t\t\t\t\t\t18 区域\n\t\t\t\t\t\t\t\t\t19 按钮 为此标签页添加书签\n\t\t\t\t\t\t\t\t20 区域\n\t\t\t\t\t\t\t21 区域\n\t\t\t\t\t\t\t\t22 按钮 壹伴 · 小插件 可以访问此网站\n\t\t\t\t\t\t\t\t23 按钮 篡改猴 可以访问此网站\n\t\t\t\t\t\t\t\t24 按钮 AutoGrok 可以访问此网站\n\t\t\t\t\t\t\t\t25 按钮 扩展程序\n\t\t\t\t\t\t\t26 区域\n\t\t\t\t\t\t\t27 按钮 朋\n\t\t\t\t\t\t\t28 按钮 Chrome\n\t\t\t\t\t\t29 工具栏 书签\n\t\t\t\t\t\t\t30 工具栏 已保存的标签页分组\n\t\t\t\t\t\t\t\t31 按钮 标签页分组\n\t\t\t\t\t\t\t32 分隔符 分隔符\n\t\t\t\t\t\t\t33 书签按钮 百度一下，你就知道\n\t\t\t\t\t\t\t34 书签按钮 npm\n\t\t\t\t\t\t\t35 书签按钮 搬瓦工Cenots7 实现BBR加速以及SS安装 - 简书\n\t\t\t\t\t\t\t36 书签按钮 Kiwi VM控制面板\n\t\t\t\t\t\t\t37 书签按钮 作为程序员，你关注哪些国外 IT 网站？ - 知乎\n\t\t\t\t\t\t\t38 书签按钮 2018年Web前端入门的自学路线 - 千古壹号 - 博客园\n\t\t\t\t\t\t\t39 书签按钮 首页\n\t\t\t\t\t\t\t40 书签按钮 index\n\t\t\t\t\t\t\t41 书签按钮 view-source:60.255.48.174:32764/college/second_domestic.html\n\t\t\t\t\t\t\t42 书签按钮 Gmail\n\t\t\t\t\t\t\t43 按钮 包含隐藏书签的菜单\n\t\t\t\t\t\t\t44 书签文件夹按钮 所有书签\n\t\t\t\t\t\t\t45 分隔符 分隔符\n\t\t\t\t\t46 区域\n\t\t\t\t\t\t47 区域\n\t\t\t\t\t\t\t48 区域\n\t\t\t\t\t\t\t49 区域\n\t\t\t\t\t50 区域\n\t\t\t\t\t\t51 区域\n\t\t\t\t\t\t\t52 按钮 标签页搜索\n\t\t\t\t\t\t53 区域 view_21\n\t\t\t\t\t\t\t54 选项卡\n\t\t\t\t\t\t\t\t55 选项卡项目 docker-ubuntu-desktop - 内存用量 - 407 MB, Secondary Actions: Select\n\t\t\t\t\t\t\t\t\t56 按钮 关闭\n\t\t\t\t\t\t\t\t57 选项卡项目 noVNC, Secondary Actions: Select\n\t\t\t\t\t\t\t\t\t58 按钮 关闭\n\t\t\t\t\t\t\t59 区域\n\t\t\t\t\t\t60 按钮 新标签页\n\t\t\t\t\t\t61 区域\n\t\t\t\t\t\t62 区域\n\t\t\t\t\t\t\t63 按钮 打开 Chrome 中的 Gemini\n\t\t\t\t\t\t\t64 区域\n\t\t\t\t\t65 区域",
+      "elementCount": 66,
+      "focusedElementId": null,
+      "truncation": {
+        "truncated": false,
+        "maxNodes": 1200,
+        "maxDepth": 64,
+        "maxDepthReached": false
+      }
+    },
+    "screenshot": {
+      "format": "png",
+      "width": 2906,
+      "height": 1730,
+      "scale": 1,
+      "path": "C:\\Users\\yuesh\\AppData\\Local\\Temp\\orca-computer-use\\32a36d2e-d113-4d36-8f57-a03b7f6020dc-screenshot.png",
+      "dataOmitted": true,
+      "expiresAt": "2026-08-05T05:41:51.757Z"
+    },
+    "screenshotStatus": {
+      "state": "captured",
+      "metadata": {
+        "engine": "unknown",
+        "windowId": 2493556
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "19d24d73-7ee8-467a-a150-71ac535a63f5"
+  }
+}

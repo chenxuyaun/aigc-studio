@@ -1,0 +1,36 @@
+{
+  "team_id": "1484755517060643361",
+  "project_id": "355389888",
+  "project_name": "Team project",
+  "files": [
+    {
+      "key": "8STtFRZgbMAUJ2lutYYjWy",
+      "name": "Untitled",
+      "last_modified": "2026-07-22T11:26:15Z",
+      "file_url": "https://www.figma.com/file/8STtFRZgbMAUJ2lutYYjWy",
+      "thumbnail_bytes": 1268,
+      "pages": [
+        {
+          "id": "0:1",
+          "name": "Page 1",
+          "type": "CANVAS"
+        }
+      ]
+    },
+    {
+      "key": "gZ0jw9dGLAtQWf6sUhlonI",
+      "name": "陈朋's team library",
+      "last_modified": "2025-03-21T03:28:21Z",
+      "file_url": "https://www.figma.com/file/gZ0jw9dGLAtQWf6sUhlonI",
+      "thumbnail_bytes": 5810,
+      "pages": [
+        {
+          "id": "0:1",
+          "name": "Page 1",
+          "type": "CANVAS"
+        }
+      ]
+    }
+  ],
+  "note": "Community discovery pages under /resources/community/* are not listable via Personal Access Token REST API."
+}

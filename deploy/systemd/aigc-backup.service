@@ -1,0 +1,10 @@
+[Unit]
+Description=AIGC Studio daily database & media backup
+After=network.target mysql.service
+
+[Service]
+Type=oneshot
+# 按实际部署目录调整
+Environment=REMOTE_DIR=/opt/aigc-studio
+ExecStart=/usr/bin/env bash /opt/aigc-studio/deploy/scripts/backup.sh
+# 备份失败时让 journal 记录并可被 systemctl status 观察

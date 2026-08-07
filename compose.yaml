@@ -1,0 +1,156 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-aigc_studio}
+      MYSQL_USER: ${MYSQL_USER:-aigc}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-changeme}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    entrypoint: ["bash", "/docker-entrypoint.sh"]
+    ports:
+      - "${API_INTERNAL_PORT:-8000}:8000"
+    env_file: .env
+    # 容器内以 mysql 服务名访问；本地 uvicorn（无 DATABASE_URL）仍走 SQLite
+    environment:
+      - DATABASE_URL=mysql+aiomysql://${MYSQL_USER:-aigc}:${MYSQL_PASSWORD:-changeme}@mysql:3306/${MYSQL_DATABASE:-aigc_studio}
+      - TDAI_MEMORY_ENDPOINT=http://memory-core:8420
+    # 让容器内 provider 的 host.docker.internal 能指向宿主机（grok2api/cpa 跑在宿主机 docker）
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/live')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-B", "-l", "info", "-Q", "text,image,video,audio,import,maintenance"]
+    env_file: .env
+    environment:
+      - DATABASE_URL=mysql+aiomysql://${MYSQL_USER:-aigc}:${MYSQL_PASSWORD:-changeme}@mysql:3306/${MYSQL_DATABASE:-aigc_studio}
+      - TDAI_MEMORY_ENDPOINT=http://memory-core:8420
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage
+      - ./backups:/app/backups
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app:celery_app", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5000}:80"
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage:ro
+
+  sillytavern:
+    build:
+      context: ./SillyTavern
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${SILLYTAVERN_PORT:-8001}:8000"
+    volumes:
+      - sillytavern_data:/home/node/app/data
+      - ./deploy/sillytavern/config:/home/node/app/config
+    environment:
+      - TZ=Asia/Shanghai
+
+  # 角色陪伴多层记忆（L0-L3 抽取/检索服务，Tencent MemoryCore standalone）
+  memory-core:
+    image: agentmemory/memory-core:latest
+    restart: unless-stopped
+    ports:
+      - "8420:8420"
+    environment:
+      - TDAI_GATEWAY_API_KEY=${TDAI_MEMORY_API_KEY}
+      # LLM 复用 grok2api OpenAI 兼容网关（容器内经 host.docker.internal 访问宿主机）
+      - TDAI_LLM_BASE_URL=http://host.docker.internal:8000/v1
+      - TDAI_LLM_API_KEY=${OPENAI_COMPATIBLE_API_KEY}
+      - TDAI_LLM_MODEL=${OPENAI_COMPATIBLE_MODEL:-grok-chat-fast}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - tdai_data:/data/tdai-memory
+      - ./deploy/tdai-gateway.yaml:/data/config/tdai-gateway.yaml:ro
+      # 覆盖 L1 抽取 prompt：中文对话强制中文输出（镜像直接跑 TS 源码，挂载即生效）
+      - ./deploy/tdai-prompts/l1-extraction.ts:/app/src/core/prompts/l1-extraction.ts:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8420/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+  redis_data:
+  storage_data:
+  sillytavern_data:
+  tdai_data:

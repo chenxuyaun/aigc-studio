@@ -1,0 +1,191 @@
+@import "tailwindcss";
+
+/*
+ * 设计方向：干净明亮工作台（Krea 风）—— 暖白底 × 琥珀金点缀。
+ *
+ * 关键：主题色直接定义在 Tailwind 的 --color-* 上（@theme 输出到 :root 并生成
+ * bg-primary/text-primary 等工具类）；深色主题在根节点作用域内“覆盖” --color-*，
+ * 子树继承覆盖值。不要用 --color-x: var(--自定义) 的间接引用——那样 :root 解析不到
+ * 作用域变量会导致颜色为空（琥珀金不显示的根因）。
+ */
+@theme {
+  --color-background: #faf9f6;
+  --color-foreground: #1c1b18;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-border: #ece9e1;
+  --color-border-strong: #e2ded3;
+  --color-input: #e2ded3;
+  --color-ring: #e8912a;
+  --color-primary: #e8912a;
+  --color-primary-hover: #d0801e;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f2efe8;
+  --color-secondary-foreground: #33302a;
+  --color-muted: #f2efe8;
+  --color-muted-foreground: #78736a;
+  --color-success: #2f9e6a;
+  --color-warning: #c98a1e;
+  --color-danger: #cf4a34;
+  --color-info: #2b7fc4;
+  --radius-card: 18px;
+}
+
+[data-aigc-studio-root] {
+  --shadow-soft: 0 1px 2px rgba(28, 27, 24, 0.04), 0 10px 30px -14px rgba(28, 27, 24, 0.14);
+  color: var(--color-foreground);
+  background: var(--color-background);
+  min-height: 100dvh;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", Inter, ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 深色（暖炭底 + 琥珀金）——覆盖 --color-* */
+@media (prefers-color-scheme: dark) {
+  [data-aigc-studio-root][data-theme="system"] {
+    --color-background: #14130f;
+    --color-foreground: #ece9e2;
+    --color-surface: #1c1a15;
+    --color-surface-raised: #221f19;
+    --color-border: #2c2920;
+    --color-border-strong: #3a3629;
+    --color-input: #3a3629;
+    --color-ring: #f0a53f;
+    --color-primary: #f0a53f;
+    --color-primary-hover: #e2963a;
+    --color-primary-foreground: #1a1204;
+    --color-secondary: #262319;
+    --color-secondary-foreground: #ddd8cc;
+    --color-muted: #221f18;
+    --color-muted-foreground: #9c968a;
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 34px -18px rgba(0, 0, 0, 0.7);
+    color-scheme: dark;
+  }
+}
+
+[data-aigc-studio-root][data-theme="dark"] {
+  --color-background: #14130f;
+  --color-foreground: #ece9e2;
+  --color-surface: #1c1a15;
+  --color-surface-raised: #221f19;
+  --color-border: #2c2920;
+  --color-border-strong: #3a3629;
+  --color-input: #3a3629;
+  --color-ring: #f0a53f;
+  --color-primary: #f0a53f;
+  --color-primary-hover: #e2963a;
+  --color-primary-foreground: #1a1204;
+  --color-secondary: #262319;
+  --color-secondary-foreground: #ddd8cc;
+  --color-muted: #221f18;
+  --color-muted-foreground: #9c968a;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 34px -18px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+.font-mono-ui {
+  font-family: "SFMono-Regular", "JetBrains Mono", Consolas, monospace;
+}
+.pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* AI 回复的 Markdown 排版（.markdown-body 由 MarkdownContent 使用） */
+.markdown-body > *:first-child {
+  margin-top: 0;
+}
+.markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 0.9em 0 0.4em;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.markdown-body h1 {
+  font-size: 1.25em;
+}
+.markdown-body h2 {
+  font-size: 1.15em;
+}
+.markdown-body h3,
+.markdown-body h4 {
+  font-size: 1.05em;
+}
+.markdown-body p {
+  margin: 0.5em 0;
+}
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.5em 0;
+  padding-left: 1.4em;
+  list-style: revert;
+}
+.markdown-body li {
+  margin: 0.2em 0;
+}
+.markdown-body blockquote {
+  margin: 0.6em 0;
+  border-left: 3px solid var(--color-border, #e5e2da);
+  padding-left: 0.8em;
+  color: var(--color-muted-foreground, #77736a);
+}
+.markdown-body code:not(pre code) {
+  border-radius: 4px;
+  background: var(--color-surface-raised, #f4f2ec);
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+  font-family: "SFMono-Regular", "JetBrains Mono", Consolas, monospace;
+}
+.markdown-body table {
+  margin: 0.6em 0;
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95em;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--color-border, #e5e2da);
+  padding: 0.35em 0.6em;
+  text-align: left;
+}
+.markdown-body th {
+  background: var(--color-surface-raised, #f4f2ec);
+  font-weight: 600;
+}
+.markdown-body hr {
+  margin: 0.8em 0;
+  border: none;
+  border-top: 1px solid var(--color-border, #e5e2da);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

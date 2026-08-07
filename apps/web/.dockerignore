@@ -1,0 +1,6 @@
+# 构建上下文清理：避免把开发产物/依赖打入镜像
+node_modules/
+dist/
+*.log
+.vite/
+coverage/

@@ -1,0 +1,32 @@
+[Unit]
+Description=AIGC Studio API
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/aigc-studio/apps/api
+EnvironmentFile=/opt/aigc-studio/.env
+# 混合部署：MySQL/Redis 在 docker 映射端口，覆盖 compose 服务名
+Environment=DATABASE_URL=mysql+aiomysql://aigc:aigc2026@127.0.0.1:13306/aigc_studio
+Environment=REDIS_URL=redis://127.0.0.1:16379/0
+Environment=CELERY_BROKER_URL=redis://127.0.0.1:16379/1
+Environment=CELERY_RESULT_BACKEND=redis://127.0.0.1:16379/2
+Environment=STORAGE_LOCAL_PATH=/opt/aigc-studio/storage
+Environment=PYTHONPATH=/opt/aigc-studio/apps/api
+Environment=APP_ENV=production
+Environment=APP_DEBUG=false
+Environment=CORS_ALLOWED_ORIGINS=http://117.72.89.27:5000,http://localhost:5000
+Environment=USE_CELERY_WORKER=0
+Environment=RATE_LIMIT_PER_MINUTE=180
+Environment=RATE_LIMIT_LOGIN_PER_MINUTE=30
+ExecStart=/opt/aigc-studio/apps/api/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8800 --proxy-headers
+Restart=always
+RestartSec=5
+# 防止日志打满磁盘
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+# AIGC Studio 公网入口（Caddy 自动 HTTPS）
+# 把下面的 aigc.example.com 换成你的域名（解析到本服务器 IP），
+# Caddy 会自动申请并续期 Let's Encrypt 证书。
+# 本地测试（无域名）可先用 :80 注释掉 https 段。
+
+aigc.example.com {
+    reverse_proxy frontend:80
+}
+
+# 无域名临时方案（HTTP 直连 IP，安全组开 80 即可）：
+# :80 {
+#     reverse_proxy frontend:80
+# }

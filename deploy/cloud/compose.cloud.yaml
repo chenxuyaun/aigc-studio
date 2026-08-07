@@ -1,0 +1,179 @@
+# AIGC Studio 云服务器版编排（Ubuntu + Docker Compose）
+#
+# 与本地 compose.yaml 的差异：
+#  1. 端口收敛：mysql/redis/api/memory-core/frontend 不再暴露到宿主（内网互访）；
+#     仅 caddy 暴露 80/443（HTTPS 自动证书），sillytavern 8001 供浏览器直连。
+#  2. Redis 加密码（REDIS_PASSWORD 必填；api/worker 的 redis URL 自动带密码）。
+#  3. 外部服务并入编排：grok2api(8000)/cpa(8317)，端口映射保留 0.0.0.0
+#     （api 经 host.docker.internal 访问），云安全组不要开放这些端口。
+#     注：注册机（grok-register-agent/turnstile/flaresolverr）本地运行，不上云。
+#  4. 外部服务配置目录：上传到本文件同级的 grok-register/ 下（见 README）。
+#
+# 使用：docker compose -f deploy/cloud/compose.cloud.yaml up -d --build
+# 依赖 deploy/cloud/.env（由 deploy.sh 从 .env.cloud.example 生成，密钥自行填写）
+
+services:
+  # ─────────── 平台核心 ───────────
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-aigc_studio}
+      MYSQL_USER: ${MYSQL_USER:-aigc}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-changeme}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-aigc_redis_pw}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-aigc_redis_pw}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ../../
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    entrypoint: ["bash", "/docker-entrypoint.sh"]
+    env_file: .env
+    environment:
+      - DATABASE_URL=mysql+aiomysql://${MYSQL_USER:-aigc}:${MYSQL_PASSWORD:-changeme}@mysql:3306/${MYSQL_DATABASE:-aigc_studio}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-aigc_redis_pw}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-aigc_redis_pw}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-aigc_redis_pw}@redis:6379/2
+      - TDAI_MEMORY_ENDPOINT=http://memory-core:8420
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/live')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build:
+      context: ../../
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "-B", "-l", "info", "-Q", "text,image,video,audio,import,maintenance"]
+    env_file: .env
+    environment:
+      - DATABASE_URL=mysql+aiomysql://${MYSQL_USER:-aigc}:${MYSQL_PASSWORD:-changeme}@mysql:3306/${MYSQL_DATABASE:-aigc_studio}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-aigc_redis_pw}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-aigc_redis_pw}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-aigc_redis_pw}@redis:6379/2
+      - TDAI_MEMORY_ENDPOINT=http://memory-core:8420
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage
+      - ../../backups:/app/backups
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app:celery_app", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ../../
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5000:80"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage:ro
+
+  sillytavern:
+    image: sillytavern/sillytavern:latest
+    restart: unless-stopped
+    ports:
+      - "${SILLYTAVERN_PORT:-8001}:8000"
+    volumes:
+      - sillytavern_data:/home/node/app/data
+      - ../../deploy/sillytavern/config:/home/node/app/config
+    environment:
+      - TZ=Asia/Shanghai
+
+  memory-core:
+    image: agentmemory/memory-core:latest
+    restart: unless-stopped
+    environment:
+      - TDAI_GATEWAY_API_KEY=${TDAI_MEMORY_API_KEY}
+      - TDAI_LLM_BASE_URL=http://host.docker.internal:8000/v1
+      - TDAI_LLM_API_KEY=${OPENAI_COMPATIBLE_API_KEY}
+      - TDAI_LLM_MODEL=${OPENAI_COMPATIBLE_MODEL:-grok-chat-fast}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - tdai_data:/data/tdai-memory
+      - ../../deploy/tdai-gateway.yaml:/data/config/tdai-gateway.yaml:ro
+      - ../../deploy/tdai-prompts/l1-extraction.ts:/app/src/core/prompts/l1-extraction.ts:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8420/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ─────────── HTTPS 反向代理（自动证书）───────────
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+volumes:
+  mysql_data:
+  redis_data:
+  storage_data:
+  sillytavern_data:
+  tdai_data:
+  # grok2api 数据卷已随服务移除（本地运行，不上云）；服务器上残留卷数据保留备用
+  caddy_data:
+  caddy_config:

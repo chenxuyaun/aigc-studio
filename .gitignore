@@ -1,0 +1,50 @@
+.env
+.env.local
+.venv/
+imports/figma/team-project/
+imports/figma/meta/
+.ace-tool/
+node_modules/
+__pycache__/
+*.pyc
+dist/
+build/
+*.db
+.DS_Store
+storage/
+.ace-tool/
+
+# 日志与运行产物
+*.log
+api-dev.out.log
+web-dev.out.log
+uvicorn.*.log
+import_prompts.log
+
+# 缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.vite/
+coverage/
+
+# 备份与临时
+backups/
+*.bak
+
+# 开发截图（仓库根散落的测试截图，不应入库）
+test-step*.png
+test*.png
+0*-workflow-*.png
+gui-test-screenshots/
+
+# 第三方源码克隆（仅本地构建用，项目定制在 deploy/）
+SillyTavern/
+TencentDB-Agent-Memory/
+
+# 内网穿透配置（含 token，勿入库）
+.cpolar-data/
+
+# 本机 AI 工具配置
+.claude/
+.zcode/
