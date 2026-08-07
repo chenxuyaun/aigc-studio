@@ -19,7 +19,7 @@ def _prompt_hash(title: str, content: str) -> str:
     """去重 hash：与存量回填规则一致（sha256(title + \n + content)）。"""
     import hashlib
 
-    return hashlib.sha256(f"{title}\n{content}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{title}\n{content}".encode()).hexdigest()
 
 router = APIRouter()
 

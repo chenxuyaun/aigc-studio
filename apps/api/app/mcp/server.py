@@ -18,8 +18,8 @@ from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset
 from app.models.generation_task import GenerationTask
 from app.models.prompt import Prompt
-from app.tasks.register_batch import _create_task_record, schedule_register_batch
 from app.services.media_access import sign_content_url
+from app.tasks.register_batch import _create_task_record, schedule_register_batch
 
 mcp = FastMCP("aigc-studio", streamable_http_path="/")
 

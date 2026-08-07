@@ -26,9 +26,9 @@ from app.providers.base import TextProvider
 from app.services import sessions
 from app.services.character_card import parse_character_card
 from app.services.macros import substitute as substitute_macros
+from app.services.media_access import sign_content_url
 from app.services.provider_resolver import resolve_text_provider
 from app.services.worldbook import match_worldbook
-from app.services.media_access import sign_content_url
 
 # 保留后台任务引用，避免被 GC 回收
 _memory_tasks: set[asyncio.Task[Any]] = set()

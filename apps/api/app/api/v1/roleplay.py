@@ -26,8 +26,8 @@ from app.models.roleplay_persona import RoleplayPersona
 from app.models.user import User
 from app.security.auth import get_current_user
 from app.services import sessions
-from app.services.roleplay import list_characters, roleplay_chat, roleplay_chat_stream
 from app.services.media_access import sign_content_url
+from app.services.roleplay import list_characters, roleplay_chat, roleplay_chat_stream
 
 router = APIRouter()
 

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select
 from app.models.character_profile import CharacterProfile
 from app.models.roleplay_character import RoleplayCharacter
 from app.models.user import User
+from sqlalchemy import select
 
 from tests.conftest import TestingSessionLocal
 

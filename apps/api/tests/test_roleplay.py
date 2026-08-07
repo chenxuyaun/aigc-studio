@@ -107,7 +107,8 @@ def test_list_characters_query_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     # 签名 URL：content 路径 + exp/sig 查询参数（无需 JWT 即可 <img> 直出）
     url = items[0]["url"]
     assert url.startswith("/api/v1/assets/a1/content?")
-    assert "exp=" in url and "sig=" in url
+    assert "exp=" in url
+    assert "sig=" in url
 
 
 def test_extract_mood() -> None:

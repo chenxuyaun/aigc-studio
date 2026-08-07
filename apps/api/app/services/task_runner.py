@@ -30,8 +30,8 @@ from app.models.generation_task import GenerationTask
 from app.providers.mock import media
 from app.providers.registry import ProviderRegistry
 from app.services.call_logger import log_call
-from app.storage import choose_write_backend, get_storage
 from app.services.media_access import sign_content_url
+from app.storage import choose_write_backend, get_storage
 
 logger = structlog.get_logger()
 

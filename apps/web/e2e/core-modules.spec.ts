@@ -139,4 +139,19 @@ test.describe("核心业务模块 GUI", () => {
       timeout: 15000,
     });
   });
+
+  test("文本生成页可打开", async ({ page }) => {
+    await page.goto("/create/text", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "文本生成" })).toBeVisible({ timeout: 20000 });
+  });
+
+  test("视频生成页可打开", async ({ page }) => {
+    await page.goto("/create/video", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "视频生成" })).toBeVisible({ timeout: 20000 });
+  });
+
+  test("语音生成页可打开", async ({ page }) => {
+    await page.goto("/create/audio", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "语音生成" })).toBeVisible({ timeout: 20000 });
+  });
 });
