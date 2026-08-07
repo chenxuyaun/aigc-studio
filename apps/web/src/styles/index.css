@@ -2,6 +2,20 @@
 @import "tailwindcss";
 
 /*
+ * 自托管 iconfont（font_1334179_yeeyzhmgwya）：原本运行时内容会从 at.alicdn.com 拉取，
+ * 被 CSP 拦截刷错误。已下载到 public/fonts/，声明同族名本地源，浏览器优先用本地文件。
+ * 字体极小（woff 1KB），无性能负担。
+ */
+@font-face {
+  font-family: "font_1334179_yeeyzhmgwya";
+  src: url("/fonts/font_1334179_yeeyzhmgwya.woff") format("woff"),
+    url("/fonts/font_1334179_yeeyzhmgwya.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
  * 设计方向：干净明亮工作台（Krea 风）—— 暖白底 × 琥珀金点缀。
  *
  * 关键：主题色直接定义在 Tailwind 的 --color-* 上（@theme 输出到 :root 并生成

@@ -60,3 +60,6 @@ TencentDB-Agent-Memory/
 
 # 会话临时产物
 .cowork-temp/
+
+# 根目录惰性 static/（字体已迁至 apps/web/public/fonts/，此目录不参与构建）
+/static/

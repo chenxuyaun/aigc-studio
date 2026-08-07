@@ -172,7 +172,7 @@ aigc-studio/
 - 新增 `DB_ECHO` 独立开关（默认关）：SQL 语句不再刷日志；与 APP_DEBUG 解耦，/docs 保持可用
 - 根目录 27 个 GUI 测试产物移出版本控制（保留于 .cowork-temp/test-artifacts/）
 - 演示账号 brother1-3 密码轮换为随机值并逐个验证登录
-- 控制台错误清零（CSP/媒体/接口对齐）：`img-src/media-src` 加 `blob:`（本地媒体预览）；`font-src` 白名单 at.alicdn.com、cdn.yiban.io（AI 内容第三方字体，无 scheme 写法同时匹配 http/https）；`/asmr/favorites` 上限 100→200 对齐前端；MarkdownContent 新增 SmartImg（`/api/` 私有图带鉴权取 blob 渲染，不再 401 破图）；Dashboard 巡检查询仅 admin 发起（普通用户不再 403）
+- 控制台错误清零（CSP/媒体/接口对齐）：`img-src/media-src` 加 `blob:`（本地媒体预览）；`font-src 'self' data:` 保持收紧——iconfont（font_1334179_yeeyzhmgwya）已自托管至 `apps/web/public/fonts/`（index.css 声明同族名 @font-face，外部 CDN 白名单已移除）；`/asmr/favorites` 上限 100→200 对齐前端；MarkdownContent 新增 SmartImg（`/api/` 私有图带鉴权取 blob 渲染，不再 401 破图）；Dashboard 巡检查询仅 admin 发起（普通用户不再 403）
 - 资产签名 URL（第二轮修复）：旧字段 `url`/角色头像/生成结果直接 `<img>` 渲染会 401 → content 端点支持短期 HMAC 签名（`?exp&sig`，默认 4h，`ASSET_SIGNED_TTL_SECONDS` 可调）；9 处 URL 生成点全部换签名 URL；无 JWT 时校验签名，有 JWT 走原归属校验；篡改/过期/裸 URL 均 401
 
 ## 10. 部署经验与教训
