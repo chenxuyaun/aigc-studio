@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     APP_SECRET_KEY: str = "dev-secret-key"
     APP_BASE_URL: str = "http://localhost:5000"
 
+    # SQLAlchemy SQL 语句日志（生产噪音大且会记录 prompt 参数），默认关；
+    # 排查时 .env 设 DB_ECHO=true（独立于 APP_DEBUG，不影响 /docs 开关）
+    DB_ECHO: bool = False
+
     MYSQL_HOST: str = "localhost"
     MYSQL_PORT: int = 3306
     MYSQL_DATABASE: str = "aigc_studio"

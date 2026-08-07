@@ -8,9 +8,10 @@ from sqlalchemy.pool import NullPool
 
 # pool_pre_ping：丢弃被 MySQL wait_timeout / 网络抖动掐断的连接，避免 ready 偶发 2013
 # pool_recycle：小于默认 wait_timeout(28800)，主动轮换长连接
-# SQL echo 只在本机调试开：会把用户 prompt 等参数全量写日志，生产必须关
+# SQL echo 由 DB_ECHO 独立控制（默认关：会把用户 prompt 等参数全量写日志）；
+# 不要挂在 APP_DEBUG 上——那会连 Swagger /docs 一起关掉
 _engine_kwargs: dict[str, object] = {
-    "echo": settings.APP_DEBUG and settings.APP_ENV != "production",
+    "echo": settings.DB_ECHO and settings.APP_ENV != "production",
     "pool_pre_ping": True,
     "pool_recycle": 1800,
 }

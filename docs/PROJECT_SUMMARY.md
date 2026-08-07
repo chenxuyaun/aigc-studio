@@ -166,6 +166,13 @@ aigc-studio/
 ### 专项：剧本《替身》
 - scripts/generate_script.cjs 生成完整 30 场 1 小时悬疑电影剧本 → docx（已交付导演）
 
+### D. 交接后第一轮（2026-08-07）
+- `git init` + 基线提交；.gitignore 排除第三方克隆（SillyTavern/、TencentDB-Agent-Memory/）、.cpolar-data/ 等
+- worker `DB_POOL_CLASS=null`（NullPool）：消除 asyncio.run 跨 loop 复用连接导致的 `Event loop is closed` 噪音
+- 新增 `DB_ECHO` 独立开关（默认关）：SQL 语句不再刷日志；与 APP_DEBUG 解耦，/docs 保持可用
+- 根目录 27 个 GUI 测试产物移出版本控制（保留于 .cowork-temp/test-artifacts/）
+- 演示账号 brother1-3 密码轮换为随机值并逐个验证登录
+
 ## 10. 部署经验与教训
 
 ### 本地（当前主环境）
@@ -239,4 +246,4 @@ cd apps/web && npx tsc --noEmit       # 前端类型检查
 - grok2api 管理凭据仅用于 API 调用，不落文件
 - 平台不开放匿名注册（用户由 admin 创建）
 - 公网只暴露前端 5000（nginx 反代），API/DB/Redis 均不暴露
-- 演示账号：brother1-3（如需重建：admin 调 `POST /api/v1/users/`）
+- 演示账号：brother1-3（密码已于 2026-08-07 轮换为随机值，由用户本地保管；如需重建：admin 调 `POST /api/v1/users/`）
