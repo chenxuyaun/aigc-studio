@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -123,8 +123,8 @@ export function DashboardPage() {
           </button>
         </div>
       )}
-      <Card className="p-6 sm:p-7">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">你想创作什么？</h1>
+      <Card className="animate-enter p-6 sm:p-7">
+        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-[28px]">你想创作什么？</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           输入一句话，或从下方灵感开始。无需任何模型 Key 也能完整体验。
         </p>
@@ -156,7 +156,7 @@ export function DashboardPage() {
             </div>
             <button
               onClick={generate}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_6px_16px_-8px_rgba(232,145,42,0.7)] transition-colors hover:bg-primary-hover"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_6px_16px_-8px_rgba(232,145,42,0.7)] transition-all duration-200 hover:-translate-y-px hover:bg-primary-hover hover:shadow-[0_10px_24px_-8px_rgba(232,145,42,0.8)] active:scale-[0.98]"
             >
               <Sparkles className="h-4 w-4" aria-hidden />
               开始创作
@@ -169,7 +169,7 @@ export function DashboardPage() {
             <button
               key={t.to}
               onClick={() => navigate(t.to)}
-              className="inline-flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm font-medium transition-colors hover:border-primary"
+              className="inline-flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm font-medium transition-all duration-200 hover:-translate-y-px hover:border-primary hover:shadow-soft active:scale-[0.98]"
             >
               <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/12 text-primary">
                 <t.icon className="h-4 w-4" aria-hidden />
@@ -181,7 +181,7 @@ export function DashboardPage() {
       </Card>
 
       {inspection.data?.report && (
-        <section className="mt-6">
+        <section className="animate-enter mt-6" style={{ "--stagger": "80ms" } as CSSProperties}>
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-[15px] font-semibold">系统巡检</h2>
@@ -220,7 +220,7 @@ export function DashboardPage() {
               ].map((item) => (
                 <div key={item.label} className="rounded-lg bg-muted/40 p-3">
                   <p className="text-xs text-muted-foreground">{item.label}</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                  <p className="mt-0.5 truncate font-display text-lg font-semibold tabular-nums">
                     {item.value}
                   </p>
                 </div>
@@ -232,26 +232,32 @@ export function DashboardPage() {
 
       {s && (
         <>
-          <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <section
+            className="animate-enter mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4"
+            style={{ "--stagger": "140ms" } as CSSProperties}
+          >
             {[
               { label: "总任务", value: s.total_tasks },
               { label: "成功", value: s.succeeded },
               { label: "失败", value: s.failed },
               { label: "图片任务", value: s.image_count },
             ].map((item) => (
-              <Card key={item.label} className="p-4">
+              <Card key={item.label} hoverable className="p-4">
                 <p className="text-xs text-muted-foreground">{item.label}</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">{item.value}</p>
+                <p className="mt-1 font-display text-[26px] font-semibold tabular-nums">{item.value}</p>
               </Card>
             ))}
           </section>
 
           {s.trend_7d && s.trend_7d.length > 0 && (
-            <section className="mt-6">
+            <section
+              className="animate-enter mt-6"
+              style={{ "--stagger": "200ms" } as CSSProperties}
+            >
               <Card className="p-4">
                 <h2 className="text-[15px] font-semibold">近 7 天生成趋势</h2>
                 <div className="mt-4 flex h-36 items-end gap-2 sm:gap-3">
-                  {s.trend_7d.map((d) => {
+                  {s.trend_7d.map((d, idx) => {
                     const max = Math.max(...s.trend_7d!.map((x) => x.count), 1);
                     const height = Math.max((d.count / max) * 100, d.count > 0 ? 8 : 2);
                     const label = d.date.slice(5).replace("-", "/");
@@ -262,12 +268,17 @@ export function DashboardPage() {
                         </span>
                         <div
                           className={cn(
-                            "w-full rounded-t-md transition-all",
+                            "bar-grow w-full rounded-t-md transition-all",
                             d.count > 0
                               ? "bg-primary/70 hover:bg-primary"
                               : "bg-muted",
                           )}
-                          style={{ height: `${height}%` }}
+                          style={
+                            {
+                              height: `${height}%`,
+                              "--stagger": `${idx * 45}ms`,
+                            } as CSSProperties
+                          }
                           title={`${d.date}: ${d.count} 个任务`}
                         />
                         <span className="text-[11px] tabular-nums text-muted-foreground">
@@ -283,7 +294,10 @@ export function DashboardPage() {
         </>
       )}
 
-      <section className="mt-8">
+      <section
+        className="animate-enter mt-8"
+        style={{ "--stagger": "240ms" } as CSSProperties}
+      >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-[15px] font-semibold">最近任务</h2>
           <button onClick={() => navigate("/tasks")} className="text-sm text-primary hover:underline">
@@ -297,6 +311,7 @@ export function DashboardPage() {
             {(recentTasks.data?.items ?? []).map((t) => (
               <Card
                 key={t.id}
+                hoverable
                 className="flex cursor-pointer items-center justify-between gap-3 p-3"
                 onClick={() => navigate("/tasks")}
               >
@@ -316,7 +331,10 @@ export function DashboardPage() {
         )}
       </section>
 
-      <section className="mt-9">
+      <section
+        className="animate-enter mt-9"
+        style={{ "--stagger": "280ms" } as CSSProperties}
+      >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-[15px] font-semibold">精选灵感</h2>
           <button
@@ -336,7 +354,7 @@ export function DashboardPage() {
                 })
               }
               title={p.title}
-              className="group relative aspect-square overflow-hidden rounded-2xl border border-border bg-muted"
+              className="group hover-lift relative aspect-square overflow-hidden rounded-2xl border border-border bg-muted"
             >
               {p.cover_url && (
                 <img

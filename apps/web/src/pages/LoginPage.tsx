@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 
 import { useNavigate } from "react-router-dom";
 
@@ -63,22 +63,31 @@ export function LoginPage() {
       {/* 品牌侧：真实作品拼贴 */}
       <div className="relative hidden overflow-hidden md:block">
         <div className="absolute inset-0 grid grid-cols-3 gap-2 p-2">
-          {COLLAGE.map((id) => (
+          {COLLAGE.map((id, idx) => (
             <img
               key={id}
               src={`${R2}/${id}.jpg`}
               alt=""
               loading="lazy"
-              className="h-full w-full rounded-xl object-cover"
+              className="animate-enter h-full w-full rounded-xl bg-secondary object-cover"
+              style={{ "--stagger": `${idx * 60}ms` } as CSSProperties}
+              onError={(e) => {
+                // R2 图床个别图挂掉时留一块低饱和色砖，不出现破图图标
+                e.currentTarget.style.visibility = "hidden";
+              }}
             />
           ))}
         </div>
         <div className="absolute inset-0 bg-gradient-to-br from-background/85 via-background/55 to-background/85" />
+        {/* 底部压暗：保证品牌文案在拼贴图上可读 */}
+        <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-background/10 to-transparent" />
+        {/* 品牌氛围光晕：琥珀色径向渐变，点亮拼贴左下角 */}
+        <div className="pointer-events-none absolute -bottom-24 -left-24 h-80 w-80 rounded-full bg-primary/15 blur-3xl" />
         <div className="relative flex h-full flex-col justify-between p-9">
-          <span className="font-mono-ui text-xs uppercase tracking-[0.16em] text-muted-foreground">
+          <span className="animate-enter font-mono-ui text-xs uppercase tracking-[0.16em] text-muted-foreground">
             AI 创作中心
           </span>
-          <div>
+          <div className="animate-enter" style={{ "--stagger": "120ms" } as CSSProperties}>
             <h2 className="max-w-[14ch] text-3xl font-bold tracking-tight text-balance">
               把想法，变成画面。
             </h2>
@@ -92,21 +101,37 @@ export function LoginPage() {
       {/* 表单侧 */}
       <div className="flex flex-col justify-center px-6 py-12 sm:px-12">
         <div className="mx-auto w-full max-w-sm">
-          <div className="mb-8 flex items-center gap-2.5">
+          <div
+            className="animate-enter mb-8 flex items-center gap-2.5"
+            style={{ "--stagger": "40ms" } as CSSProperties}
+          >
             <img
               src="/logo.png"
               alt="AIGC Studio"
-              className="h-9 w-9 rounded-xl object-cover"
+              className="shadow-soft h-9 w-9 rounded-xl object-cover"
               draggable={false}
             />
-            <span className="text-lg font-semibold tracking-tight">AIGC Studio</span>
+            <span className="font-display text-xl font-semibold tracking-tight">AIGC Studio</span>
           </div>
-          <p className="font-mono-ui text-xs uppercase tracking-[0.16em] text-muted-foreground">
+          <p
+            className="animate-enter font-mono-ui text-xs uppercase tracking-[0.16em] text-muted-foreground"
+            style={{ "--stagger": "100ms" } as CSSProperties}
+          >
             欢迎回来
           </p>
-          <h1 className="mb-6 mt-1 text-2xl font-semibold tracking-tight">登录你的创作空间</h1>
+          <h1
+            className="animate-enter mb-6 mt-1 text-2xl font-semibold tracking-tight"
+            style={{ "--stagger": "160ms" } as CSSProperties}
+          >
+            登录你的创作空间
+          </h1>
 
-          <form onSubmit={onSubmit} className="space-y-4" noValidate>
+          <form
+            onSubmit={onSubmit}
+            className="animate-enter space-y-4"
+            style={{ "--stagger": "220ms" } as CSSProperties}
+            noValidate
+          >
             <Field label="用户名或邮箱" required error={fieldErrors.username}>
               {({ id, describedBy }) => (
                 <Input
