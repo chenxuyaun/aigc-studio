@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Dialog } from "@/components/ui/Dialog";
 import { Field, Input, Textarea } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { GallerySkeleton } from "@/components/ui/Skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/States";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -455,28 +456,28 @@ function PromptEditor({
           )}
         </Field>
         <Field label="类型">
-          {({ id }) => (
-            <select
+          {({ id, describedBy }) => (
+            <Select
               id={id}
+              aria-describedby={describedBy}
               value={form.prompt_type}
               onChange={(e) => setForm({ ...form, prompt_type: e.target.value })}
-              className="h-10 w-full rounded-xl border border-input bg-surface px-3.5 text-[16px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
             >
               {PROMPT_TYPE_OPTS.map((o) => (
                 <option key={o.v} value={o.v}>
                   {o.label}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </Field>
         <Field label="分类">
-          {({ id }) => (
-            <select
+          {({ id, describedBy }) => (
+            <Select
               id={id}
+              aria-describedby={describedBy}
               value={form.category_id}
               onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-              className="h-10 w-full rounded-xl border border-input bg-surface px-3.5 text-[16px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
             >
               <option value="">未分类</option>
               {categories.map((c) => (
@@ -484,7 +485,7 @@ function PromptEditor({
                   {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </Field>
         <Field label="标签" hint="逗号分隔，如：绘画, 写实">

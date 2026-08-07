@@ -112,6 +112,9 @@ body {
 .shadow-soft {
   box-shadow: var(--shadow-soft);
 }
+.shadow-pop {
+  box-shadow: var(--shadow-pop);
+}
 .font-mono-ui {
   font-family: "SFMono-Regular", "JetBrains Mono", Consolas, monospace;
 }

@@ -24,7 +24,7 @@ export function PageHeader({
         <div>
           <h1
             onClick={onTitleClick}
-            className={`text-lg font-semibold text-foreground ${
+            className={`font-display text-lg font-semibold tracking-tight text-foreground ${
               onTitleClick ? "cursor-pointer select-none" : ""
             }`}
           >

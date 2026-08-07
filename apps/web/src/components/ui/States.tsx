@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { AlertTriangle, Inbox, Loader2 } from "lucide-react";
+import { AlertTriangle, Inbox, Loader2, SearchX } from "lucide-react";
 
 import { AppError } from "@/lib/apiClient";
 
@@ -32,6 +32,22 @@ export function EmptyState({
       <h3 className="text-base font-semibold text-foreground">{title}</h3>
       {description && <p className="max-w-sm text-sm text-muted-foreground">{description}</p>}
       {action}
+    </div>
+  );
+}
+
+/** 搜索/筛选无结果：区别于空库的 EmptyState，附带「清除筛选」复位。 */
+export function EmptyQuery({ onReset, label = "没有匹配的结果" }: { onReset?: () => void; label?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+      <SearchX className="h-8 w-8 text-muted-foreground" aria-hidden />
+      <h3 className="text-base font-semibold text-foreground">{label}</h3>
+      <p className="max-w-sm text-sm text-muted-foreground">试试换一个关键词，或清除筛选条件。</p>
+      {onReset && (
+        <Button variant="outline" size="sm" onClick={onReset}>
+          清除筛选
+        </Button>
+      )}
     </div>
   );
 }
