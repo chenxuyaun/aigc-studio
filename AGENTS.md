@@ -33,11 +33,20 @@ cd apps/api && uv run pytest    # 后端测试
 cd apps/web && npx tsc --noEmit # 前端类型检查
 ```
 
-## 当前待办（用户明确想做的三件事）
+## 当前状态（2026-08-07 更新）
 
-1. **前端 GUI 测试**：已有 `gui-test-screenshots/`、browser-use 工具链；补充关键页面（登录/角色/故事/ASMR）的自动化 GUI 测试
-2. **推理框架资料入库**：把推理框架（如 vLLM/Ollama 等）资料整理入库（知识库/提示词/技能？——先确认落点）
-3. **连载告警**：小说/剧本连载场景的更新提醒机制（schedule 表已有 `serial_schedule` 模型可复用）
+**已完成的待办**（均含自动化测试）：
+1. ✅ 前端 GUI 测试：`apps/web/e2e/`（global-setup 登录 + core-modules 4 测试 + smoke 5 测试，`--grep-invert @heavy` 跑默认套件）
+2. ✅ 推理框架资料入库：知识库 `推理框架·vllm/ollama/llamacpp/selection` 4 篇
+3. ✅ 连载告警：每日巡检 `serial_project_alerts`（`SERIAL_STALL_DAYS` 默认 7 天）+ Dashboard 高亮
+4. ✅ 提示词库治理：清理 168 垃圾 + 382 重复（剩 13,464 条）；`content_hash` 去重机制已启用
+5. ✅ 图片/视频生成真实链路修复（provider_configs 需含 grok-imagine-* 匹配行）
+6. ✅ 图片生成页「从提示词库选择」入口
+
+**注意**：
+- E2E 登录态文件 `apps/web/e2e/.auth/` 含 token，已在 .gitignore
+- 改后端代码后需 `docker compose up -d --build api worker`（容器内代码非热加载）
+- MySQL 客户端操作必须带 `--default-character-set=utf8mb4`（否则中文条件匹配失败）
 
 ## 文档索引
 
