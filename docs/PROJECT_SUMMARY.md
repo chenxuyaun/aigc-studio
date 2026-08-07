@@ -193,12 +193,13 @@ aigc-studio/
 - ✅ 本地 11 容器全绿，AI 对话/生成/记忆/蒸馏全链路可用
 - ✅ 数据完整（62k ASMR / 14k prompt），每日自动备份
 - ✅ 217+ 测试通过，ruff/mypy/tsc 全绿
-- 🔶 未做：代码无 git 版本控制（**建议 git init + 快照**）；C 盘清理后需持续关注磁盘
+- ✅ 已有 git 版本控制（2026-08-07 `git init` + 首次提交，main 分支）
+- 🔶 C 盘清理后需持续关注磁盘
 
 ## 12. 已知问题 / 优化候选（供接手者）
 
-1. **无版本控制**：整个仓库没有 git 历史，优先 git init + 首次提交
-2. **api/worker 日志噪音**：`RuntimeError: Event loop is closed`（连接池关闭时序，功能无影响，可清理）
+1. ~~**无版本控制**~~（已解决 2026-08-07）：git init + 首次提交完成；SillyTavern/、TencentDB-Agent-Memory/（第三方克隆）、.cpolar-data/ 已入 .gitignore
+2. ~~**api/worker 日志噪音**~~（已解决 2026-08-07）：worker 服务设 `DB_POOL_CLASS=null`（compose.yaml），database.py 按环境变量切 NullPool——asyncio.run 每任务新 loop，现连现关，不再跨 loop 复用连接；API 进程保持 QueuePool 不变
 3. **cpolar 免费隧道**：域名重启后变化、限速 1Mbps；长期分享需付费版或自建 frp
 4. **本地 API 端口 8002** 与 grok2api 8000 并存，文档/脚本中需区分；建议统一通过 nginx 反代访问
 5. **云端数据无增量同步**（当前为一次性快照；云端已退，本地为唯一源）

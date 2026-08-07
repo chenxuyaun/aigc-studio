@@ -75,6 +75,8 @@ services:
     environment:
       - DATABASE_URL=mysql+aiomysql://${MYSQL_USER:-aigc}:${MYSQL_PASSWORD:-changeme}@mysql:3306/${MYSQL_DATABASE:-aigc_studio}
       - TDAI_MEMORY_ENDPOINT=http://memory-core:8420
+      # asyncio.run 任务模式用 NullPool：避免跨事件循环复用连接刷 Event loop is closed
+      - DB_POOL_CLASS=null
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

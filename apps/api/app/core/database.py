@@ -1,8 +1,10 @@
 from collections.abc import AsyncGenerator
+import os
 
 from app.core.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 # pool_pre_ping：丢弃被 MySQL wait_timeout / 网络抖动掐断的连接，避免 ready 偶发 2013
 # pool_recycle：小于默认 wait_timeout(28800)，主动轮换长连接
@@ -12,8 +14,14 @@ _engine_kwargs: dict[str, object] = {
     "pool_pre_ping": True,
     "pool_recycle": 1800,
 }
-# sqlite 不支持连接池参数；生产 MySQL 再开连接数限制
-if not settings.sqlalchemy_database_url.startswith("sqlite"):
+# celery worker 以 asyncio.run 跑任务，每任务一个新事件循环：常驻连接池会把
+# 旧 loop 的 aiomysql 连接带到下次任务，dispose 时在已关闭 loop 上 call_soon，
+# 刷 "RuntimeError: Event loop is closed" 噪音。worker 用 NullPool 现连现关
+# （连接随 session 在任务自己的 loop 内关闭），API 进程保持默认连接池。
+if os.environ.get("DB_POOL_CLASS", "").lower() == "null":
+    _engine_kwargs["poolclass"] = NullPool
+elif not settings.sqlalchemy_database_url.startswith("sqlite"):
+    # sqlite 不支持连接池参数；生产 MySQL 再开连接数限制
     _engine_kwargs.update(
         {
             "pool_size": 5,
