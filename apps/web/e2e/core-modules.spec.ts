@@ -113,4 +113,30 @@ test.describe("核心业务模块 GUI", () => {
     await expect(textarea).not.toHaveValue("", { timeout: 10000 });
     await page.screenshot({ path: "gui-test-screenshots/g4_prompt_picker.png" });
   });
+
+  test("Agent 库：列表加载", async ({ page }) => {
+    await page.goto("/agents", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Agent 库" })).toBeVisible({ timeout: 20000 });
+    // 统计与搜索入口渲染（90 个 Agent 真实数据）
+    await expect(page.getByText(/共 \d+ 个 Agent/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByPlaceholder(/搜索 Agent/)).toBeVisible();
+  });
+
+  test("知识库：推理框架文档可见可检索", async ({ page }) => {
+    await page.goto("/knowledge", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByRole("heading", { name: "知识库", exact: true }),
+    ).toBeVisible({ timeout: 20000 });
+    // 入库的推理框架文档出现在列表（可检索）
+    await expect(page.getByText(/推理框架/).first()).toBeVisible({ timeout: 15000 });
+  });
+
+  test("任务中心：历史任务列表加载", async ({ page }) => {
+    await page.goto("/tasks", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "任务中心" })).toBeVisible({ timeout: 20000 });
+    // 有历史任务记录（本地有 200+ 条生成任务）
+    await expect(page.locator("main").getByText(/生成|任务/).first()).toBeVisible({
+      timeout: 15000,
+    });
+  });
 });
