@@ -32,6 +32,15 @@ coverage/
 backups/
 *.bak
 
+# 根目录 GUI 自动化产物（状态快照/截图，锚定根目录不误伤子目录）
+/cs*.json
+/cst*.json
+/click*.json
+/chrome_state.json
+/agent_v2.json
+/story_page_shot.png
+/[0-9]*-*.png
+
 # 开发截图（仓库根散落的测试截图，不应入库）
 test-step*.png
 test*.png
