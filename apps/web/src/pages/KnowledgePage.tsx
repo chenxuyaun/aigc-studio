@@ -212,7 +212,7 @@ export function KnowledgePage() {
                     <div className="flex items-center gap-2 px-3 py-2">
                       <button
                         type="button"
-                        className="min-w-0 flex-1 text-left text-sm hover:text-primary"
+                        className="min-w-0 flex-1 text-left text-sm hover:text-primary-text"
                         onClick={() =>
                           setExpandedId((prev) => (prev === doc.id ? null : doc.id))
                         }

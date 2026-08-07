@@ -107,7 +107,7 @@ export function WorldPanel({ projectId, onChanged }: Props) {
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium">
                 {it.keywords.join(" / ")}
-                {it.constant && <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">常驻</span>}
+                {it.constant && <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary-text">常驻</span>}
               </span>
               <button className="text-xs text-danger/70 hover:text-danger" onClick={() => remove(it.id)}>
                 删除

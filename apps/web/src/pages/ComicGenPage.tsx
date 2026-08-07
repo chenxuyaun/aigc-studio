@@ -125,7 +125,7 @@ export function ComicGenPage() {
                   onClick={() => setPanels(o.v)}
                   className={`flex-1 rounded-xl border px-3 py-2 text-sm transition-colors ${
                     panels === o.v
-                      ? "border-primary bg-primary/10 font-medium text-primary"
+                      ? "border-primary bg-primary/10 font-medium text-primary-text"
                       : "border-border text-muted-foreground hover:border-border-strong"
                   }`}
                 >
@@ -144,7 +144,7 @@ export function ComicGenPage() {
                   onClick={() => setLayout(o.v)}
                   className={`flex-1 rounded-xl border px-3 py-2 text-sm transition-colors ${
                     layout === o.v
-                      ? "border-primary bg-primary/10 font-medium text-primary"
+                      ? "border-primary bg-primary/10 font-medium text-primary-text"
                       : "border-border text-muted-foreground hover:border-border-strong"
                   }`}
                 >
@@ -163,7 +163,7 @@ export function ComicGenPage() {
                   onClick={() => setStyle(s)}
                   className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
                     style === s
-                      ? "border-primary bg-primary/10 font-medium text-primary"
+                      ? "border-primary bg-primary/10 font-medium text-primary-text"
                       : "border-border text-muted-foreground hover:border-border-strong"
                   }`}
                 >

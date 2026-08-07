@@ -35,6 +35,9 @@
   --color-primary: #e8912a;
   --color-primary-hover: #d0801e;
   --color-primary-foreground: #ffffff;
+  /* 文字场景琥珀（背景上的正文/链接/标签，对比度≥4.5:1，WCAG AA）；
+   * 填充场景（按钮底色）继续用 --color-primary 品牌色 */
+  --color-primary-text: #a5630f;
   --color-secondary: #f2efe8;
   --color-secondary-foreground: #33302a;
   --color-muted: #f2efe8;
@@ -79,6 +82,7 @@
     --color-primary: #f0a53f;
     --color-primary-hover: #e2963a;
     --color-primary-foreground: #1a1204;
+    --color-primary-text: #f2b45e;
     --color-secondary: #262319;
     --color-secondary-foreground: #ddd8cc;
     --color-muted: #221f18;
@@ -102,6 +106,7 @@
   --color-primary: #f0a53f;
   --color-primary-hover: #e2963a;
   --color-primary-foreground: #1a1204;
+  --color-primary-text: #f2b45e;
   --color-secondary: #262319;
   --color-secondary-foreground: #ddd8cc;
   --color-muted: #221f18;

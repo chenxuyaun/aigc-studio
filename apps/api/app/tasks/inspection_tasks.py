@@ -73,6 +73,40 @@ async def _collect() -> dict[str, object]:
             for r in serial_rows
         ]
 
+        # 连载项目停滞告警：status=ongoing 但超过 N 天（SERIAL_STALL_DAYS，默认 7）无新章节
+        import os
+
+        from app.models.story_chapter import StoryChapter
+        from app.models.story_project import StoryProject
+
+        stall_days = int(os.environ.get("SERIAL_STALL_DAYS", "7"))
+        cutoff_stall = datetime.now(UTC) - timedelta(days=stall_days)
+        ongoing = (
+            await db.execute(
+                select(StoryProject).where(StoryProject.status == "ongoing")
+            )
+        ).scalars().all()
+        stall_alerts: list[dict[str, object]] = []
+        for p in ongoing:
+            last_ch = (
+                await db.execute(
+                    select(StoryChapter.created_at)
+                    .where(StoryChapter.project_id == p.id)
+                    .order_by(StoryChapter.created_at.desc())
+                    .limit(1)
+                )
+            ).scalar()
+            if last_ch is None:
+                stall_alerts.append(
+                    {"title": p.title, "note": "连载中但尚无章节"}
+                )
+            elif last_ch < cutoff_stall:
+                days = (datetime.now(UTC) - last_ch).days
+                stall_alerts.append(
+                    {"title": p.title, "days_since_update": days}
+                )
+        report["sections"]["serial_project_alerts"] = stall_alerts
+
         # ASMR 聚合库同步状态：总量 + 上次同步时间 + 24h 增量（异常可告警）
         from app.models.asmr_work import AsmrWork
 

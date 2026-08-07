@@ -21,7 +21,7 @@ export function MarkdownContent({ content }: { content: string }) {
               {...props}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-primary underline underline-offset-2"
+              className="text-primary-text underline underline-offset-2"
             />
           ),
         }}

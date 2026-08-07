@@ -237,12 +237,12 @@ export function ProvidersPage() {
               <Card key={row.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Server className="h-4 w-4 text-primary" aria-hidden />
+                    <Server className="h-4 w-4 text-primary-text" aria-hidden />
                     <span className="font-semibold">{row.name}</span>
                     <span
                       className={
                         row.is_enabled
-                          ? "rounded-full bg-primary/12 px-2 py-0.5 text-[11px] text-primary"
+                          ? "rounded-full bg-primary/12 px-2 py-0.5 text-[11px] text-primary-text"
                           : "rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
                       }
                     >

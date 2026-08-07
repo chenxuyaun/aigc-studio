@@ -277,7 +277,7 @@ export function AgentDirectoryPage() {
                     <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{p.description}</p>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {p.categories.map((c) => (
-                        <span key={c} className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
+                        <span key={c} className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary-text">
                           {c}
                         </span>
                       ))}
@@ -350,7 +350,7 @@ export function AgentDirectoryPage() {
                 </pre>
                 {detail.content.length > 6000 && (
                   <button
-                    className="text-sm text-primary underline"
+                    className="text-sm text-primary-text underline"
                     onClick={() => setExpanded((v) => !v)}
                   >
                     {expanded ? "收起" : `展开全文（${detail.content.length} 字符）`}
@@ -360,13 +360,13 @@ export function AgentDirectoryPage() {
             )}
             <div className="flex flex-wrap gap-2">
               {detail.url && (
-                <a className="text-sm text-primary underline" href={detail.url} target="_blank" rel="noreferrer">
+                <a className="text-sm text-primary-text underline" href={detail.url} target="_blank" rel="noreferrer">
                   原站链接
                 </a>
               )}
               {isProject(detail) && detail.github_url && (
                 <a
-                  className="text-sm text-primary underline"
+                  className="text-sm text-primary-text underline"
                   href={detail.github_url}
                   target="_blank"
                   rel="noreferrer"
@@ -376,7 +376,7 @@ export function AgentDirectoryPage() {
               )}
               {isProject(detail) && detail.homepage_url && (
                 <a
-                  className="text-sm text-primary underline"
+                  className="text-sm text-primary-text underline"
                   href={detail.homepage_url}
                   target="_blank"
                   rel="noreferrer"

@@ -4,6 +4,9 @@ AI 创作工作台：文本 / 图片 / 视频 / 语音生成，配套提示词�
 
 Monorepo：`apps/web`（React 19 + Vite + Module Federation）、`apps/api`（FastAPI + SQLAlchemy async）、`packages/shared-types`。
 
+> 📖 **项目全景**：完整架构/模块/数据/部署/优化记录见 **[docs/PROJECT_SUMMARY.md](docs/PROJECT_SUMMARY.md)**；
+> 接手 AI 引导见 **AGENTS.md**。
+
 ## 快速开始
 
 ```bash

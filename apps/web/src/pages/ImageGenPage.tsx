@@ -3,11 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import type { CatalogItem } from "@aigc/shared-types";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Download, FolderOpen, Image as ImageIcon, Wand2, X } from "lucide-react";
+import { BookOpen, ChevronDown, Download, FolderOpen, Image as ImageIcon, Wand2, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
 import { Field, Input, Textarea } from "@/components/ui/Field";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { useMediaTask } from "@/hooks/useMediaTask";
@@ -56,6 +57,28 @@ export function ImageGenPage() {
   );
   const [refLabel, setRefLabel] = useState(handoff?.reference_label ?? "");
   const task = useMediaTask("/generations/image/generate");
+
+  // 提示词库选择器：搜索 /prompts 并填充提示词框
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerResults, setPickerResults] = useState<
+    Array<{ id: string; title: string; content: string }>
+  >([]);
+  const [pickerBusy, setPickerBusy] = useState(false);
+
+  async function searchPrompts() {
+    const q = pickerQuery.trim();
+    if (!q) return;
+    setPickerBusy(true);
+    try {
+      const res = await apiClient.get<{
+        items: Array<{ id: string; title: string; content: string }>;
+      }>(`/prompts/?search=${encodeURIComponent(q)}&page=1&page_size=10`);
+      setPickerResults(res.items ?? []);
+    } finally {
+      setPickerBusy(false);
+    }
+  }
 
   // DB Provider 驱动模型选项：内置 huggingface + 已注册 Provider（自动出现）
   const dbProviders = useQuery({
@@ -229,13 +252,13 @@ export function ImageGenPage() {
                 <div className="flex flex-wrap gap-2">
                   <Link
                     to="/photography"
-                    className="inline-flex h-9 items-center rounded-xl border border-dashed border-border px-3 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+                    className="inline-flex h-9 items-center rounded-xl border border-dashed border-border px-3 text-sm text-muted-foreground hover:border-primary hover:text-primary-text"
                   >
                     从写真选择
                   </Link>
                   <Link
                     to="/assets"
-                    className="inline-flex h-9 items-center rounded-xl border border-dashed border-border px-3 text-sm text-muted-foreground hover:border-primary hover:text-primary"
+                    className="inline-flex h-9 items-center rounded-xl border border-dashed border-border px-3 text-sm text-muted-foreground hover:border-primary hover:text-primary-text"
                   >
                     从素材库选择
                   </Link>
@@ -244,6 +267,16 @@ export function ImageGenPage() {
             }
           </Field>
 
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              <BookOpen className="h-3.5 w-3.5" aria-hidden />
+              从提示词库选择
+            </button>
+          </div>
           <Field label="提示词" required>
             {({ id }) => (
               <Textarea
@@ -279,7 +312,7 @@ export function ImageGenPage() {
                     }}
                     className={
                       width === p.w && height === p.h
-                        ? "rounded-lg border border-primary bg-primary/12 px-2.5 py-1 text-xs font-semibold text-primary"
+                        ? "rounded-lg border border-primary bg-primary/12 px-2.5 py-1 text-xs font-semibold text-primary-text"
                         : "rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-primary"
                     }
                   >
@@ -338,7 +371,7 @@ export function ImageGenPage() {
           <button
             type="button"
             onClick={() => setShowAdvanced((v) => !v)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary-text"
           >
             <ChevronDown
               className={cn("h-3.5 w-3.5 transition-transform", showAdvanced && "rotate-180")}
@@ -456,7 +489,7 @@ export function ImageGenPage() {
                 </Link>
                 <Link
                   to="/tasks"
-                  className="inline-flex h-8 items-center text-sm text-primary hover:underline"
+                  className="inline-flex h-8 items-center text-sm text-primary-text hover:underline"
                 >
                   任务中心
                 </Link>
@@ -493,6 +526,45 @@ export function ImageGenPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={pickerOpen} onClose={() => setPickerOpen(false)} title="从提示词库选择">
+        <div className="flex gap-2">
+          <Input
+            value={pickerQuery}
+            onChange={(e) => setPickerQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void searchPrompts();
+            }}
+            placeholder="搜索提示词…"
+            autoFocus
+          />
+          <Button size="sm" onClick={() => void searchPrompts()} disabled={pickerBusy}>
+            {pickerBusy ? "搜索中…" : "搜索"}
+          </Button>
+        </div>
+        <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+          {!pickerBusy && pickerResults.length === 0 && (
+            <li className="py-6 text-center text-xs text-muted-foreground">
+              输入关键词搜索提示词库，点击结果填充提示词
+            </li>
+          )}
+          {pickerResults.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-primary"
+                onClick={() => {
+                  setPrompt(p.content);
+                  setPickerOpen(false);
+                }}
+              >
+                <p className="text-sm font-medium text-foreground">{p.title}</p>
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.content}</p>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Dialog>
     </div>
   );
 }

@@ -53,7 +53,7 @@ export function CreatePage() {
               t.ready ? "hover:-translate-y-0.5 hover:border-primary" : "cursor-not-allowed opacity-55",
             )}
           >
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/12 text-primary">
+            <span className="grid h-11 w-11 place-items-center rounded-xl bg-primary/12 text-primary-text">
               <t.icon className="h-5.5 w-5.5" aria-hidden />
             </span>
             <span>

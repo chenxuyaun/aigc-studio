@@ -203,7 +203,7 @@ export function AgentsPage() {
                     onClick={() => navigate(`/agents/${a.id}/chat`)}
                     aria-label={`运行 ${a.name}`}
                     title={`运行 ${a.name}`}
-                    className="grid h-8 w-8 flex-none place-items-center rounded-lg border border-border text-muted-foreground hover:border-primary hover:text-primary"
+                    className="grid h-8 w-8 flex-none place-items-center rounded-lg border border-border text-muted-foreground hover:border-primary hover:text-primary-text"
                   >
                     <Play className="h-4 w-4" aria-hidden />
                   </button>

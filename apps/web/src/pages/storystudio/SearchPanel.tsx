@@ -73,7 +73,7 @@ export function SearchPanel({ projectId, onOpenChapter }: Props) {
               <div className="flex items-start justify-between gap-1">
                 <button
                   onClick={() => (isChapter ? onOpenChapter(item.id) : setExpanded(expanded === item.id ? null : item.id))}
-                  className="min-w-0 text-left text-xs font-medium text-foreground hover:text-primary"
+                  className="min-w-0 text-left text-xs font-medium text-foreground hover:text-primary-text"
                   title={isChapter ? "打开该章节" : "展开资料片段"}
                 >
                   {item.title}

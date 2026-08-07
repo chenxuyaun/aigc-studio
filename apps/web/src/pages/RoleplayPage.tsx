@@ -515,7 +515,7 @@ export function RoleplayPage() {
               </h3>
               <a
                 href="/create/character-card"
-                className="flex items-center gap-1 text-xs text-primary hover:underline"
+                className="flex items-center gap-1 text-xs text-primary-text hover:underline"
               >
                 <Plus className="h-3 w-3" aria-hidden />
                 生成新卡
@@ -649,7 +649,7 @@ export function RoleplayPage() {
           <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
             <span className="text-sm font-semibold">
               {selected ? `与 ${charDisplayName || selected.filename} 聊天` : "请选择角色"}
-              <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+              <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary-text">
                 好感度 {affinity}
               </span>
             </span>
@@ -727,7 +727,7 @@ export function RoleplayPage() {
                       {m.swipes && m.swipes.length > 1 && (
                         <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                           <button
-                            className="hover:text-primary"
+                            className="hover:text-primary-text"
                             title="上一个"
                             onClick={() => switchSwipe(i, -1)}
                           >
@@ -735,7 +735,7 @@ export function RoleplayPage() {
                           </button>
                           {(m.swipeIndex ?? m.swipes.length - 1) + 1}/{m.swipes.length}
                           <button
-                            className="hover:text-primary"
+                            className="hover:text-primary-text"
                             title="下一个"
                             onClick={() => switchSwipe(i, 1)}
                           >
@@ -744,14 +744,14 @@ export function RoleplayPage() {
                         </span>
                       )}
                       <button
-                        className="text-[10px] text-muted-foreground hover:text-primary"
+                        className="text-[10px] text-muted-foreground hover:text-primary-text"
                         title="生成另一个回复"
                         onClick={() => void swipeReply(i)}
                       >
                         ↻ 换一个
                       </button>
                       <button
-                        className="text-[10px] text-muted-foreground hover:text-primary"
+                        className="text-[10px] text-muted-foreground hover:text-primary-text"
                         title="继续写下去"
                         onClick={() => void continueReply(i)}
                       >
@@ -769,14 +769,14 @@ export function RoleplayPage() {
                     </button>
                   )}
                   <button
-                    className="mt-1 px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100"
+                    className="mt-1 px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-primary-text group-hover:opacity-100"
                     title="复制消息"
                     onClick={() => void copyText(m.content)}
                   >
                     复制
                   </button>
                   <button
-                    className="mt-1 px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100"
+                    className="mt-1 px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-primary-text group-hover:opacity-100"
                     title="从这里分叉新会话"
                     onClick={() => void branchChat(i)}
                   >
@@ -804,7 +804,7 @@ export function RoleplayPage() {
                   key={q.id}
                   disabled={busy || !selected}
                   onClick={() => setInput(expandQuickMacros(q.message, charDisplayName, personas.find((p) => p.id === personaId)?.name ?? "用户"))}
-                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-40"
+                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary-text disabled:opacity-40"
                 >
                   {q.label}
                 </button>
@@ -921,7 +921,7 @@ export function RoleplayPage() {
                 key={key}
                 onClick={() => setRightTab(key)}
                 className={`rounded-lg px-2.5 py-1 transition-colors ${
-                  rightTab === key ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                  rightTab === key ? "bg-primary/10 text-primary-text" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {label}

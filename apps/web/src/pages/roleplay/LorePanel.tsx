@@ -150,14 +150,14 @@ export function LorePanel({ characterName }: Props) {
         </span>
         <div className="flex gap-1">
           <button
-            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary"
+            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary-text"
             onClick={() => void exportLore()}
             title="导出为 ST lorebook JSON"
           >
             <Download className="h-3 w-3" aria-hidden />
             导出
           </button>
-          <label className="flex cursor-pointer items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary">
+          <label className="flex cursor-pointer items-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary-text">
             <Upload className="h-3 w-3" aria-hidden />
             导入
             <input
@@ -315,7 +315,7 @@ export function LorePanel({ characterName }: Props) {
             </div>
             <p className="mb-1.5 whitespace-pre-wrap text-muted-foreground">{e.content}</p>
             <div className="flex gap-2">
-              <button className="text-primary hover:underline" onClick={() => edit(e)}>
+              <button className="text-primary-text hover:underline" onClick={() => edit(e)}>
                 编辑
               </button>
               <button className="text-muted-foreground hover:text-danger" onClick={() => void remove(e.id)}>

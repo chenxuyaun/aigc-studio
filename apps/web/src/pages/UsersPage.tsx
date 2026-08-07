@@ -85,7 +85,7 @@ export function UsersPage() {
             <ul className="divide-y divide-border">
               {(users.data ?? []).map((u) => (
                 <li key={u.id} className="flex items-center gap-3 px-4 py-3">
-                  <span className="grid h-9 w-9 flex-none place-items-center rounded-full bg-primary/12 text-primary">
+                  <span className="grid h-9 w-9 flex-none place-items-center rounded-full bg-primary/12 text-primary-text">
                     {u.role === "admin" ? (
                       <ShieldCheck className="h-4 w-4" aria-hidden />
                     ) : (

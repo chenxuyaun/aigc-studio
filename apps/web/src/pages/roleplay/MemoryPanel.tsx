@@ -120,7 +120,7 @@ export function MemoryPanel({ assetId }: MemoryPanelProps) {
       {/* ── 原著蒸馏 ── */}
       <div>
         <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
+          <Sparkles className="h-3.5 w-3.5 text-primary-text" aria-hidden />
           原著蒸馏（书籍 → 角色档案）
         </p>
         <div className="space-y-2">
@@ -160,7 +160,7 @@ export function MemoryPanel({ assetId }: MemoryPanelProps) {
       {p && p.status === "done" && (
         <div className="space-y-2 rounded-xl border border-border bg-surface p-3">
           <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-            <Brain className="h-3.5 w-3.5 text-primary" aria-hidden />
+            <Brain className="h-3.5 w-3.5 text-primary-text" aria-hidden />
             原著档案 · 《{p.book_title}》
           </p>
           {p.identity && <p className="text-[11px] leading-relaxed text-foreground"><span className="text-muted-foreground">身份：</span>{p.identity}</p>}

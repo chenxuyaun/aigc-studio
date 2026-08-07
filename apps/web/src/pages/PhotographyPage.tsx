@@ -547,7 +547,7 @@ export function PhotographyAlbumPage() {
             onDrop={onDropFiles}
           >
             <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/12 text-primary">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/12 text-primary-text">
                 <ImagePlus className="h-5 w-5" aria-hidden />
               </span>
               <div>

@@ -114,7 +114,7 @@ export function AudioGenPage() {
         <div className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-[var(--radius-card)] border border-border bg-surface p-4">
           {task.result ? (
             <>
-              <div className="grid h-20 w-20 place-items-center rounded-full bg-primary/12 text-primary">
+              <div className="grid h-20 w-20 place-items-center rounded-full bg-primary/12 text-primary-text">
                 <AudioLines className="h-9 w-9" aria-hidden />
               </div>
               <audio controls src={task.result.assetUrl} className="w-full max-w-md">

@@ -210,7 +210,7 @@ export function StoryStudioPage() {
                     onClick={() => toggleChar(c.asset_id)}
                     className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
                       form.character_asset_ids.includes(c.asset_id)
-                        ? "border-primary bg-primary/15 text-primary"
+                        ? "border-primary bg-primary/15 text-primary-text"
                         : "border-border bg-surface text-muted-foreground hover:border-border-strong"
                     }`}
                   >

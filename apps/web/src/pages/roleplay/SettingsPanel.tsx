@@ -157,7 +157,7 @@ export function SettingsPanel({
                 <span className="font-medium">
                   {q.label}
                   {"auto" in q && q.auto === true && (
-                    <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary">
+                    <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary-text">
                       自动
                     </span>
                   )}

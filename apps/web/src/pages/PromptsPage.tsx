@@ -174,7 +174,7 @@ function PromptCard({
         <p className="line-clamp-1 text-sm font-medium text-foreground">
           {prompt.title}
           {vars.length > 0 && (
-            <span className="ml-1.5 inline-flex translate-y-[-1px] items-center rounded-md bg-primary/10 px-1.5 py-0.5 align-middle text-[10px] font-medium text-primary">
+            <span className="ml-1.5 inline-flex translate-y-[-1px] items-center rounded-md bg-primary/10 px-1.5 py-0.5 align-middle text-[10px] font-medium text-primary-text">
               变量 {vars.length}
             </span>
           )}
@@ -245,7 +245,7 @@ function PromptDetail({
         {vars.length > 0 && (
           <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-3">
             <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-primary" aria-hidden />
+              <SlidersHorizontal className="h-3.5 w-3.5 text-primary-text" aria-hidden />
               模板变量（{vars.length}）· 填好后「复制」或「用于创作」会带上你的填写
             </p>
             {vars.map((v) => (

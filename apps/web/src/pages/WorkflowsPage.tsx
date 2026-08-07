@@ -170,7 +170,7 @@ export function WorkflowsPage() {
                     disabled={runMut.isPending}
                     aria-label={`运行 ${w.name}`}
                     title="运行工作流（按节点顺序串联生成）"
-                    className="grid h-8 w-8 flex-none place-items-center rounded-lg border border-border text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-50"
+                    className="grid h-8 w-8 flex-none place-items-center rounded-lg border border-border text-muted-foreground hover:border-primary hover:text-primary-text disabled:opacity-50"
                   >
                     <Play className="h-4 w-4" aria-hidden />
                   </button>
@@ -214,7 +214,7 @@ export function WorkflowsPage() {
               runResult.data.order.map((nodeId, i) => (
                 <div key={nodeId} className="rounded-xl border border-border p-3">
                   <p className="mb-1.5 flex items-center gap-2 text-sm font-medium">
-                    <span className="grid h-5 w-5 place-items-center rounded-full bg-primary/12 text-xs text-primary">
+                    <span className="grid h-5 w-5 place-items-center rounded-full bg-primary/12 text-xs text-primary-text">
                       {i + 1}
                     </span>
                     {runResult.data.node_names[nodeId] ?? "节点"}

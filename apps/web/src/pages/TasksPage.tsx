@@ -445,14 +445,14 @@ export function TasksPage() {
               <p>
                 产物素材：{" "}
                 <Link
-                  className="text-primary hover:underline"
+                  className="text-primary-text hover:underline"
                   to="/assets"
                   state={{ highlight: resultView.asset_id }}
                 >
                   {resultView.asset_id}
                 </Link>
                 {" · "}
-                <Link className="text-primary hover:underline" to="/assets">
+                <Link className="text-primary-text hover:underline" to="/assets">
                   打开素材库
                 </Link>
               </p>

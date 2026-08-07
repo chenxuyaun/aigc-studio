@@ -115,7 +115,7 @@ export function CrewPanel({ projectId, characters, onChanged }: Props) {
               <span className="text-sm font-medium">
                 {c.name}
                 {c.role === "protagonist" && (
-                  <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">主角</span>
+                  <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary-text">主角</span>
                 )}
               </span>
               <div className="flex gap-2 text-xs">

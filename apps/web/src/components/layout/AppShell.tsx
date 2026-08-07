@@ -239,7 +239,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   cn(
                     "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
                     isActive
-                      ? "bg-primary/12 font-semibold text-primary"
+                      ? "bg-primary/12 font-semibold text-primary-text"
                       : "font-medium text-muted-foreground hover:bg-secondary hover:text-foreground",
                   )
                 }
@@ -310,7 +310,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   ))}
                   <button
                     onClick={() => goSearchPage(searchQ.trim())}
-                    className="mt-1 w-full rounded-xl border-t border-border px-2.5 py-2 text-xs font-medium text-primary"
+                    className="mt-1 w-full rounded-xl border-t border-border px-2.5 py-2 text-xs font-medium text-primary-text"
                   >
                     查看全部结果 →
                   </button>
@@ -376,7 +376,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 className={({ isActive }) =>
                   cn(
                     "flex flex-1 flex-col items-center gap-1 py-2 text-xs",
-                    isActive ? "font-medium text-primary" : "text-muted-foreground",
+                    isActive ? "font-medium text-primary-text" : "text-muted-foreground",
                   )
                 }
               >
@@ -389,7 +389,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               aria-label="更多"
               className={cn(
                 "flex flex-1 flex-col items-center gap-1 py-2 text-xs",
-                moreOpen ? "font-medium text-primary" : "text-muted-foreground",
+                moreOpen ? "font-medium text-primary-text" : "text-muted-foreground",
               )}
             >
               <MoreHorizontal className="h-5 w-5" aria-hidden />
@@ -417,7 +417,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       cn(
                         "flex flex-col items-center gap-1.5 rounded-xl border border-border bg-surface px-2 py-3 text-xs",
                         isActive
-                          ? "border-primary/40 bg-primary/10 font-medium text-primary"
+                          ? "border-primary/40 bg-primary/10 font-medium text-primary-text"
                           : "text-muted-foreground",
                       )
                     }

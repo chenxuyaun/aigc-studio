@@ -22,6 +22,7 @@ interface InspectionReport {
     upstream?: Record<string, unknown>;
     grok?: string;
     asmr?: { total?: number; updated_24h?: number; last_sync_at?: string | null; healthy?: boolean };
+    serial_project_alerts?: Array<{ title?: string; days_since_update?: number; note?: string }>;
   };
 }
 
@@ -150,7 +151,7 @@ export function DashboardPage() {
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-sm transition-colors",
                     type === t.v
-                      ? "bg-primary/12 font-semibold text-primary"
+                      ? "bg-primary/12 font-semibold text-primary-text"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -175,7 +176,7 @@ export function DashboardPage() {
               onClick={() => navigate(t.to)}
               className="inline-flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm font-medium transition-all duration-200 hover:-translate-y-px hover:border-primary hover:shadow-soft active:scale-[0.98]"
             >
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/12 text-primary">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/12 text-primary-text">
                 <t.icon className="h-4 w-4" aria-hidden />
               </span>
               {t.label}
@@ -221,8 +222,32 @@ export function DashboardPage() {
                   label: "ASMR 24h 更新",
                   value: inspection.data.report.sections?.asmr?.updated_24h ?? "-",
                 },
+                {
+                  label: "连载停滞",
+                  value: (() => {
+                    const alerts =
+                      inspection.data.report.sections?.serial_project_alerts;
+                    const n = Array.isArray(alerts) ? alerts.length : 0;
+                    return n > 0
+                      ? `${n} 个待关注`
+                      : "正常";
+                  })(),
+                  warn:
+                    (Array.isArray(
+                      inspection.data.report.sections?.serial_project_alerts,
+                    )
+                      ? inspection.data.report.sections.serial_project_alerts.length
+                      : 0) > 0,
+                },
               ].map((item) => (
-                <div key={item.label} className="rounded-lg bg-muted/40 p-3">
+                <div
+                  key={item.label}
+                  className={`rounded-lg p-3 ${
+                    "warn" in item && item.warn
+                      ? "bg-destructive/10 ring-1 ring-destructive/40"
+                      : "bg-muted/40"
+                  }`}
+                >
                   <p className="text-xs text-muted-foreground">{item.label}</p>
                   <p className="mt-0.5 truncate font-display text-lg font-semibold tabular-nums">
                     {item.value}
@@ -304,7 +329,7 @@ export function DashboardPage() {
       >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-[15px] font-semibold">最近任务</h2>
-          <button onClick={() => navigate("/tasks")} className="text-sm text-primary hover:underline">
+          <button onClick={() => navigate("/tasks")} className="text-sm text-primary-text hover:underline">
             全部任务
           </button>
         </div>
@@ -343,7 +368,7 @@ export function DashboardPage() {
           <h2 className="text-[15px] font-semibold">精选灵感</h2>
           <button
             onClick={() => navigate("/prompts")}
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-primary-text hover:underline"
           >
             查看全部
           </button>

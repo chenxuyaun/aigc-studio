@@ -398,7 +398,7 @@ export function AsmrPage() {
                 className={cn(
                   "rounded-full border px-3 py-1 text-xs",
                   favoritesOnly
-                    ? "border-primary/40 bg-primary/10 font-medium text-primary"
+                    ? "border-primary/40 bg-primary/10 font-medium text-primary-text"
                     : "border-border bg-surface text-muted-foreground",
                 )}
               >
@@ -418,7 +418,7 @@ export function AsmrPage() {
           {tag && (
             <button
               onClick={() => setTag("")}
-              className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+              className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary-text"
             >
               {tag} ✕
             </button>
@@ -437,7 +437,7 @@ export function AsmrPage() {
                 className={cn(
                   "rounded-full border px-2.5 py-0.5 text-xs",
                   tag === name
-                    ? "border-primary/40 bg-primary/10 font-medium text-primary"
+                    ? "border-primary/40 bg-primary/10 font-medium text-primary-text"
                     : "border-border bg-surface text-muted-foreground",
                 )}
               >
@@ -669,7 +669,7 @@ export function AsmrPage() {
                 href={detail.source_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-primary underline"
+                className="text-xs text-primary-text underline"
               >
                 查看源站作品页 ↗
               </a>

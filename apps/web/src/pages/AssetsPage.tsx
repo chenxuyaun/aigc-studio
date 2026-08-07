@@ -220,7 +220,7 @@ export function AssetsPage() {
             className={cn(
               "rounded-full border px-3 py-1 text-sm transition-colors",
               mimePrefix === f.v
-                ? "border-primary bg-primary/12 font-semibold text-primary"
+                ? "border-primary bg-primary/12 font-semibold text-primary-text"
                 : "border-border text-muted-foreground hover:border-primary",
             )}
           >
@@ -261,8 +261,8 @@ export function AssetsPage() {
           className={cn(
             "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors",
             dragOver
-              ? "border-primary bg-primary/5 text-primary"
-              : "border-border text-muted-foreground hover:border-primary hover:text-primary",
+              ? "border-primary bg-primary/5 text-primary-text"
+              : "border-border text-muted-foreground hover:border-primary hover:text-primary-text",
           )}
         >
           <Upload className="h-6 w-6" aria-hidden />

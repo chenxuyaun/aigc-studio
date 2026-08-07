@@ -14,6 +14,13 @@ from app.schemas.common import PaginatedResponse
 from app.schemas.prompt import PromptCreate, PromptResponse, PromptUpdate
 from app.security.auth import get_current_user
 
+
+def _prompt_hash(title: str, content: str) -> str:
+    """去重 hash：与存量回填规则一致（sha256(title + \n + content)）。"""
+    import hashlib
+
+    return hashlib.sha256(f"{title}\n{content}".encode("utf-8")).hexdigest()
+
 router = APIRouter()
 
 
@@ -195,6 +202,7 @@ async def create_prompt(
         prompt_type=req.prompt_type,
         is_public=req.is_public,
         author_id=user.id,
+        content_hash=_prompt_hash(req.title, req.content),
     )
     db.add(prompt)
     await db.flush()
@@ -259,6 +267,8 @@ async def update_prompt(
     tags = data.pop("tags", None)
     for field, value in data.items():
         setattr(prompt, field, value)
+    # 标题/内容变更后重算去重 hash
+    prompt.content_hash = _prompt_hash(prompt.title, prompt.content)
     if tags is not None:
         await _set_prompt_tags(db, prompt, tags)
     await db.commit()

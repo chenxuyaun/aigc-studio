@@ -108,7 +108,7 @@ export function SkillsPage() {
                   onClick={() => navigate(`/skills/${s.id}/chat`)}
                   aria-label={`运行 ${s.name}`}
                   title="运行技能（携带技能指令对话）"
-                  className="grid h-8 w-8 flex-none place-items-center rounded-lg border border-border text-muted-foreground hover:border-primary hover:text-primary"
+                  className="grid h-8 w-8 flex-none place-items-center rounded-lg border border-border text-muted-foreground hover:border-primary hover:text-primary-text"
                 >
                   <Play className="h-4 w-4" aria-hidden />
                 </button>

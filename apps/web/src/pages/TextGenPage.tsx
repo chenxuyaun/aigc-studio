@@ -198,7 +198,7 @@ export function TextGenPage() {
               </Button>
             )}
             {isAdmin ? (
-              <Link to="/settings/providers" className="text-sm text-primary hover:underline">
+              <Link to="/settings/providers" className="text-sm text-primary-text hover:underline">
                 配置模型
               </Link>
             ) : undefined}
@@ -234,7 +234,7 @@ export function TextGenPage() {
                     className={cn(
                       "group flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs",
                       s.id === currentId
-                        ? "bg-primary/12 font-medium text-primary"
+                        ? "bg-primary/12 font-medium text-primary-text"
                         : "text-muted-foreground hover:bg-surface-raised hover:text-foreground",
                     )}
                   >

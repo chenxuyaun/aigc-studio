@@ -115,7 +115,7 @@ export function SearchPage() {
                 className={cn(
                   "rounded-full border px-3 py-1 text-xs",
                   scope === t.value
-                    ? "border-primary/40 bg-primary/10 font-medium text-primary"
+                    ? "border-primary/40 bg-primary/10 font-medium text-primary-text"
                     : "border-border bg-surface text-muted-foreground hover:border-border-strong",
                 )}
               >
