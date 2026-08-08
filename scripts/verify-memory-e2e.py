@@ -55,9 +55,10 @@ def call(path: str, body=None, token=None, method="POST", timeout: float = 30) -
 
 def grok_ready() -> bool:
     env = load_env()
-    key = env.get("OPENAI_COMPATIBLE_API_KEY", "")
+    key = os.environ.get("GROK_API_KEY") or env.get("OPENAI_COMPATIBLE_API_KEY", "")
+    model = os.environ.get("GROK_MODEL", "grok-chat-fast")
     body = json.dumps({
-        "model": "grok-chat-fast",
+        "model": model,
         "messages": [{"role": "user", "content": "hi"}],
         "max_tokens": 8,
     }).encode()

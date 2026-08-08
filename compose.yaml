@@ -133,10 +133,10 @@ services:
       - "8420:8420"
     environment:
       - TDAI_GATEWAY_API_KEY=${TDAI_MEMORY_API_KEY}
-      # LLM 复用 grok2api OpenAI 兼容网关（容器内经 host.docker.internal 访问宿主机）
-      - TDAI_LLM_BASE_URL=http://host.docker.internal:8000/v1
-      - TDAI_LLM_API_KEY=${OPENAI_COMPATIBLE_API_KEY}
-      - TDAI_LLM_MODEL=${OPENAI_COMPATIBLE_MODEL:-grok-chat-fast}
+      # LLM 复用 OpenAI 兼容网关（默认 grok2api；记忆抽取可在 .env 用 TDAI_LLM_BASE_URL 切换，如 cpa:8317）
+      - TDAI_LLM_BASE_URL=${TDAI_LLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      - TDAI_LLM_API_KEY=${TDAI_LLM_API_KEY:-${OPENAI_COMPATIBLE_API_KEY}}
+      - TDAI_LLM_MODEL=${TDAI_LLM_MODEL:-${OPENAI_COMPATIBLE_MODEL:-grok-chat-fast}}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
