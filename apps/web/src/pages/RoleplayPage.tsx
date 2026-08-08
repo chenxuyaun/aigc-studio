@@ -1,11 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { BookOpen, Bot, ExternalLink, Plus, Search, Send, SlidersHorizontal, Wand2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
+import { Dialog } from "@/components/ui/Dialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useAuthStore } from "@/stores/auth";
+import { apiClient } from "@/lib/apiClient";
+import { useToast } from "@/components/ui/Toast";
 import { copyText } from "@/lib/clipboard";
 
 import { useRoleplayEngine } from "@/pages/roleplay/useRoleplayEngine";
@@ -19,6 +22,20 @@ import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { SessionSidebar } from "@/pages/roleplay/SessionSidebar";
 import { estimateTokens } from "@/pages/roleplay/types";
 
+interface GroupMember {
+  user_id: string;
+  username: string;
+  role: string;
+}
+interface GroupInfo {
+  chat_id: string;
+  name: string;
+  description: string;
+  invite_code: string;
+  owner_id: string;
+  members: GroupMember[];
+}
+
 export function RoleplayPage() {
   useEffect(
     () => () => {
@@ -27,6 +44,7 @@ export function RoleplayPage() {
     [],
   );
   const authUser = useAuthStore((s) => s.user);
+  const { error: toastError } = useToast();
 
   const {
     characters, selected, groupMode, isRoom, authorName, groupIds, groupStrategy,
@@ -37,12 +55,38 @@ export function RoleplayPage() {
     setGroupIds, setCharSearch, setIsRoom, setAuthorName, setGroupStrategy, setGroupModeType,
     setPersonaId, setNoteContent, setNoteInterval, setMsgSearch, setAutoMode,
     setAutoInterval, setRightTab, setInput, setGroupMode, setModel,
+    groupName, setGroupName, groupDesc, setGroupDesc,
     setTemperature, setMaxTokens, setSelected, setPersonas, setQuickReplies,
     loadCharacters, toggleShare, openSession, selectCharacter, toggleGroupMember,
     send, swipeReply, switchSwipe, continueReply, removeMessage, branchChat,
     clearChat, newSession, deleteSession, charsForBinding, expandQuickMacros,
   } = useRoleplayEngine();
   const charDisplayName = selected?.name ?? "";
+  const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
+  const [groupInfoOpen, setGroupInfoOpen] = useState(false);
+
+  const kickMember = async (uid: string) => {
+    if (!groupInfo) return;
+    try {
+      await apiClient.del(`/roleplay/groups/${groupInfo.chat_id}/members/${uid}`);
+      setGroupInfo({
+        ...groupInfo,
+        members: groupInfo.members.filter((m) => m.user_id !== uid),
+      });
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : "操作失败");
+    }
+  };
+
+  const openGroupInfo = async (cid: string) => {
+    try {
+      const res = await apiClient.get<GroupInfo>(`/roleplay/groups/${cid}`);
+      setGroupInfo(res);
+      setGroupInfoOpen(true);
+    } catch {
+      /* 非群会话忽略 */
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -91,12 +135,26 @@ export function RoleplayPage() {
               多人房间（全员可见可加入）
             </label>
             {isRoom && (
-              <input
-                value={authorName}
-                onChange={(e) => setAuthorName(e.target.value)}
-                placeholder="你的身份名（如：陈满堂）"
-                className="mb-1 w-full rounded border border-border bg-background px-2 py-1 text-xs"
-              />
+              <div className="mb-1 flex flex-col gap-1">
+                <input
+                  value={authorName}
+                  onChange={(e) => setAuthorName(e.target.value)}
+                  placeholder="你的身份名（如：陈满堂）"
+                  className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
+                />
+                <input
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="群名（如：双城之夜剧组）"
+                  className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
+                />
+                <input
+                  value={groupDesc}
+                  onChange={(e) => setGroupDesc(e.target.value)}
+                  placeholder="群简介（可选）"
+                  className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
+                />
+              </div>
             )}
             {groupMode && (
               <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground">
@@ -238,6 +296,15 @@ export function RoleplayPage() {
               <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary-text">
                 好感度 {affinity}
               </span>
+              {sessionId && (
+                <button
+                  type="button"
+                  className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary-text hover:bg-primary/20"
+                  onClick={() => void openGroupInfo(sessionId)}
+                >
+                  📋 群信息
+                </button>
+              )}
             </span>
             <div className="flex items-center gap-2 text-xs">
               {messages.length > 0 && (
@@ -562,6 +629,50 @@ export function RoleplayPage() {
           </div>
         </div>
       </div>
+      <Dialog open={groupInfoOpen} onClose={() => setGroupInfoOpen(false)} title={groupInfo?.name ?? "群信息"}>
+        {groupInfo && (
+          <div className="space-y-3">
+            {groupInfo.description && (
+              <p className="text-xs text-muted-foreground">{groupInfo.description}</p>
+            )}
+            <div className="flex items-center gap-2 rounded-lg bg-muted/40 p-2">
+              <span className="text-xs text-muted-foreground">邀请码：</span>
+              <code className="font-mono text-sm font-semibold">{groupInfo.invite_code}</code>
+              <button
+                type="button"
+                className="ml-auto text-xs text-primary-text hover:underline"
+                onClick={() => void navigator.clipboard?.writeText(groupInfo.invite_code)}
+              >
+                复制
+              </button>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-semibold text-foreground">
+                成员（{groupInfo.members.length}）
+              </p>
+              <ul className="space-y-1">
+                {groupInfo.members.map((m: GroupMember) => (
+                  <li key={m.user_id} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm">
+                    <span className="truncate">{m.username}</span>
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      {m.role === "owner" ? "群主" : "成员"}
+                    </span>
+                    {m.role !== "owner" && authUser?.id === groupInfo.owner_id && (
+                      <button
+                        type="button"
+                        className="ml-auto text-xs text-danger hover:underline"
+                        onClick={() => void kickMember(m.user_id)}
+                      >
+                        移出
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

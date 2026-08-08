@@ -559,10 +559,16 @@ async def chats_join(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """加入多人房间会话（返回会话+全部消息）；非房间会话需本人。"""
+    """加入多人房间会话（返回会话+全部消息）；完整群需成员身份。"""
+    from app.services import group_service
+
     chat = await sessions.get_chat(db, user.id, chat_id)
     if chat is None:
         raise HTTPException(status_code=404, detail="会话不存在")
+    if chat.is_room:
+        group = await group_service.get_group(db, chat_id)
+        if group is not None and not await group_service.is_member(db, chat_id, user.id):
+            raise HTTPException(status_code=403, detail="请先用邀请码加入群")
     return {"chat": _chat_dict(chat), "messages": sessions.chat_messages(chat)}
 
 
@@ -1097,3 +1103,134 @@ async def personas_delete(
     await db.delete(row)
     await db.commit()
     return {"ok": True}
+
+
+# ==== 完整群（多人创作） ====
+
+class GroupCreateRequest(BaseModel):
+    """建群：创建 is_room 会话 + 群资料。"""
+
+    title: str = Field(default="", max_length=200)
+    description: str = Field(default="", max_length=500)
+    character_asset_ids: list[str] = Field(default_factory=list, max_length=20)
+    model: str = ""
+    temperature: float | None = None
+    max_tokens: int | None = None
+
+
+class GroupJoinRequest(BaseModel):
+    invite_code: str = Field(min_length=4, max_length=12)
+
+
+class GroupUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    reset_invite: bool = False
+
+
+@router.post("/groups", response_model=None)
+async def groups_create(
+    req: GroupCreateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """建群：is_room 会话 + 群资料 + 群主自动入群。"""
+    from app.services import group_service
+
+    chat = await sessions.create_chat(
+        db, user.id,
+        title=req.title or "新群",
+        character_asset_ids=req.character_asset_ids or [],
+        group=len(req.character_asset_ids) > 1,
+        is_room=True,
+        model=req.model,
+        temperature=req.temperature,
+        max_tokens=req.max_tokens,
+    )
+    group = await group_service.create_group(
+        db, owner_id=user.id, chat_id=chat.id,
+        name=req.title or "新群", description=req.description,
+    )
+    await db.commit()
+    await db.refresh(chat)
+    members = await group_service.list_members(db, chat.id)
+    usernames = {user.id: user.username}
+    return {"ok": True, "chat": _chat_dict(chat), "group": group_service.group_dict(group, members, usernames)}
+
+
+@router.get("/groups/{chat_id}")
+async def groups_detail(
+    chat_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """群详情：资料 + 成员列表（成员可见）。"""
+    from app.models.user import User as UserModel
+    from app.services import group_service
+
+    group = await group_service.get_group(db, chat_id)
+    if group is None:
+        raise HTTPException(status_code=404, detail="群不存在")
+    if not await group_service.is_member(db, chat_id, user.id) and user.role != "admin":
+        raise HTTPException(status_code=403, detail="非群成员")
+    members = await group_service.list_members(db, chat_id)
+    ids = [m.user_id for m in members]
+    usernames = {}
+    if ids:
+        rows = (await db.execute(select(UserModel).where(UserModel.id.in_(ids)))).scalars().all()
+        usernames = {u.id: u.username for u in rows}
+    return group_service.group_dict(group, members, usernames)
+
+
+@router.post("/groups/join")
+async def groups_join_code(
+    req: GroupJoinRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """邀请码加入群。"""
+    from app.services import group_service
+
+    group, err = await group_service.join_by_code(db, req.invite_code.strip(), user.id)
+    if group is None:
+        raise HTTPException(status_code=404, detail=err)
+    await db.commit()
+    return {"ok": True, "chat_id": group.chat_id, "name": group.name}
+
+
+@router.delete("/groups/{chat_id}/members/{target_user_id}")
+async def groups_kick(
+    chat_id: str,
+    target_user_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """群主踢人 / 成员退出。"""
+    from app.services import group_service
+
+    ok, err = await group_service.remove_member(db, chat_id, target_user_id, actor_id=user.id)
+    if not ok:
+        raise HTTPException(status_code=400, detail=err)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.put("/groups/{chat_id}")
+async def groups_update(
+    chat_id: str,
+    req: GroupUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """群主修改资料 / 重置邀请码。"""
+    from app.services import group_service
+
+    group, err = await group_service.update_group(
+        db, chat_id, actor_id=user.id,
+        name=req.name, description=req.description, reset_invite=req.reset_invite,
+    )
+    if group is None:
+        raise HTTPException(status_code=400, detail=err)
+    await db.commit()
+    members = await group_service.list_members(db, chat_id)
+    return {"ok": True, "group": group_service.group_dict(group, members, {})}

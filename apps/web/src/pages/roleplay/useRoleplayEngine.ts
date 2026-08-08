@@ -30,6 +30,8 @@ export function useRoleplayEngine() {
   const [groupMode, setGroupMode] = useState(false);
   const [isRoom, setIsRoom] = useState(false); // 多人同场演出：全员可见可加入
   const [authorName, setAuthorName] = useState(""); // 房间内真人身份
+  const [groupName, setGroupName] = useState(""); // 群名（建群时）
+  const [groupDesc, setGroupDesc] = useState(""); // 群简介
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [groupStrategy, setGroupStrategy] = useState<"natural" | "list" | "random">("natural");
   const [groupModeType, setGroupModeType] = useState<"append" | "swap">("append");
@@ -238,18 +240,28 @@ export function useRoleplayEngine() {
     try {
       let sid = sessionId;
       if (!sid) {
-        const created = await apiClient.post<{ ok: boolean; chat: ChatSession }>(
-          "/roleplay/chats",
-          {
-            character_asset_ids: ids,
-            group: groupMode && ids.length > 1,
-            is_room: isRoom,
-            model,
-            temperature,
-            max_tokens: maxTokens,
-          },
+        const created = await apiClient.post<{ ok: boolean; chat: ChatSession; group?: { chat_id?: string } }>(
+          isRoom
+            ? "/roleplay/groups"
+            : "/roleplay/chats",
+          isRoom
+            ? {
+                title: groupName.trim() || "新群",
+                description: groupDesc.trim(),
+                character_asset_ids: ids,
+                model,
+                temperature,
+                max_tokens: maxTokens,
+              }
+            : {
+                character_asset_ids: ids,
+                group: groupMode && ids.length > 1,
+                model,
+                temperature,
+                max_tokens: maxTokens,
+              },
         );
-        sid = created.chat.id;
+        sid = created.chat?.id ?? created.group?.chat_id;
         setSessionId(sid);
         void refreshSessions();
       }
@@ -521,6 +533,7 @@ export function useRoleplayEngine() {
     setGroupIds, setCharSearch, setIsRoom, setAuthorName, setGroupStrategy, setGroupModeType,
     setPersonaId, setNoteContent, setNoteInterval, setMsgSearch, setAutoMode,
     setAutoInterval, setRightTab, setInput, setAffinity, setGroupMode, setModel,
+    groupName, setGroupName, groupDesc, setGroupDesc,
     setTemperature, setMaxTokens, setSelected, setPersonas, setQuickReplies,
     loadCharacters, toggleShare, openSession, selectCharacter, toggleGroupMember,
     send, swipeReply, switchSwipe, continueReply, removeMessage, branchChat,

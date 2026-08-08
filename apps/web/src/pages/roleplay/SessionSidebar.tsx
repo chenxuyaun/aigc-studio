@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { FolderPlus, MessageSquare, Upload } from "lucide-react";
+import { FolderPlus, MessageSquare, Upload, Users } from "lucide-react";
 
 import { Input } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
@@ -37,6 +37,25 @@ export function SessionSidebar({ activeId, refreshKey, onSelect, onCreated, onDe
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
+
+  const joinGroup = async () => {
+    const code = window.prompt("输入群邀请码：");
+    if (!code?.trim()) return;
+    try {
+      const res = await apiClient.post<{ ok: boolean; chat_id: string; name: string }>(
+        "/roleplay/groups/join",
+        { invite_code: code.trim() },
+      );
+      toast.success(`已加入群：${res.name}`);
+      void load();
+      // 加入后自动打开该群
+      const target = sessions.find((s) => s.id === res.chat_id);
+      if (target) onSelect(target);
+      else void load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "加入失败");
+    }
+  };
 
   const create = async () => {
     try {
@@ -125,6 +144,13 @@ export function SessionSidebar({ activeId, refreshKey, onSelect, onCreated, onDe
             onClick={() => void create()}
           >
             <FolderPlus className="h-3.5 w-3.5" aria-hidden />
+          </button>
+          <button
+            className="text-muted-foreground hover:text-primary-text"
+            title="邀请码加入群"
+            onClick={() => void joinGroup()}
+          >
+            <Users className="h-3.5 w-3.5" aria-hidden />
           </button>
         </div>
       </div>
