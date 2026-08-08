@@ -137,7 +137,15 @@ async def ask_knowledge(
     try:
         from app.models.agentlist import AgentArticle, AgentComparison, AgentProject
 
-        for proj in (await db.execute(select(AgentProject).limit(2000))).scalars().all():
+        # 按需投影（只取检索所需列，避免每请求全字段拉 2000 行）
+        for proj in (
+            await db.execute(
+                select(
+                    AgentProject.id, AgentProject.name, AgentProject.description,
+                    AgentProject.categories, AgentProject.language, AgentProject.stars,
+                ).limit(500)
+            )
+        ).all():
             chunks.append(
                 (
                     f"al-proj:{proj.id}",
@@ -146,9 +154,17 @@ async def ask_knowledge(
                     f"语言:{proj.language} 星数:{proj.stars}",
                 )
             )
-        for art in (await db.execute(select(AgentArticle).limit(100))).scalars().all():
+        for art in (
+            await db.execute(
+                select(AgentArticle.id, AgentArticle.title, AgentArticle.description).limit(100)
+            )
+        ).all():
             chunks.append((f"al-art:{art.id}", f"[AgentList文章] {art.title}", art.description))
-        for cmp_ in (await db.execute(select(AgentComparison).limit(50))).scalars().all():
+        for cmp_ in (
+            await db.execute(
+                select(AgentComparison.id, AgentComparison.title, AgentComparison.description).limit(50)
+            )
+        ).all():
             chunks.append((f"al-cmp:{cmp_.id}", f"[AgentList对比] {cmp_.title}", cmp_.description))
     except Exception:
         pass  # 目录表缺失（旧库）时静默跳过，不影响文档问答
