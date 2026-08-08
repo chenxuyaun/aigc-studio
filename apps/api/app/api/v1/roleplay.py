@@ -1155,7 +1155,11 @@ async def groups_create(
     await db.refresh(chat)
     members = await group_service.list_members(db, chat.id)
     usernames = {user.id: user.username}
-    return {"ok": True, "chat": _chat_dict(chat), "group": group_service.group_dict(group, members, usernames)}
+    return {
+        "ok": True,
+        "chat": _chat_dict(chat),
+        "group": group_service.group_dict(group, members, usernames),
+    }
 
 
 @router.get("/groups/{chat_id}")
