@@ -162,7 +162,9 @@ async def ask_knowledge(
             chunks.append((f"al-art:{art.id}", f"[AgentList文章] {art.title}", art.description))
         for cmp_ in (
             await db.execute(
-                select(AgentComparison.id, AgentComparison.title, AgentComparison.description).limit(50)
+                select(
+                    AgentComparison.id, AgentComparison.title, AgentComparison.description,
+                ).limit(50)
             )
         ).all():
             chunks.append((f"al-cmp:{cmp_.id}", f"[AgentList对比] {cmp_.title}", cmp_.description))
