@@ -26,6 +26,7 @@ from app.api.v1 import (
     workflows,
 )
 from app.api.v1.generations import audio as gen_audio
+from app.api.v1.generations import music as gen_music
 from app.api.v1.generations import comic as gen_comic
 from app.api.v1.generations import image as gen_image
 from app.api.v1.generations import prompt_tools as gen_prompt
@@ -45,6 +46,7 @@ router.include_router(gen_text.router, prefix="/generations/text", tags=["genera
 router.include_router(gen_image.router, prefix="/generations/image", tags=["generations"])
 router.include_router(gen_video.router, prefix="/generations/video", tags=["generations"])
 router.include_router(gen_audio.router, prefix="/generations/audio", tags=["generations"])
+router.include_router(gen_music.router, prefix="/generations/music", tags=["generations"])
 router.include_router(gen_comic.router, prefix="/generations/comic", tags=["generations"])
 router.include_router(gen_prompt.router, prefix="/generations/prompt", tags=["generations"])
 router.include_router(knowledge.router, prefix="/knowledge", tags=["knowledge"])

@@ -3,6 +3,7 @@ import type { ComponentType } from "react";
 import {
   AudioLines,
   BookOpen,
+  Music,
   Camera,
   Clapperboard,
   Image as ImageIcon,
@@ -30,6 +31,7 @@ const TOOLS: Tool[] = [
   { to: "/create/image", title: "图片生成", desc: "文本生成图片，异步任务", scene: "海报 · 插画 · 摄影", icon: ImageIcon, ready: true },
   { to: "/create/video", title: "视频生成", desc: "文本生成短视频", scene: "分镜 · 广告 · 概念", icon: Clapperboard, ready: true },
   { to: "/create/audio", title: "语音生成", desc: "文本转语音，多发音人", scene: "配音 · 朗读 · 播客", icon: AudioLines, ready: true },
+  { to: "/create/music", title: "音乐生成", desc: "MusicGen 文本描述生成音乐", scene: "纯音乐 · 氛围 · 配乐", icon: Music, ready: true },
   { to: "/create/comic", title: "漫画生成", desc: "自动分镜、逐格出图、拼合成页", scene: "故事 · 四格 · 九宫格", icon: BookOpen, ready: true },
   { to: "/create/character-card", title: "角色卡生成", desc: "为 SillyTavern 生成角色扮演角色卡", scene: "角色 · 头像 · 开场白", icon: Users, ready: true },
   { to: "/create/prompt", title: "提示词生成", desc: "把想法变成结构化提示词", scene: "结构化 · 保存 · 复用", icon: Sparkles, ready: true },

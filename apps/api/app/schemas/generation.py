@@ -56,6 +56,15 @@ class AudioGenerationRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
+class MusicGenerationRequest(BaseModel):
+    """音乐生成（MusicGen 等 HF 音频模型）：自然语言描述风格/情绪/乐器。"""
+
+    model: str = Field(default_factory=lambda: settings.DEFAULT_SPEECH_PROVIDER)
+    prompt: str = Field(max_length=50_000)
+    # MusicGen 时长由 max_new_tokens 控制（~30s 默认）；预留 duration 便于后续扩展
+    duration_seconds: int = Field(default=30, ge=5, le=120)
+
+
 class ComicGenerationRequest(BaseModel):
     """漫画生成：分镜（文本模型）→ 逐格出图（图片模型）→ PIL 拼合。"""
 

@@ -328,7 +328,7 @@ async def _try_real_media(
                 return None, "真实视频结果缺少视频地址"
             data, mime = await _download_media(_rewrite_media_url(url, upstream_base))
             return data, mime, _ext_from_mime(mime, "mp4")
-        if task_type == "audio":
+        if task_type in ("audio", "music"):
             speech_provider = ProviderRegistry.get_speech_provider(
                 model, **_provider_kwargs(provider_conf)
             )
@@ -481,7 +481,7 @@ async def run_media_task(task_id: str) -> None:
             if not model_name:
                 if task.task_type == "image":
                     model_name = settings.DEFAULT_IMAGE_PROVIDER or ""
-                elif task.task_type == "audio":
+                elif task.task_type in ("audio", "music"):
                     model_name = settings.DEFAULT_SPEECH_PROVIDER or ""
                 else:
                     model_name = ""

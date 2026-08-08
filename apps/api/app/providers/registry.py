@@ -89,7 +89,7 @@ class ProviderRegistry:
             )
         return MockVideoProvider()
 
-    # ── 语音 ─────────────────────────────────────────────────────────
+    # ── 语音 / 音乐 ─────────────────────────────────────────────────
     @classmethod
     def get_speech_provider(cls, name: str = "") -> SpeechProvider:
         provider = name or settings.DEFAULT_SPEECH_PROVIDER
@@ -97,6 +97,11 @@ class ProviderRegistry:
             from app.providers.huggingface import HuggingFaceSpeechProvider
 
             return HuggingFaceSpeechProvider()
+        # HF 模型 id（含 /，如 facebook/musicgen-small）：直接走该模型的推理端点
+        if "/" in provider:
+            from app.providers.huggingface import HuggingFaceSpeechProvider
+
+            return HuggingFaceSpeechProvider(model=provider)
         if provider in {"edge_tts", "edge-tts", "edge"}:
             from app.providers.edge_tts import EdgeTTSSpeechProvider
 

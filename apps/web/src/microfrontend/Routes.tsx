@@ -40,6 +40,9 @@ const VideoGenPage = lazy(() =>
 const AudioGenPage = lazy(() =>
   import("@/pages/AudioGenPage").then((m) => ({ default: m.AudioGenPage })),
 );
+const MusicGenPage = lazy(() =>
+  import("@/pages/MusicGenPage").then((m) => ({ default: m.MusicGenPage })),
+);
 const PromptGeneratorPage = lazy(() =>
   import("@/pages/PromptGeneratorPage").then((m) => ({ default: m.PromptGeneratorPage })),
 );
@@ -135,6 +138,7 @@ export function AppRoutes() {
         <Route path="/settings/upstream" element={<Page><UpstreamPage /></Page>} />
         <Route path="/create/video" element={<Page><VideoGenPage /></Page>} />
         <Route path="/create/audio" element={<Page><AudioGenPage /></Page>} />
+        <Route path="/create/music" element={<Page><MusicGenPage /></Page>} />
         <Route path="/create/prompt" element={<Page><PromptGeneratorPage /></Page>} />
         <Route path="/create/prompt-optimize" element={<Page><PromptOptimizerPage /></Page>} />
         <Route path="/prompts" element={<Page><PromptsPage /></Page>} />

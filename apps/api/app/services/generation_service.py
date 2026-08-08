@@ -14,6 +14,7 @@ _CELERY_TASK_BY_TYPE = {
     "image": "generate_image",
     "video": "generate_video",
     "audio": "generate_audio",
+    "music": "generate_audio",
 }
 
 
