@@ -159,7 +159,14 @@ export function SessionSidebar({ activeId, refreshKey, onSelect, onCreated, onDe
               onClick={() => onSelect(s)}
             >
               <MessageSquare className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="truncate">{s.title}</span>
+              <span className="truncate">
+                {s.title}
+                {s.is_room && (
+                  <span className="ml-1 rounded bg-primary/12 px-1 py-0.5 text-[9px] font-semibold text-primary-text">
+                    房间
+                  </span>
+                )}
+              </span>
             </button>
           )}
           <span className="hidden shrink-0 gap-0.5 group-hover:flex">

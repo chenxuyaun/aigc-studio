@@ -36,19 +36,26 @@ def dump_messages(messages: list[dict[str, Any]]) -> str:
 
 
 async def get_chat(db: AsyncSession, user_id: str, chat_id: str) -> RoleplayChat | None:
+    """取会话：本人会话或多人房间（is_room 全员可访问）。"""
+    from sqlalchemy import or_
+
     return (
         await db.execute(
             select(RoleplayChat).where(
-                RoleplayChat.id == chat_id, RoleplayChat.user_id == user_id
+                RoleplayChat.id == chat_id,
+                or_(RoleplayChat.user_id == user_id, RoleplayChat.is_room.is_(True)),
             )
         )
     ).scalar_one_or_none()
 
 
 async def list_chats(db: AsyncSession, user_id: str) -> list[RoleplayChat]:
+    """会话列表：本人会话 + 全部多人房间。"""
+    from sqlalchemy import or_
+
     rows = await db.execute(
         select(RoleplayChat)
-        .where(RoleplayChat.user_id == user_id)
+        .where(or_(RoleplayChat.user_id == user_id, RoleplayChat.is_room.is_(True)))
         .order_by(RoleplayChat.updated_at.desc())
     )
     return list(rows.scalars().all())
@@ -70,6 +77,7 @@ async def create_chat(
     max_tokens: int | None = None,
     top_p: float | None = None,
     settings: dict[str, Any] | None = None,
+    is_room: bool = False,
 ) -> RoleplayChat:
     chat = RoleplayChat(
         id=str(uuid.uuid4()),
@@ -77,6 +85,7 @@ async def create_chat(
         title=title or f"会话 {datetime.now(UTC).strftime('%m-%d %H:%M')}",
         character_asset_ids=json.dumps(character_asset_ids, ensure_ascii=False),
         group=group,
+        is_room=is_room,
         messages="[]",
         model=model,
         temperature=temperature,

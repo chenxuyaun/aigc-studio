@@ -24,6 +24,8 @@ class RoleplayChat(Base):
     # JSON 字符串数组：参与的角色卡 asset_id 列表
     character_asset_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    # 多人同场演出：房间会话对全员可见可加入（真人+AI 角色同场）
+    is_room: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     # JSON 字符串数组：消息历史
     messages: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     model: Mapped[str] = mapped_column(String(100), default="", server_default="")

@@ -47,6 +47,7 @@ class RoleplayChatRequest(BaseModel):
     note: dict[str, Any] | None = None
     mode: str = "normal"  # normal / continue（续写）
     swipe: bool = False  # True = 生成备选回复（不落库）
+    author: str = ""  # 多人房间：真人身份名（消息以【身份】前缀参与群聊）
     group_strategy: str = "natural"  # natural / list / random
     group_mode: str = "append"  # append（全员卡片）/ swap（仅说话者）
 
@@ -76,6 +77,7 @@ class ChatCreateRequest(BaseModel):
     title: str = Field(default="", max_length=200)
     character_asset_ids: list[str] = Field(default_factory=list)
     group: bool = False
+    is_room: bool = False  # 多人同场演出：全员可见可加入
     model: str = ""
     temperature: float | None = None
     max_tokens: int | None = None
@@ -190,6 +192,7 @@ def _chat_dict(c: RoleplayChat) -> dict[str, Any]:
     return {
         "id": c.id,
         "title": c.title,
+        "is_room": bool(c.is_room),
         "character_asset_ids": char_ids,
         "group": bool(c.group),
         "model": c.model,
@@ -445,6 +448,19 @@ async def chat(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """角色扮演对话（单角色 / 群聊 + 情绪标注 + 会话落库）。"""
+    # 多人房间：真人以 author 身份发言（【身份】前缀，AI 群聊可区分真人）
+    if req.author.strip() and req.session_id:
+        chat = await sessions.get_chat(db, user.id, req.session_id)
+        if chat is not None and chat.is_room:
+            req.messages = [
+                {
+                    **m,
+                    "content": f"【{req.author.strip()}】{m.get('content', '')}"
+                    if m.get("role") == "user"
+                    else m.get("content", ""),
+                }
+                for m in req.messages
+            ]
     result = await roleplay_chat(
         db,
         user.id,
@@ -525,6 +541,7 @@ async def chats_create(
         title=req.title,
         character_asset_ids=req.character_asset_ids,
         group=req.group,
+        is_room=req.is_room,
         model=req.model,
         temperature=req.temperature,
         max_tokens=req.max_tokens,
@@ -534,6 +551,19 @@ async def chats_create(
     await db.commit()
     await db.refresh(chat)
     return {"ok": True, "chat": _chat_dict(chat)}
+
+
+@router.post("/chats/{chat_id}/join")
+async def chats_join(
+    chat_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """加入多人房间会话（返回会话+全部消息）；非房间会话需本人。"""
+    chat = await sessions.get_chat(db, user.id, chat_id)
+    if chat is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return {"chat": _chat_dict(chat), "messages": sessions.chat_messages(chat)}
 
 
 @router.get("/chats/{chat_id}")

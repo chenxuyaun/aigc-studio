@@ -34,6 +34,8 @@ export interface ChatSession {
   title: string;
   character_asset_ids: string[];
   group: boolean;
+  /** 多人同场演出：房间会话全员可见可加入 */
+  is_room?: boolean;
   model: string;
   temperature?: number | null;
   max_tokens?: number | null;

@@ -42,6 +42,8 @@ export function RoleplayPage() {
   const [charSearch, setCharSearch] = useState("");
   const [selected, setSelected] = useState<CharacterItem | null>(null);
   const [groupMode, setGroupMode] = useState(false);
+  const [isRoom, setIsRoom] = useState(false); // 多人同场演出：全员可见可加入
+  const [authorName, setAuthorName] = useState(""); // 房间内真人身份
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [groupStrategy, setGroupStrategy] = useState<"natural" | "list" | "random">("natural");
   const [groupModeType, setGroupModeType] = useState<"append" | "swap">("append");
@@ -237,6 +239,7 @@ export function RoleplayPage() {
           {
             character_asset_ids: ids,
             group: groupMode && ids.length > 1,
+            is_room: isRoom,
             model,
             temperature,
             max_tokens: maxTokens,
@@ -254,6 +257,7 @@ export function RoleplayPage() {
           model,
           group: groupMode && ids.length > 1,
           session_id: sid,
+          author: isRoom ? authorName.trim() : "",
           temperature,
           max_tokens: maxTokens,
           persona_id: personaId || null,
@@ -543,6 +547,22 @@ export function RoleplayPage() {
               />
               群聊模式（多选角色同场）
             </label>
+            <label className="flex items-center gap-2 px-1 py-1 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={isRoom}
+                onChange={(e) => setIsRoom(e.target.checked)}
+              />
+              多人房间（全员可见可加入）
+            </label>
+            {isRoom && (
+              <input
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+                placeholder="你的身份名（如：陈满堂）"
+                className="mb-1 w-full rounded border border-border bg-background px-2 py-1 text-xs"
+              />
+            )}
             {groupMode && (
               <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground">
                 轮流
