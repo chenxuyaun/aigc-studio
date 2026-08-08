@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/Toast";
+import { useAuthStore } from "@/stores/auth";
 import { apiClient, streamSse } from "@/lib/apiClient";
 import { copyText } from "@/lib/clipboard";
 
@@ -36,6 +37,7 @@ function expandQuickMacros(text: string, charName: string, userName: string): st
 
 export function RoleplayPage() {
   const toast = useToast();
+  const authUser = useAuthStore((s) => s.user);
   const [characters, setCharacters] = useState<CharacterItem[]>([]);
   const [charSearch, setCharSearch] = useState("");
   const [selected, setSelected] = useState<CharacterItem | null>(null);
@@ -94,6 +96,18 @@ export function RoleplayPage() {
       toastError(e instanceof Error ? e.message : "角色列表加载失败");
     }
   }, [toastError]);
+
+  const toggleShare = useCallback(
+    async (c: CharacterItem) => {
+      try {
+        await apiClient.put(`/roleplay/characters/${c.asset_id}/share`);
+        await loadCharacters();
+      } catch {
+        toastError("共享设置失败");
+      }
+    },
+    [loadCharacters, toastError],
+  );
 
   const loadPersonas = useCallback(async () => {
     try {
@@ -618,6 +632,16 @@ export function RoleplayPage() {
                           </span>
                         )}
                       </span>
+                      {authUser?.role === "admin" && (
+                        <button
+                          type="button"
+                          onClick={() => void toggleShare(c)}
+                          className="shrink-0 rounded-md border border-border px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-primary hover:text-primary-text"
+                          title={c.is_shared ? "取消共享（仅自己可见）" : "共享给所有用户"}
+                        >
+                          {c.is_shared ? "取消共享" : "共享"}
+                        </button>
+                      )}
                       <span className="block truncate text-[10px] text-muted-foreground">
                         {c.filename}
                       </span>
