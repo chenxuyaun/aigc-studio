@@ -308,6 +308,7 @@ function WorkflowDetail({
           size="icon"
           onClick={() => onToggleFav(workflow.id)}
           aria-pressed={favorited}
+          aria-label={favorited ? "取消收藏" : "收藏"}
         >
           <Heart className={cn("h-4 w-4", favorited && "fill-danger text-danger")} aria-hidden />
         </Button>
@@ -316,6 +317,7 @@ function WorkflowDetail({
           onClick={() => dupMut.mutate()}
           loading={dupMut.isPending}
           title="复制工作流"
+          aria-label="复制工作流"
         >
           <Copy className="h-4 w-4" aria-hidden />
         </Button>

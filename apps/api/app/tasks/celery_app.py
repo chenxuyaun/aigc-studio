@@ -24,6 +24,7 @@ celery_app = Celery(
     ],
 )
 celery_app.conf.update(
+    task_ignore_result=False,
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
@@ -52,6 +53,7 @@ celery_app.conf.update(
         "account-health-every-30m": {
             "task": "account_health_check",
             "schedule": 1800.0,
+            "options": {"ignore_result": True},
         },
         # 注册批次：默认每 12 小时自动补一批新号（REGISTER_BATCH_INTERVAL_HOURS 可调）。
         # 注：单批 10 号需数小时，4h 间隔会批次叠加且频繁注册易触发 Grok 风控，故放慢
@@ -75,12 +77,14 @@ celery_app.conf.update(
         "story-serial-tick": {
             "task": "serial_tick",
             "schedule": 60.0,
+            "options": {"ignore_result": True},
         },
         # 队列排空兜底：send_task 在 uvicorn 环境可能静默丢消息，
         # 每 15 秒从 DB 扫 queued 任务执行（pull 模式，保证任务不卡死）
         "drain-queued-tasks": {
             "task": "drain_queued_tasks",
             "schedule": 15.0,
+            "options": {"ignore_result": True},
         },
         # 每日巡检：每天 06:00 收集系统健康快照
         "daily-inspection": {

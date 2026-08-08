@@ -37,6 +37,12 @@ function expandQuickMacros(text: string, charName: string, userName: string): st
 
 export function RoleplayPage() {
   const toast = useToast();
+  useEffect(
+    () => () => {
+      if (roomPollRef.current != null) window.clearInterval(roomPollRef.current);
+    },
+    [],
+  );
   const authUser = useAuthStore((s) => s.user);
   const [characters, setCharacters] = useState<CharacterItem[]>([]);
   const [charSearch, setCharSearch] = useState("");
@@ -58,6 +64,7 @@ export function RoleplayPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const roomPollRef = useRef<number | null>(null);
 
   // 参数 / persona / 快捷回复
   const [temperature, setTemperature] = useState(0.8);
@@ -195,6 +202,23 @@ export function RoleplayPage() {
         `/roleplay/chats/${s.id}`,
       );
       setMessages(res.messages);
+      // 多人房间：5s 轮询拉新消息（其他真人发言实时可见；离开会话自动停止）
+      if (res.chat.is_room) {
+        if (roomPollRef.current != null) window.clearInterval(roomPollRef.current);
+        roomPollRef.current = window.setInterval(async () => {
+          try {
+            const poll = await apiClient.get<{ chat: ChatSession; messages: ChatMsg[] }>(
+              `/roleplay/chats/${s.id}`,
+            );
+            setMessages(poll.messages);
+          } catch {
+            /* 轮询失败静默 */
+          }
+        }, 5000);
+      } else if (roomPollRef.current != null) {
+        window.clearInterval(roomPollRef.current);
+        roomPollRef.current = null;
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "会话加载失败");
     }

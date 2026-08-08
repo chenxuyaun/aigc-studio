@@ -315,6 +315,7 @@ function AgentDetail({
           size="icon"
           onClick={() => onToggleFav(agent.id)}
           aria-pressed={favorited}
+          aria-label={favorited ? "取消收藏" : "收藏"}
         >
           <Heart className={cn("h-4 w-4", favorited && "fill-danger text-danger")} aria-hidden />
         </Button>
