@@ -35,8 +35,8 @@ router = APIRouter()
 # ==== 请求模型 ====
 
 class RoleplayChatRequest(BaseModel):
-    character_asset_ids: list[str]
-    messages: list[dict[str, str]]
+    character_asset_ids: list[str] = Field(max_length=20)
+    messages: list[dict[str, str]] = Field(max_length=200)
     model: str = ""
     group: bool = False
     session_id: str | None = None
@@ -54,10 +54,10 @@ class RoleplayChatRequest(BaseModel):
 class LoreEntryRequest(BaseModel):
     character_name: str | None = None  # None = 全局书
     project_id: str | None = None  # 创作项目作用域（None = 常规角色扮演）
-    keyword: str = ""
-    keywords: list[str] = Field(default_factory=list)
+    keyword: str = Field(default="", max_length=200)
+    keywords: list[str] = Field(default_factory=list, max_length=50)
     keysecondary: list[str] = Field(default_factory=list)
-    content: str = ""
+    content: str = Field(default="", max_length=50_000)
     constant: bool = False
     selective: bool = True
     selective_logic: str = "AND_ANY"
@@ -73,7 +73,7 @@ class LoreEntryRequest(BaseModel):
 
 
 class ChatCreateRequest(BaseModel):
-    title: str = ""
+    title: str = Field(default="", max_length=200)
     character_asset_ids: list[str] = Field(default_factory=list)
     group: bool = False
     model: str = ""

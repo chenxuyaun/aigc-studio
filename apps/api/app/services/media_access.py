@@ -24,7 +24,8 @@ class MediaAccess(BaseModel):
 
 
 # 旧字段 url / 头像 / 生成结果等直接 <img> 渲染场景的签名有效期（无 JWT、能力型 URL）
-_CONTENT_SIG_TTL = int(os.environ.get("ASSET_SIGNED_TTL_SECONDS", "14400"))  # 默认 4h
+# 安全收紧：默认 10min（原 4h 过长，URL 一旦外泄即成长时间通行证）
+_CONTENT_SIG_TTL = int(os.environ.get("ASSET_SIGNED_TTL_SECONDS", "600"))
 
 
 def sign_content_url(object_id: str) -> str:

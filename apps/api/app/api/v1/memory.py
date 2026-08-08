@@ -10,7 +10,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -81,8 +81,8 @@ async def _get_character(
 class DistillRequest(BaseModel):
     asset_id: str
     doc_id: str | None = None
-    text: str | None = None
-    book_title: str | None = None
+    text: str | None = Field(default=None, max_length=500_000)
+    book_title: str | None = Field(default=None, max_length=200)
 
 
 @router.post("/memory/distill")

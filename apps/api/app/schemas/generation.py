@@ -9,13 +9,13 @@ from app.core.config import settings
 
 class TextGenerationRequest(BaseModel):
     model: str = Field(default_factory=lambda: settings.DEFAULT_TEXT_PROVIDER)
-    messages: list[dict[str, str]] = []
-    prompt: str = ""
+    messages: list[dict[str, str]] = Field(default_factory=list, max_length=200)
+    prompt: str = Field(default="", max_length=50_000)
     temperature: float | None = None
-    max_tokens: int | None = None
+    max_tokens: int | None = Field(default=None, ge=1, le=200_000)
     stream: bool = True
     # 知识库 RAG：限定在这些文档内检索，命中片段注入提示词（空/None 表示不启用）
-    knowledge_doc_ids: list[str] | None = None
+    knowledge_doc_ids: list[str] | None = Field(default=None, max_length=100)
     knowledge_max_chunks: int = Field(default=3, ge=1, le=6)
 
 
@@ -23,14 +23,14 @@ class AgentChatRequest(BaseModel):
     """智能体对话（工具调用）：结构化 messages + 可选工具白名单。"""
 
     model: str = Field(default_factory=lambda: settings.DEFAULT_TEXT_PROVIDER)
-    messages: list[dict[str, object]]
-    tools: list[str] | None = None  # 省略 = 全部工具
+    messages: list[dict[str, object]] = Field(max_length=200)
+    tools: list[str] | None = Field(default=None, max_length=50)  # 省略 = 全部工具
 
 
 class ImageGenerationRequest(BaseModel):
     model: str = Field(default_factory=lambda: settings.DEFAULT_IMAGE_PROVIDER)
-    prompt: str
-    negative_prompt: str = ""
+    prompt: str = Field(max_length=50_000)
+    negative_prompt: str = Field(default="", max_length=50_000)
     width: int = Field(default=1024, ge=64, le=2048)
     height: int = Field(default=1024, ge=64, le=2048)
     num_images: int = Field(default=1, ge=1, le=4)
@@ -45,25 +45,25 @@ class ImageGenerationRequest(BaseModel):
 
 class VideoGenerationRequest(BaseModel):
     model: str = Field(default_factory=lambda: settings.DEFAULT_VIDEO_PROVIDER)
-    prompt: str = ""
+    prompt: str = Field(default="", max_length=50_000)
     duration: int = Field(default=5, ge=1, le=60)
 
 
 class AudioGenerationRequest(BaseModel):
     model: str = Field(default_factory=lambda: settings.DEFAULT_SPEECH_PROVIDER)
-    text: str
-    voice: str = "default"
+    text: str = Field(max_length=50_000)
+    voice: str = Field(default="default", max_length=100)
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
 class ComicGenerationRequest(BaseModel):
     """漫画生成：分镜（文本模型）→ 逐格出图（图片模型）→ PIL 拼合。"""
 
-    prompt: str
+    prompt: str = Field(max_length=50_000)
     panels: int = Field(default=4, ge=4, le=9)
-    style: str = "日式漫画"
-    characters: str = ""
-    layout: str = "grid"  # grid（网格）| manga（条漫）
+    style: str = Field(default="日式漫画", max_length=500)
+    characters: str = Field(default="", max_length=5000)
+    layout: str = Field(default="grid", pattern="^(grid|manga)$")  # grid（网格）| manga（条漫）
     model: str = Field(default_factory=lambda: settings.DEFAULT_IMAGE_PROVIDER)
 
 

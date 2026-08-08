@@ -102,8 +102,8 @@ async def test_poll_task_until_terminal(monkeypatch: pytest.MonkeyPatch) -> None
     assert out["status"] == "succeeded"
 
 
-def test_trigger_register_batch_creates_task(monkeypatch: pytest.MonkeyPatch) -> None:
-    """触发注册批次：生成 task 记录并调度。"""
+async def test_trigger_register_batch_creates_task(monkeypatch: pytest.MonkeyPatch) -> None:
+    """触发注册批次：生成 task 记录并调度（admin 通过，非 admin 拒绝）。"""
     from app.mcp import server as mcp_server
 
     captured: dict[str, object] = {}
@@ -114,10 +114,25 @@ def test_trigger_register_batch_creates_task(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(mcp_server, "schedule_register_batch", fake_schedule)
     monkeypatch.setattr(mcp_server, "_create_task_record", lambda count: "reg-123")
-    out = mcp_server.trigger_register_batch(count=5)
+
+    async def _role_admin(_ctx: object) -> str:
+        return "admin"
+
+    async def _role_user(_ctx: object) -> str:
+        return "user"
+
+    monkeypatch.setattr(mcp_server, "_request_role", _role_admin)
+    out = await mcp_server.trigger_register_batch(count=5)
     assert out["ok"] is True
     assert out["task_id"] == "reg-123"
     assert captured["run_count"] == 5
+    # 安全：非 admin 一律拒绝（不生成任务、不调度）
+    monkeypatch.setattr(mcp_server, "_request_role", _role_user)
+    captured.clear()
+    out2 = await mcp_server.trigger_register_batch(count=5)
+    assert out2.get("ok") is not True
+    assert "仅管理员" in str(out2)
+    assert captured == {}
 
 
 def test_openai_tools_all_twelve() -> None:

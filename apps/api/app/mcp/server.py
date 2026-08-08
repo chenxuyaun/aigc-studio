@@ -71,6 +71,20 @@ async def _admin_user_id(db: AsyncSession) -> str:
     return str(row.id) if row else ""
 
 
+async def _request_role(ctx: Any | None) -> str:
+    """解析调用者角色（admin 校验用）；查不到返回空串。"""
+    from app.models.user import User
+
+    uid = await _request_user_id(ctx)
+    if not uid:
+        return ""
+    async with AsyncSessionLocal() as db:
+        row = (
+            await db.execute(select(User).where(User.id == uid))
+        ).scalar_one_or_none()
+        return str(row.role) if row else ""
+
+
 async def _request_user_id(ctx: Any | None) -> str:
     """从 MCP 请求上下文解析调用者 user_id（按用户隔离工具操作）。
 
@@ -103,36 +117,52 @@ async def list_tasks(
     status: str = "",
     task_type: str = "",
     limit: int = 20,
+    ctx: Any | None = None,
 ) -> list[dict[str, Any]]:
-    """查询任务中心（可按状态/类型过滤）。"""
+    """查询任务中心（可按状态/类型过滤；非 admin 仅本人任务）。"""
+    from app.models.user import User
+
     async with AsyncSessionLocal() as db:
+        uid = await _request_user_id(ctx)
+        me = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
         stmt = select(GenerationTask).order_by(GenerationTask.created_at.desc()).limit(limit)
         if status:
             stmt = stmt.where(GenerationTask.status == status)
         if task_type:
             stmt = stmt.where(GenerationTask.task_type == task_type)
+        if me is None or me.role != "admin":
+            stmt = stmt.where(GenerationTask.user_id == uid)
         rows = (await db.execute(stmt)).scalars().all()
         return [_task_dict(t) for t in rows]
 
 
 @mcp.tool()
-async def get_task(task_id: str) -> dict[str, Any]:
-    """查询单个任务详情（含结果摘要）。"""
+async def get_task(task_id: str, ctx: Any | None = None) -> dict[str, Any]:
+    """查询单个任务详情（含结果摘要；非 admin 仅本人任务）。"""
+    from app.models.user import User
+
     async with AsyncSessionLocal() as db:
+        uid = await _request_user_id(ctx)
+        me = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
         t = (
             await db.execute(select(GenerationTask).where(GenerationTask.id == task_id))
         ).scalar_one_or_none()
         if t is None:
             return {"error": f"任务不存在: {task_id}"}
+        if (me is None or me.role != "admin") and t.user_id != uid:
+            return {"error": "无权访问该任务"}
         return _summarize_task_result(t)
 
 
 @mcp.tool()
-async def list_assets(limit: int = 20) -> list[dict[str, Any]]:
-    """素材库最近资产列表。"""
+async def list_assets(limit: int = 20, ctx: Any | None = None) -> list[dict[str, Any]]:
+    """素材库最近资产列表（仅本人素材）。"""
     async with AsyncSessionLocal() as db:
+        uid = await _request_user_id(ctx)
         rows = (
-            await db.execute(select(Asset).order_by(Asset.id.desc()).limit(limit))
+            await db.execute(
+                select(Asset).where(Asset.user_id == uid).order_by(Asset.id.desc()).limit(limit)
+            )
         ).scalars().all()
         return [
             {
@@ -148,14 +178,17 @@ async def list_assets(limit: int = 20) -> list[dict[str, Any]]:
 
 
 @mcp.tool()
-async def get_asset(asset_id: str) -> dict[str, Any]:
-    """查询素材详情（返回 content 下载路径）。"""
+async def get_asset(asset_id: str, ctx: Any | None = None) -> dict[str, Any]:
+    """查询素材详情（返回 content 下载路径；仅本人素材）。"""
     async with AsyncSessionLocal() as db:
+        uid = await _request_user_id(ctx)
         a = (
             await db.execute(select(Asset).where(Asset.id == asset_id))
         ).scalar_one_or_none()
         if a is None:
             return {"error": f"素材不存在: {asset_id}"}
+        if a.user_id != uid:
+            return {"error": "无权访问该素材"}
         return {
             "asset_id": a.id,
             "filename": a.filename,
@@ -167,14 +200,20 @@ async def get_asset(asset_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def search_prompts(query: str, limit: int = 10) -> list[dict[str, Any]]:
-    """检索 prompt 库（标题/内容模糊匹配）。"""
+async def search_prompts(
+    query: str, limit: int = 10, ctx: Any | None = None,
+) -> list[dict[str, Any]]:
+    """检索 prompt 库（标题/内容模糊匹配；仅公开或本人）。"""
     async with AsyncSessionLocal() as db:
+        uid = await _request_user_id(ctx)
         like = f"%{query}%"
         rows = (
             await db.execute(
                 select(Prompt)
-                .where(Prompt.title.like(like) | Prompt.content.like(like))
+                .where(
+                    or_(Prompt.is_public.is_(True), Prompt.author_id == uid),
+                    Prompt.title.like(like) | Prompt.content.like(like),
+                )
                 .limit(limit)
             )
         ).scalars().all()
@@ -185,8 +224,10 @@ async def search_prompts(query: str, limit: int = 10) -> list[dict[str, Any]]:
 
 
 @mcp.tool()
-async def get_upstream_status() -> dict[str, Any]:
-    """上游状态：grok 账号池 / 注册机 / grok 图片 / cpa。"""
+async def get_upstream_status(ctx: Any | None = None) -> dict[str, Any]:
+    """上游状态：grok 账号池 / 注册机 / grok 图片 / cpa（仅 admin）。"""
+    if await _request_role(ctx) != "admin":
+        return {"error": "仅管理员可查看上游状态"}
     from app.api.v1.upstream import upstream_status
 
     async with AsyncSessionLocal() as db:
@@ -194,12 +235,19 @@ async def get_upstream_status() -> dict[str, Any]:
 
 
 @mcp.tool()
-async def list_workflows() -> list[dict[str, Any]]:
-    """workflow 模板列表。"""
+async def list_workflows(ctx: Any | None = None) -> list[dict[str, Any]]:
+    """workflow 模板列表（公开或本人）。"""
     from app.models.workflow import Workflow
 
     async with AsyncSessionLocal() as db:
-        rows = (await db.execute(select(Workflow).limit(50))).scalars().all()
+        uid = await _request_user_id(ctx)
+        rows = (
+            await db.execute(
+                select(Workflow)
+                .where(or_(Workflow.is_public.is_(True), Workflow.author_id == uid))
+                .limit(50)
+            )
+        ).scalars().all()
         return [
             {
                 "id": w.id,
@@ -400,8 +448,12 @@ async def synthesize_speech(text: str, voice: str = "default") -> dict[str, Any]
 
 
 @mcp.tool()
-def trigger_register_batch(count: int = 10) -> dict[str, Any]:
-    """触发注册机刷号批次（后台异步执行）。"""
+async def trigger_register_batch(count: int = 10, ctx: Any | None = None) -> dict[str, Any]:
+    """触发注册机刷号批次（仅 admin，后台异步执行）。"""
+    if await _request_role(ctx) != "admin":
+        return {"error": "仅管理员可触发注册批次"}
+    if not 1 <= count <= 20:
+        return {"error": "run_count 需在 1-20 之间"}
     task_id = _create_task_record(count)
     schedule_register_batch(task_id, count)
     return {"ok": True, "task_id": task_id, "run_count": count}

@@ -8,7 +8,8 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme}
     ports:
-      - "3306:3306"
+      # 安全收口：仅本机可访问（LAN 不暴露数据平面）；公网入口只有 frontend:5000
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -20,12 +21,14 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-changeme}"]
     ports:
-      - "6379:6379"
+      # 安全收口：仅本机可访问 + requirepass（.env REDIS_URL 带密码）
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a '${REDIS_PASSWORD:-changeme}' ping | grep PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -37,7 +40,8 @@ services:
     restart: unless-stopped
     entrypoint: ["bash", "/docker-entrypoint.sh"]
     ports:
-      - "${API_INTERNAL_PORT:-8000}:8000"
+      # 安全收口：仅本机可访问（LAN 不暴露 API；前端 nginx 容器内反代）
+      - "127.0.0.1:${API_INTERNAL_PORT:-8000}:8000"
     env_file: .env
     # 容器内以 mysql 服务名访问；本地 uvicorn（无 DATABASE_URL）仍走 SQLite
     environment:
@@ -118,7 +122,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "${SILLYTAVERN_PORT:-8001}:8000"
+      # 安全收口：SillyTavern 无鉴权，仅本机可访问（公网演示不暴露）
+      - "127.0.0.1:${SILLYTAVERN_PORT:-8001}:8000"
     volumes:
       - sillytavern_data:/home/node/app/data
       - ./deploy/sillytavern/config:/home/node/app/config
@@ -130,7 +135,8 @@ services:
     image: agentmemory/memory-core:latest
     restart: unless-stopped
     ports:
-      - "8420:8420"
+      # 安全收口：仅本机可访问（LAN 不暴露记忆数据）
+      - "127.0.0.1:8420:8420"
     environment:
       - TDAI_GATEWAY_API_KEY=${TDAI_MEMORY_API_KEY}
       # LLM 复用 OpenAI 兼容网关（默认 grok2api；记忆抽取可在 .env 用 TDAI_LLM_BASE_URL 切换，如 cpa:8317）

@@ -271,8 +271,9 @@ async def _run_drain() -> dict[str, Any]:
                 elif t.task_type == "register":
                     # register 由注册机执行器处理（进程内/beat 调度），
                     # drain 不能当媒体任务跑（否则 run_media_task 报"暂无真实 Provider"）
-                    from app.tasks.register_batch import _execute_and_update
                     import json as _json
+
+                    from app.tasks.register_batch import _execute_and_update
 
                     params = _json.loads(t.params or "{}")
                     await _execute_and_update(t.id, int(params.get("run_count") or 10))

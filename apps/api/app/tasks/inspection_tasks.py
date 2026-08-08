@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from app.core.config import settings
 from app.tasks.celery_app import celery_app
 
 
@@ -158,12 +159,18 @@ async def _collect() -> dict[str, object]:
         except Exception as e:
             report["sections"]["upstream"][name] = f"unreachable: {str(e)[:80]}"
 
-    # Grok catalog 健康（走内部 provider 探测）
+    # Grok catalog 健康（真实探测：OpenAI 兼容 /v1/models）
     try:
+        import httpx as _httpx
 
-        report["sections"]["grok"] = "ok"
+        async with _httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                "http://host.docker.internal:8000/v1/models",
+                headers={"Authorization": f"Bearer {settings.OPENAI_COMPATIBLE_API_KEY}"},
+            )
+            report["sections"]["grok"] = "ok" if r.status_code == 200 else f"HTTP {r.status_code}"
     except Exception:
-        report["sections"]["grok"] = "n/a"
+        report["sections"]["grok"] = "unreachable"
 
     return report
 

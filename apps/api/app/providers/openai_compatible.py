@@ -349,7 +349,7 @@ class OpenAICompatibleImageProvider(ImageProvider):
             raise ProviderError(str(exc)) from exc
 
     async def _chat_image(self, prompt: str, target: str) -> tuple[bytes, str] | None:
-        """chat 图片模式：/chat/completions 返回 message.images（如 cpa gemini-3.1-flash-image）。"""
+        """chat 图片模式：chat/completions 返回 message.images（cpa gemini 等）。"""
         payload: dict[str, object] = {
             "model": target,
             "messages": [{"role": "user", "content": prompt}],

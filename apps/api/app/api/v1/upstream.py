@@ -25,7 +25,7 @@ from app.core.database import get_db
 from app.models.generation_task import GenerationTask
 from app.models.user import User
 from app.schemas.generation import TaskResponse
-from app.security.auth import get_current_user
+from app.security.auth import get_current_user, require_role
 
 router = APIRouter()
 
@@ -182,8 +182,9 @@ async def _cpa_status(db: AsyncSession) -> dict[str, object]:
 @router.get("/status")
 async def upstream_status(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_role("admin")),
 ) -> dict[str, object]:
+    """上游状态聚合（仅 admin：暴露账号池/注册机信息，且触发带成本的 grok 图片探测）。"""
     pool = await _grok_account_pool()
     reg = await _register_status()
     grok_img = await _grok_image_probe()
