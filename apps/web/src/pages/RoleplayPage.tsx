@@ -610,7 +610,14 @@ export function RoleplayPage() {
                       className="h-9 w-9 rounded-lg border border-border object-cover"
                     />
                     <span className="min-w-0">
-                      <span className="block truncate text-xs font-medium">{c.name || c.filename}</span>
+                      <span className="block truncate text-xs font-medium">
+                        {c.name || c.filename}
+                        {c.is_shared && (
+                          <span className="ml-1 rounded bg-primary/12 px-1 py-0.5 text-[9px] font-semibold text-primary-text">
+                            共享
+                          </span>
+                        )}
+                      </span>
                       <span className="block truncate text-[10px] text-muted-foreground">
                         {c.filename}
                       </span>

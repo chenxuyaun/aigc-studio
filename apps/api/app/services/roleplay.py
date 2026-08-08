@@ -14,7 +14,7 @@ import re
 from collections.abc import AsyncIterator
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
@@ -66,13 +66,29 @@ def parse_character_png(data: bytes) -> dict[str, Any]:
 
 
 async def list_characters(db: AsyncSession, user_id: str) -> list[dict[str, Any]]:
-    """素材库中的角色卡资产列表（filename 以 character- 开头）。"""
+    """素材库中的角色卡资产列表（filename 以 character- 开头；含 admin 共享卡）。"""
+    shared_ids = set(
+        (
+            await db.execute(
+                select(RoleplayCharacter.asset_id).where(
+                    RoleplayCharacter.is_shared.is_(True)
+                )
+            )
+        ).scalars().all()
+    )
     rows = (
         await db.execute(
             select(Asset).where(
-                Asset.user_id == user_id,
                 Asset.filename.like("character-%"),
                 Asset.mime_type == "image/png",
+                or_(
+                    Asset.user_id == user_id,
+                    Asset.id.in_(
+                        select(RoleplayCharacter.asset_id).where(
+                            RoleplayCharacter.is_shared.is_(True)
+                        )
+                    ),
+                ),
             )
         )
     ).scalars().all()
@@ -82,6 +98,7 @@ async def list_characters(db: AsyncSession, user_id: str) -> list[dict[str, Any]
             "filename": a.filename,
             "url": sign_content_url(str(a.id)),
             "created_at": str(a.created_at) if a.created_at else "",
+            "is_shared": a.id in shared_ids,
         }
         for a in rows
     ]
@@ -161,12 +178,22 @@ async def _load_cards(
     from app.storage import get_storage
 
     # N+1 优化：Asset 与 RoleplayCharacter 各一次批量 IN 取回（原循环内逐卡 2 次查询）
+    shared_ids = set(
+        (
+            await db.execute(
+                select(RoleplayCharacter.asset_id).where(
+                    RoleplayCharacter.is_shared.is_(True)
+                )
+            )
+        ).scalars().all()
+    )
     assets = {
         a.id: a
         for a in (
             await db.execute(
                 select(Asset).where(
-                    Asset.id.in_(character_asset_ids), Asset.user_id == user_id
+                    Asset.id.in_(character_asset_ids),
+                    or_(Asset.user_id == user_id, Asset.id.in_(list(shared_ids))),
                 )
             )
         ).scalars().all()
@@ -255,7 +282,10 @@ async def _load_lore_entries(
     rows = (
         await db.execute(
             select(RoleplayLoreEntry).where(
-                RoleplayLoreEntry.user_id == user_id,
+                or_(
+                    RoleplayLoreEntry.user_id == user_id,
+                    RoleplayLoreEntry.is_shared.is_(True),
+                ),
                 name_cond,
                 project_cond,
             )
@@ -295,7 +325,11 @@ async def _load_regex_scripts(db: AsyncSession, user_id: str) -> list[RegexScrip
     rows = (
         await db.execute(
             select(RegexScript).where(
-                RegexScript.user_id == user_id, RegexScript.enabled.is_(True)
+                or_(
+                    RegexScript.user_id == user_id,
+                    RegexScript.is_shared.is_(True),
+                ),
+                RegexScript.enabled.is_(True)
             )
         )
     ).scalars().all()

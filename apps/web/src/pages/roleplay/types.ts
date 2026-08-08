@@ -5,6 +5,8 @@ export interface CharacterItem {
   filename: string;
   url: string;
   name?: string;
+  /** 多人创作共享：admin 共享后全员可见可用 */
+  is_shared?: boolean;
 }
 
 export interface CharacterDetail {

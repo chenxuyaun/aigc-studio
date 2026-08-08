@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Float, String, Text, func
+from sqlalchemy import Boolean, Float, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -20,6 +20,8 @@ class RoleplayCharacter(Base):
 
     asset_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), index=True)
+    # 多人创作共享：admin 标记后全员可见可用
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     name: Mapped[str] = mapped_column(String(100), default="", server_default="")
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     personality: Mapped[str] = mapped_column(Text, nullable=False, default="")

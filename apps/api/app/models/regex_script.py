@@ -24,6 +24,8 @@ class RegexScript(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), index=True)
+    # 多人创作共享：admin 标记后全员可见可用
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     name: Mapped[str] = mapped_column(String(100), nullable=False, default="", server_default="")
     pattern: Mapped[str] = mapped_column(Text, nullable=False)
     replacement: Mapped[str] = mapped_column(Text, nullable=False, default="")

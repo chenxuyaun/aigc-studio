@@ -25,6 +25,8 @@ class RoleplayLoreEntry(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), index=True)
+    # 多人创作共享：admin 标记后全员可见可用
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # None = 全局书（任何角色命中都注入）；否则绑定角色名
     character_name: Mapped[str | None] = mapped_column(String(100), index=True, nullable=True)
     # 创作项目作用域（story_projects.id）；None = 常规角色扮演/全局

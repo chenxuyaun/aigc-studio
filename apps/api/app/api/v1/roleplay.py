@@ -205,6 +205,29 @@ def _chat_dict(c: RoleplayChat) -> dict[str, Any]:
 
 # ==== 角色卡 ====
 
+@router.put("/characters/{asset_id}/share")
+async def toggle_character_share(
+    asset_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """多人创作共享开关（仅 admin）：共享后全员可见可用该角色卡。"""
+    from app.models.roleplay_character import RoleplayCharacter
+
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可设置共享")
+    row = (
+        await db.execute(
+            select(RoleplayCharacter).where(RoleplayCharacter.asset_id == asset_id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="角色卡不存在")
+    row.is_shared = not row.is_shared
+    await db.commit()
+    return {"asset_id": asset_id, "is_shared": row.is_shared}
+
+
 @router.get("/characters")
 async def characters(
     user: User = Depends(get_current_user),
