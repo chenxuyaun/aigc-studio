@@ -160,17 +160,35 @@ async def _load_cards(
     """加载多张角色卡（asset_id, 全字段 card dict）列表；失败项跳过。"""
     from app.storage import get_storage
 
+    # N+1 优化：Asset 与 RoleplayCharacter 各一次批量 IN 取回（原循环内逐卡 2 次查询）
+    assets = {
+        a.id: a
+        for a in (
+            await db.execute(
+                select(Asset).where(
+                    Asset.id.in_(character_asset_ids), Asset.user_id == user_id
+                )
+            )
+        ).scalars().all()
+    }
+    rows = {
+        r.asset_id: r
+        for r in (
+            await db.execute(
+                select(RoleplayCharacter).where(
+                    RoleplayCharacter.asset_id.in_(list(assets.keys()))
+                )
+            )
+        ).scalars().all()
+    }
+
     cards: list[tuple[str, dict[str, Any]]] = []
     for aid in character_asset_ids:
-        asset = (
-            await db.execute(
-                select(Asset).where(Asset.id == aid, Asset.user_id == user_id)
-            )
-        ).scalar_one_or_none()
+        asset = assets.get(aid)
         if asset is None:
             continue
         # 优先读结构化行（已同步过的卡）
-        row = await db.get(RoleplayCharacter, aid)
+        row = rows.get(aid)
         if row is not None:
             card = {
                 "name": row.name,

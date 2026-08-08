@@ -245,13 +245,13 @@ async def register_result(
         )
     ).scalar_one_or_none()
     if task is None and user.role != "admin":
-        return {"status": "not_found"}
+        raise HTTPException(status_code=404, detail="任务不存在")
     if task is None:
         task = (
             await db.execute(select(GenerationTask).where(GenerationTask.id == task_id))
         ).scalar_one_or_none()
     if task is None:
-        return {"status": "not_found"}
+        raise HTTPException(status_code=404, detail="任务不存在")
     return {
         "id": task.id,
         "status": task.status,

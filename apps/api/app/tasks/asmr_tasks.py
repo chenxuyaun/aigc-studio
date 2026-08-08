@@ -33,6 +33,11 @@ def asmr_sync_task(
 
         # celery prefork + asyncio.run：dispose 连接池避免跨 loop 连接卡死
         await engine.dispose()
+        # 跨进程互斥：beat 每日同步与手动 /asmr/sync（进程内锁互不共享）防双跑浪费限速配额
+        from app.core.cache import redis_lock
+
+        if not await redis_lock("aigc:lock:asmr_sync", ttl=2700):
+            return {"ok": False, "error": "已有 ASMR 同步运行中，本次跳过"}
         async with AsyncSessionLocal() as db:
             try:
                 result = await run_sync(

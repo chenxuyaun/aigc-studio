@@ -240,7 +240,9 @@ async def sync_agentlist(
         raise HTTPException(status_code=403, detail="仅管理员可同步")
     global _sync_running
     if _sync_running:
-        return {"ok": False, "error": "同步进行中，请稍候"}
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=409, detail="同步进行中，请稍候")
     async with _sync_lock:
         _sync_running = True
         try:

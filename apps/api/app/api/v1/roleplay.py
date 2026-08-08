@@ -212,10 +212,21 @@ async def characters(
 ) -> dict[str, Any]:
     """素材库中的角色卡列表。"""
     items = await list_characters(db, user.id)
-    # 附角色名（从结构化行读，未同步的跳过）
+    # 附角色名（批量 IN 取结构化行，未同步的跳过；原逐行 db.get N+1）
+    ids = [it["asset_id"] for it in items]
+    if ids:
+        rows = {
+            r.asset_id: r.name
+            for r in (
+                await db.execute(
+                    select(RoleplayCharacter).where(RoleplayCharacter.asset_id.in_(ids))
+                )
+            ).scalars().all()
+        }
+    else:
+        rows = {}
     for it in items:
-        row = await db.get(RoleplayCharacter, it["asset_id"])
-        it["name"] = row.name if row else ""
+        it["name"] = rows.get(it["asset_id"], "")
     return {"items": items}
 
 

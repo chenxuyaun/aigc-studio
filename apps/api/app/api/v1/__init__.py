@@ -26,9 +26,9 @@ from app.api.v1 import (
     workflows,
 )
 from app.api.v1.generations import audio as gen_audio
-from app.api.v1.generations import music as gen_music
 from app.api.v1.generations import comic as gen_comic
 from app.api.v1.generations import image as gen_image
+from app.api.v1.generations import music as gen_music
 from app.api.v1.generations import prompt_tools as gen_prompt
 from app.api.v1.generations import text as gen_text
 from app.api.v1.generations import video as gen_video

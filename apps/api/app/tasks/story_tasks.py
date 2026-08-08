@@ -106,6 +106,11 @@ async def _run_chapter_task(task_id: str) -> dict[str, Any]:
 
 async def _run_serial_tick() -> dict[str, Any]:
     """扫描到期连载调度：为每个调度创建下一章生成任务并推进 next_run_at。"""
+    # 跨进程互斥：beat 双发/多 worker 时防重复建章
+    from app.core.cache import redis_lock
+
+    if not await redis_lock("aigc:lock:serial_tick", ttl=50):
+        return {"ok": False, "error": "已有 tick 运行中，本次跳过"}
     await _reset_pool_for_loop()
     async with AsyncSessionLocal() as db:
         now = datetime.now(UTC)
@@ -184,11 +189,21 @@ async def _run_serial_tick() -> dict[str, Any]:
 
 
 def _celery_task(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """类型化 shared_task 包装：注册到默认 app，同时让 mypy 保持函数签名。"""
+    """类型化 shared_task 包装：注册到默认 app，统一重试策略（DB 抖动自动重试）。"""
 
     def deco(fn: Callable[..., Any]) -> Callable[..., Any]:
-        shared_task(name=name)(fn)
-        return fn
+        import sqlalchemy
+
+        _retryable = (sqlalchemy.exc.OperationalError, sqlalchemy.exc.TimeoutError)
+
+        @shared_task(  # type: ignore[untyped-decorator]
+            name=name, bind=True, max_retries=2, autoretry_for=_retryable,
+            retry_backoff=True, retry_backoff_max=60, retry_jitter=True,
+        )
+        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+            return fn(*args, **kwargs)
+
+        return wrapper
 
     return deco
 
