@@ -314,6 +314,18 @@ class OpenAICompatibleImageProvider(ImageProvider):
                     json=payload,
                 )
                 if resp.status_code != 200:
+                    # chat 图片模式回退：部分网关（如 cpa gemini-3.1-flash-image）
+                    # 不支持 /images/generations，但 chat/completions 返回 message.images
+                    chat = await self._chat_image(prompt, target)
+                    if chat is not None:
+                        content, mime = chat
+                        task_id = str(uuid.uuid4())
+                        self._cache[task_id] = (content, mime)
+                        return {
+                            "task_id": task_id,
+                            "status": "processing",
+                            "model": target,
+                        }
                     raise ProviderError(
                         f"图像上游 {resp.status_code} ({target}): {resp.text[:200]}"
                     )
@@ -335,6 +347,37 @@ class OpenAICompatibleImageProvider(ImageProvider):
             raise
         except Exception as exc:
             raise ProviderError(str(exc)) from exc
+
+    async def _chat_image(self, prompt: str, target: str) -> tuple[bytes, str] | None:
+        """chat 图片模式：/chat/completions 返回 message.images（如 cpa gemini-3.1-flash-image）。"""
+        payload: dict[str, object] = {
+            "model": target,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self._headers(),
+                    json=payload,
+                )
+                if resp.status_code != 200:
+                    return None
+                data = resp.json()
+                msg = (data.get("choices") or [{}])[0].get("message", {})
+                imgs = msg.get("images") or []
+                if not imgs:
+                    return None
+                url = str(imgs[0].get("image_url", {}).get("url", ""))
+                if not url:
+                    return None
+                if url.startswith("data:"):
+                    meta, _, b64 = url.partition(",")
+                    mime = meta.split(";")[0].replace("data:", "") or "image/jpeg"
+                    return base64.b64decode(b64), mime
+                return await self._fetch_url(url)
+        except Exception:
+            return None
 
     async def _fetch_url(self, url: str) -> tuple[bytes, str]:
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
