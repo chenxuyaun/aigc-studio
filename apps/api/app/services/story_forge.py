@@ -593,6 +593,21 @@ async def _build_chapter_prompt(
     parts: list[str] = [
         f"【创作任务】你是小说《{project.title}》的执笔作者（{project.genre or '类型未定'}）。",
     ]
+    # 创作罗盘（全书承诺 + 当前阶段目标）：强制注入每次生成，防多轮跑偏/一致性漂移
+    compass = _load_json(project.settings, {}).get("compass") or {}
+    intent = str(compass.get("intent") or "").strip()
+    focus = str(compass.get("focus") or "").strip()
+    if intent or focus:
+        compass_lines = []
+        if intent:
+            compass_lines.append(f"【全书承诺】（不可违反，每章都要守住）\n{intent}")
+        if focus:
+            compass_lines.append(f"【当前阶段目标】（本阶段最高优先级）\n{focus}")
+        parts.append("\n".join(compass_lines))
+    # 写法特征池（AI-Novel 借鉴）：已确认的写法特征，本章必须延续
+    style_block = writing_style_block(project)
+    if style_block:
+        parts.append(style_block)
     if project.synopsis:
         parts.append(f"【故事梗概】\n{project.synopsis}")
     if wb_before:
@@ -1054,10 +1069,26 @@ async def revise_chapter(
         return {"error": "请提供修订指令"}
     project = await get_project(db, user_id, chapter.project_id)
     original = str(chapter.content or "")
+    # 创作罗盘（与章节生成一致）：修订同样守住全书承诺
+    compass = ""
+    if project is not None:
+        compass_cfg = _load_json(project.settings, {}).get("compass") or {}
+        intent = str(compass_cfg.get("intent") or "").strip()
+        focus = str(compass_cfg.get("focus") or "").strip()
+        if intent or focus:
+            compass = "\n".join(
+                [f"【全书承诺】（不可违反）\n{intent}" if intent else "",
+                 f"【当前阶段目标】\n{focus}" if focus else ""]
+            ).strip()
     system_prompt = (
         f"你是小说《{project.title if project else ''}》的执笔作者。按指令修订指定章节正文。\n"
         "要求：保持整体情节与风格不变，只按指令调整；只输出修订后的完整正文，不要解释。"
     )
+    if compass:
+        system_prompt += f"\n\n{compass}"
+    style_block = writing_style_block(project)
+    if style_block:
+        system_prompt += f"\n\n{style_block}"
     user_prompt = (
         f"【修订指令】\n{instruction}\n\n【原文】\n{original}\n\n请输出修订后的正文："
     )
@@ -1206,3 +1237,73 @@ def _build_epub(project: StoryProject, chapters: list[dict[str, Any]]) -> bytes:
                 f"<h2>{esc(c['title'])}</h2><p>{body}</p></body></html>",
             )
     return buf.getvalue()
+
+
+# ===== 写法特征池（AI-Novel 写法引擎借鉴）：从好章节提取写法特征，注入后续生成 =====
+
+_WRITING_STYLE_PROMPT = """你是资深文学编辑。从以下章节正文中提炼「写法特征」（作者是怎么写的），
+供后续章节模仿。规则：
+- 提取 3-5 条，每条 = 特征名（4-8 字）+ 一句话说明（怎么写的，含一个原文示例片段，10 字内）
+- 只提炼「写法层面」：句式节奏 / 白描或修辞习惯 / 对话写法 / 视角与留白 / 用词偏好
+- 不要提炼剧情内容（剧情是内容不是写法）
+输出 JSON（不要任何多余文字）：{{"features": [{{"name": "白描短句", "desc": "三五个字的动作短句，不解释情绪，如『他愣了愣』", "enabled": true}}]}}
+
+章节正文：
+{content}"""
+
+
+async def extract_writing_style(
+    db: AsyncSession, user_id: str, project_id: str, chapter_id: str
+) -> dict[str, Any]:
+    """从指定章节提取写法特征（存项目 settings.writing_style）。"""
+    project = await get_project(db, user_id, project_id)
+    if project is None:
+        return {"error": "项目不存在"}
+    chapter = await get_chapter(db, user_id, chapter_id)
+    if chapter is None:
+        return {"error": "章节不存在"}
+    content = str(chapter.content or "").strip()
+    if len(content) < 200:
+        return {"error": "章节正文太短（<200 字），先完成写作再提取"}
+    resolved = await resolve_text_provider(db, "")
+    try:
+        result = await resolved.provider.generate(  # type: ignore[attr-defined]
+            _WRITING_STYLE_PROMPT.format(content=content[:5000]),
+            resolved.model,
+            temperature=0.3,
+        )
+        from app.services.text_utils import extract_json, result_text
+
+        data = extract_json(result_text(result))
+        features = [f for f in (data.get("features") or []) if isinstance(f, dict)]
+        if not features:
+            return {"error": "未能提炼出写法特征"}
+        # 限制条数与字段长度
+        cleaned = []
+        for f in features[:5]:
+            cleaned.append(
+                {
+                    "name": str(f.get("name") or "特征")[:12],
+                    "desc": str(f.get("desc") or "")[:120],
+                    "enabled": bool(f.get("enabled", True)),
+                }
+            )
+        settings = _load_json(project.settings, {})
+        settings["writing_style"] = cleaned
+        project.settings = json.dumps(settings, ensure_ascii=False)
+        await db.commit()
+        return {"ok": True, "features": cleaned}
+    except Exception as exc:
+        return {"error": f"提取失败：{str(exc)[:120]}"}
+
+
+def writing_style_block(project: StoryProject) -> str:
+    """写法特征池 → 注入文本（仅启用的特征；无则空串）。"""
+    cfg = _load_json(project.settings, {}).get("writing_style") or []
+    enabled = [f for f in cfg if isinstance(f, dict) and f.get("enabled")]
+    if not enabled:
+        return ""
+    lines = [
+        f"- {f.get('name', '特征')}：{f.get('desc', '')}" for f in enabled[:5]
+    ]
+    return "【写作特征池】（本项目已确认的写法特征，本章必须延续这些写法）\n" + "\n".join(lines)

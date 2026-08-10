@@ -5,8 +5,10 @@ import { Download, Users } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { RoundtablePanel } from "@/components/creation/RoundtablePanel";
 import { EmptyState } from "@/components/ui/States";
 import { apiClient } from "@/lib/apiClient";
+import { cn } from "@/lib/cn";
 import { toClientApiPath } from "@/lib/paths";
 
 interface CardResult {
@@ -25,6 +27,7 @@ interface CardResult {
 const STYLES = ["动漫", "写实", "水彩", "像素"];
 
 export function CharacterCardPage() {
+  const [genMode, setGenMode] = useState<"single" | "roundtable">("single");
   const [description, setDescription] = useState("");
   const [style, setStyle] = useState(STYLES[0]);
   const [busy, setBusy] = useState(false);
@@ -58,6 +61,48 @@ export function CharacterCardPage() {
         title="角色卡生成"
         description="为 SillyTavern 生成角色扮演角色卡（PNG，拖入即用）"
       />
+      {/* 模式切换：直接生成 / 创作圆桌 */}
+      <div className="flex gap-1 border-b border-border px-4 pt-2 md:px-6" role="tablist">
+        {(
+          [
+            { key: "single", label: "⚡ 直接生成" },
+            { key: "roundtable", label: "🎙️ 创作圆桌（多角色讨论人设）" },
+          ] as { key: "single" | "roundtable"; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={genMode === t.key}
+            onClick={() => setGenMode(t.key)}
+            className={cn(
+              "rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+              genMode === t.key
+                ? "border-primary text-primary-text"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {genMode === "roundtable" ? (
+        <div className="p-4 md:p-6">
+          <RoundtablePanel
+            domain="character_card"
+            themeLabel="角色设定"
+            themePlaceholder="例如：一只会魔法的黑猫，喜欢恶作剧但心地善良…"
+            extraLabel="附加要求（可选）"
+            extraPlaceholder="世界观 / 说话风格 / 与主角的关系…"
+            onFinal={(f) => {
+              if (f.content) {
+                setDescription(f.content);
+                setGenMode("single");
+              }
+            }}
+          />
+        </div>
+      ) : (
       <div className="grid gap-6 p-4 md:p-6 lg:grid-cols-[380px_1fr]">
         <div className="space-y-4 rounded-[var(--radius-card)] border border-border bg-surface p-5">
           <Field label="角色描述" required>
@@ -144,6 +189,7 @@ export function CharacterCardPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { BookOpen, ChevronDown, Download, FolderOpen, Image as ImageIcon, Wand2,
 import { Link, useLocation } from "react-router-dom";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { RoundtablePanel } from "@/components/creation/RoundtablePanel";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Field, Input, Textarea } from "@/components/ui/Field";
@@ -38,6 +39,7 @@ interface ImageHandoff {
 export function ImageGenPage() {
   const location = useLocation();
   const handoff = (location.state as ImageHandoff | null) ?? null;
+  const [genMode, setGenMode] = useState<"single" | "roundtable">("single");
   const [prompt, setPrompt] = useState(handoff?.prompt ?? "");
   const [negative, setNegative] = useState(handoff?.negative_prompt ?? "");
   const [width, setWidth] = useState(handoff?.width ?? 512);
@@ -198,6 +200,48 @@ export function ImageGenPage() {
             : "未选择模型（将自动使用已启用 Provider）"
         }
       />
+      {/* 模式切换：单次生成 / 创作圆桌 */}
+      <div className="flex gap-1 border-b border-border px-4 pt-2 md:px-6" role="tablist">
+        {(
+          [
+            { key: "single", label: "⚡ 直接生成" },
+            { key: "roundtable", label: "🎙️ 创作圆桌（多角色讨论出图方案）" },
+          ] as { key: "single" | "roundtable"; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={genMode === t.key}
+            onClick={() => setGenMode(t.key)}
+            className={cn(
+              "rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+              genMode === t.key
+                ? "border-primary text-primary-text"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {genMode === "roundtable" ? (
+        <div className="p-4 md:p-6">
+          <RoundtablePanel
+            domain="image"
+            themeLabel="画面需求"
+            themePlaceholder="例如：雨夜便利店门口，一只橘猫蹲在关东煮蒸汽里…"
+            extraLabel="附加要求（可选）"
+            extraPlaceholder="风格（写实/插画/赛博朋克）/ 尺寸 / 参考图…"
+            onFinal={(f) => {
+              if (f.content) {
+                setPrompt(f.content);
+                setGenMode("single");
+              }
+            }}
+          />
+        </div>
+      ) : (
       <div className="grid gap-4 p-4 md:grid-cols-[360px_1fr] md:p-6">
         <div className="flex flex-col gap-4">
           <Field
@@ -526,6 +570,7 @@ export function ImageGenPage() {
           )}
         </div>
       </div>
+      )}
 
       <Dialog open={pickerOpen} onClose={() => setPickerOpen(false)} title="从提示词库选择">
         <div className="flex gap-2">

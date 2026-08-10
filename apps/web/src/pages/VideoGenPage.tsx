@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Textarea } from "@/components/ui/Field";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { RoundtablePanel } from "@/components/creation/RoundtablePanel";
 import { useMediaTask } from "@/hooks/useMediaTask";
 import { cn } from "@/lib/cn";
 
@@ -18,6 +19,7 @@ const MODEL_OPTS = [
 export function VideoGenPage() {
   const location = useLocation();
   const handoff = (location.state as { prompt?: string; duration?: number } | null) ?? null;
+  const [genMode, setGenMode] = useState<"single" | "roundtable">("single");
   const [prompt, setPrompt] = useState(handoff?.prompt ?? "");
   const [duration, setDuration] = useState(handoff?.duration ?? 5);
   const [model, setModel] = useState("grok");
@@ -38,6 +40,48 @@ export function VideoGenPage() {
           "Grok 视频生成（grok2api）；上游不可用时明确报错，不产生占位结果"
         }
       />
+      {/* 模式切换：直接生成 / 创作圆桌 */}
+      <div className="flex gap-1 border-b border-border px-4 pt-2 md:px-6" role="tablist">
+        {(
+          [
+            { key: "single", label: "⚡ 直接生成" },
+            { key: "roundtable", label: "🎙️ 创作圆桌（多角色讨论分镜方案）" },
+          ] as { key: "single" | "roundtable"; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={genMode === t.key}
+            onClick={() => setGenMode(t.key)}
+            className={cn(
+              "rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+              genMode === t.key
+                ? "border-primary text-primary-text"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {genMode === "roundtable" ? (
+        <div className="p-4 md:p-6">
+          <RoundtablePanel
+            domain="video"
+            themeLabel="视频需求"
+            themePlaceholder="例如：深夜便利店门口，猫和守夜人的 15 秒故事…"
+            extraLabel="附加要求（可选）"
+            extraPlaceholder="时长 / 平台（抖音/B站）/ 风格…"
+            onFinal={(f) => {
+              if (f.content) {
+                setPrompt(f.content);
+                setGenMode("single");
+              }
+            }}
+          />
+        </div>
+      ) : (
       <div className="grid gap-4 p-4 md:grid-cols-[360px_1fr] md:p-6">
         <div className="flex flex-col gap-4">
           <Field label="模型 / Provider">
@@ -133,6 +177,7 @@ export function VideoGenPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

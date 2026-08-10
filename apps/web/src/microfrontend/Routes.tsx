@@ -43,6 +43,15 @@ const AudioGenPage = lazy(() =>
 const MusicGenPage = lazy(() =>
   import("@/pages/MusicGenPage").then((m) => ({ default: m.MusicGenPage })),
 );
+const CreationPage = lazy(() =>
+  import("@/pages/CreationPage").then((m) => ({ default: m.CreationPage })),
+);
+const WorksPage = lazy(() =>
+  import("@/pages/WorksPage").then((m) => ({ default: m.WorksPage })),
+);
+const SharedMusicPage = lazy(() =>
+  import("@/pages/SharedMusicPage").then((m) => ({ default: m.SharedMusicPage })),
+);
 const PromptGeneratorPage = lazy(() =>
   import("@/pages/PromptGeneratorPage").then((m) => ({ default: m.PromptGeneratorPage })),
 );
@@ -121,6 +130,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Page><LoginPage /></Page>} />
       <Route path="/share/prompts/:promptId" element={<Page><SharedPromptPage /></Page>} />
+      <Route path="/share/music/:workId" element={<Page><SharedMusicPage /></Page>} />
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<Page><DashboardPage /></Page>} />
         <Route path="/create" element={<Page><CreatePage /></Page>} />
@@ -139,6 +149,8 @@ export function AppRoutes() {
         <Route path="/create/video" element={<Page><VideoGenPage /></Page>} />
         <Route path="/create/audio" element={<Page><AudioGenPage /></Page>} />
         <Route path="/create/music" element={<Page><MusicGenPage /></Page>} />
+        <Route path="/create/studio" element={<Page><CreationPage /></Page>} />
+        <Route path="/works" element={<Page><WorksPage /></Page>} />
         <Route path="/create/prompt" element={<Page><PromptGeneratorPage /></Page>} />
         <Route path="/create/prompt-optimize" element={<Page><PromptOptimizerPage /></Page>} />
         <Route path="/prompts" element={<Page><PromptsPage /></Page>} />

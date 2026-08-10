@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Heart, Play, Plus, Search, Sparkles, Trash2, Wrench } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import type { Agent, AgentCategory, Paginated } from "@aigc/shared-types";
 
@@ -104,6 +104,28 @@ export function AgentsPage() {
           </Button>
         }
       >
+        {/* 同级功能入口：技能库 / 工作流 / Agent 目录（原孤儿路由，补导航） */}
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-muted-foreground">关联：</span>
+          <Link
+            to="/skills"
+            className="rounded-full border border-border px-2.5 py-1 text-muted-foreground hover:border-primary hover:text-foreground"
+          >
+            🧩 技能库
+          </Link>
+          <Link
+            to="/workflows"
+            className="rounded-full border border-border px-2.5 py-1 text-muted-foreground hover:border-primary hover:text-foreground"
+          >
+            🔀 工作流
+          </Link>
+          <Link
+            to="/agent-directory"
+            className="rounded-full border border-border px-2.5 py-1 text-muted-foreground hover:border-primary hover:text-foreground"
+          >
+            📁 Agent 目录
+          </Link>
+        </div>
         <form
           onSubmit={(e: FormEvent) => {
             e.preventDefault();

@@ -14,6 +14,7 @@ class KnowledgeDocumentSummary(BaseModel):
     id: str
     title: str
     char_count: int
+    status: str = "confirmed"  # confirmed=已确认参与检索 / pending=AI 待确认
     created_at: datetime
     updated_at: datetime
     model_config = {"from_attributes": True}

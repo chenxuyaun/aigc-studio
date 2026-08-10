@@ -1,6 +1,7 @@
 from app.models.agent import Agent
 from app.models.agent_category import AgentCategory
 from app.models.agent_favorite import AgentFavorite
+from app.models.agent_run import AgentRun
 from app.models.agentlist import AgentArticle, AgentComparison, AgentProject
 from app.models.asmr_favorite import AsmrFavorite
 from app.models.asmr_netdisk_item import AsmrNetdiskItem
@@ -8,6 +9,9 @@ from app.models.asmr_work import AsmrWork
 from app.models.asset import Asset
 from app.models.generation_task import GenerationTask
 from app.models.inspection_report import InspectionReport
+from app.models.mission_lesson import MissionLesson
+from app.models.mission_run import MissionRun
+from app.models.music_work import MusicWork
 from app.models.photo import Photo
 from app.models.photo_album import PhotoAlbum
 from app.models.project import Project
@@ -44,12 +48,16 @@ __all__ = [
     "AgentComparison",
     "AgentFavorite",
     "AgentProject",
+    "AgentRun",
     "AsmrFavorite",
     "AsmrNetdiskItem",
     "AsmrWork",
     "Asset",
     "GenerationTask",
     "InspectionReport",
+    "MissionLesson",
+    "MissionRun",
+    "MusicWork",
     "Photo",
     "PhotoAlbum",
     "Project",

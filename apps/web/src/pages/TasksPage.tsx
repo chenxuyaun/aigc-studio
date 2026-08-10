@@ -49,12 +49,9 @@ const TYPE_OPTS = [
   { v: "audio", label: "语音" },
 ];
 
-const CREATE_LINKS = [
-  { to: "/create/image", label: "图片" },
-  { to: "/create/text", label: "文本" },
-  { to: "/create/video", label: "视频" },
-  { to: "/create/audio", label: "语音" },
-] as const;
+import { MEDIA_TOOLS } from "@/shared/createTools";
+
+const CREATE_LINKS = MEDIA_TOOLS.map((t) => ({ to: t.to, label: t.title.replace("生成", "") })) as { to: string; label: string }[];
 
 const PAGE_SIZE = 20;
 const TERMINAL = new Set(["succeeded", "failed", "cancelled", "expired"]);
@@ -140,6 +137,8 @@ export function TasksPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   // 正在取消的任务 id（按行 loading，不再整页共用）
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  // 正在重试的任务 id（失败任务原地重试）
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   const query = useQuery({
@@ -190,6 +189,27 @@ export function TasksPage() {
     },
     onError: (err) => {
       setActionError(err instanceof AppError ? err.message : "删除失败");
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (id: string) => {
+      setRetryingId(id);
+      return apiClient.post(`/tasks/${id}/retry`);
+    },
+    onSettled: () => setRetryingId(null),
+    onSuccess: () => {
+      setActionError(null);
+      void qc.invalidateQueries({ queryKey: ["tasks"] });
+      if (detail) {
+        void apiClient
+          .get<GenerationTask>(`/tasks/${detail.id}`)
+          .then(setDetail)
+          .catch(() => undefined);
+      }
+    },
+    onError: (err) => {
+      setActionError(err instanceof AppError ? err.message : "重试失败");
     },
   });
 
@@ -330,6 +350,19 @@ export function TasksPage() {
                       <RotateCcw className="h-4 w-4" aria-hidden />
                       再跑
                     </Button>
+                    {task.status === "failed" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        loading={retryingId === task.id}
+                        disabled={retryingId !== null && retryingId !== task.id}
+                        onClick={() => retryMutation.mutate(task.id)}
+                        title="原地重试（同参数重新入队）"
+                      >
+                        <RefreshCw className="h-4 w-4" aria-hidden />
+                        重试
+                      </Button>
+                    )}
                     {!TERMINAL.has(task.status) && (
                       <Button
                         variant="outline"

@@ -52,6 +52,13 @@ class ProjectUpdateRequest(BaseModel):
     settings: dict[str, Any] | None = None
 
 
+class CompassUpdateRequest(BaseModel):
+    """创作罗盘：intent=全书承诺（题材/卖点/必须保留/必须避免），focus=当前阶段目标。"""
+
+    intent: str = Field(default="", max_length=2000)
+    focus: str = Field(default="", max_length=500)
+
+
 class ChapterCreateRequest(BaseModel):
     chapter_no: int | None = None
     title: str = ""
@@ -161,6 +168,77 @@ async def update_project(
     if p is None:
         raise HTTPException(status_code=404, detail="项目不存在")
     return {"ok": True, "project": story_forge._project_dict(p)}
+
+
+@router.put("/projects/{project_id}/compass")
+async def update_compass(
+    project_id: str,
+    req: CompassUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """创作罗盘：全书承诺 + 当前阶段目标（注入每次生成，防多轮跑偏）。"""
+    p = await story_forge.update_project(
+        db, user.id, project_id,
+        {"settings": {"compass": {"intent": req.intent.strip(), "focus": req.focus.strip()}}},
+    )
+    if p is None:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    return {"ok": True, "project": story_forge._project_dict(p)}
+
+
+class WritingStyleExtractRequest(BaseModel):
+    """从指定章节提取写法特征。"""
+
+    chapter_id: str = Field(min_length=1, max_length=64)
+
+
+class WritingStyleUpdateRequest(BaseModel):
+    """手动编辑/启停写法特征池。"""
+
+    features: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@router.post("/projects/{project_id}/writing-style")
+async def extract_writing_style_route(
+    project_id: str,
+    req: WritingStyleExtractRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """从指定章节提炼写法特征（存项目 settings，注入后续章节生成）。"""
+    result = await story_forge.extract_writing_style(
+        db, user.id, project_id, req.chapter_id
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.put("/projects/{project_id}/writing-style")
+async def update_writing_style_route(
+    project_id: str,
+    req: WritingStyleUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """手动编辑/启停写法特征（每条 {name, desc, enabled}）。"""
+    cleaned = []
+    for f in (req.features or [])[:5]:
+        if isinstance(f, dict):
+            cleaned.append(
+                {
+                    "name": str(f.get("name") or "特征")[:12],
+                    "desc": str(f.get("desc") or "")[:120],
+                    "enabled": bool(f.get("enabled", True)),
+                }
+            )
+    p = await story_forge.update_project(
+        db, user.id, project_id, {"settings": {"writing_style": cleaned}}
+    )
+    if p is None:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    return {"ok": True, "features": cleaned}
 
 
 @router.delete("/projects/{project_id}")
@@ -487,9 +565,17 @@ async def generate_chapter_stream(
         chapter.model = resolved.model
         chapter.status = "done"
         await db.commit()
+        # AI 腔体检（分级报告：套话/机械句式/连接词/宣传腔/空洞修饰）
+        try:
+            from app.services.ai_voice_checker import check_ai_voice
+
+            issues = check_ai_voice(content)
+        except Exception:
+            issues = []
         yield _sse(
             {"type": "done", "chapter_id": chapter.id,
-             "word_count": chapter.word_count, "worldbook_hits": len(wb.activated)}
+             "word_count": chapter.word_count, "worldbook_hits": len(wb.activated),
+             "ai_voice": issues[:12]}
         )
         yield "data: [DONE]\n\n"
 

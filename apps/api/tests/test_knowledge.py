@@ -222,3 +222,55 @@ async def test_text_generate_ignores_foreign_doc_ids(client, admin_token, user_t
     data = resp.json()["data"]
     assert data["knowledge_sources"] == []
     assert "只有管理员知道的内容" not in data["content"]
+
+
+# ---------- 候选确认区（AI 自动写入待确认，确认前不参与检索） ----------
+
+
+@pytest.mark.asyncio
+async def test_pending_doc_excluded_from_retrieval_and_confirm(client, admin_token):
+    """pending 文档不参与问答检索；确认接口后生效。"""
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    # 直接插一条 pending 文档（用 admin 真实 user id）
+    from sqlalchemy import select
+
+    from app.models.text_document import TextDocument
+    from app.models.user import User
+    from tests.conftest import TestingSessionLocal
+
+    async with TestingSessionLocal() as session:
+        admin_id = (
+            await session.execute(select(User.id).where(User.username == "admin"))
+        ).scalar_one()
+        session.add(TextDocument(
+            title="AI回填示例", user_id=admin_id,
+            content="码头工人的一天：凌晨三点扛包，盐雾混进老茧。", status="pending",
+        ))
+        await session.commit()
+
+    # 问答检索不应命中 pending
+    resp = await client.post(
+        "/api/v1/knowledge/ask",
+        json={"question": "码头工人扛包", "max_chunks": 3},
+        headers=headers,
+    )
+    titles = [s["title"] for s in resp.json()["data"]["sources"]]
+    assert "AI回填示例" not in titles, "pending 文档不应参与检索"
+
+    # 列表能看到（status 字段）
+    resp = await client.get("/api/v1/knowledge/documents", headers=headers)
+    item = next((d for d in resp.json() if d["title"] == "AI回填示例"), None)
+    assert item and item["status"] == "pending"
+
+    # 确认后参与检索
+    resp = await client.put(
+        f"/api/v1/knowledge/documents/{item['id']}/confirm", headers=headers
+    )
+    assert resp.json()["success"] is True
+    resp = await client.post(
+        "/api/v1/knowledge/ask",
+        json={"question": "码头工人扛包", "max_chunks": 3},
+        headers=headers,
+    )
+    titles = [s["title"] for s in resp.json()["data"]["sources"]]
+    assert "AI回填示例" in titles, "确认后应参与检索"

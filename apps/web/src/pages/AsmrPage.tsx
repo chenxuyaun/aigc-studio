@@ -94,6 +94,12 @@ export function AsmrPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [detail, setDetail] = useState<AsmrWork | null>(null);
   const [similar, setSimilar] = useState<AsmrWork[]>([]);
+  // 手动编辑元数据（刮削错误修正）：title/circle/nsfw
+  const [editing, setEditing] = useState<AsmrWork | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCircle, setEditCircle] = useState("");
+  const [editNsfw, setEditNsfw] = useState<boolean>(true);
+  const [editBusy, setEditBusy] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [view, setView] = useState<"works" | "disk">("works");
@@ -208,6 +214,34 @@ export function AsmrPage() {
     },
     [favorites, favoritesOnly, toastError],
   );
+
+  // 手动编辑元数据（刮削错误修正）
+  const saveEdit = async () => {
+    if (!editing || editBusy) return;
+    setEditBusy(true);
+    try {
+      const r = await apiClient.put<{ work: AsmrWork }>(`/asmr/works/${editing.id}`, {
+        title: editTitle.trim(),
+        circle_name: editCircle.trim(),
+        nsfw: editNsfw,
+      });
+      setDetail(r.work);
+      setItems((prev) => prev.map((i) => (i.id === r.work.id ? r.work : i)));
+      setEditing(null);
+      toastSuccess("元数据已修正");
+    } catch {
+      toastError("保存失败，请重试");
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const openEdit = (w: AsmrWork) => {
+    setEditing(w);
+    setEditTitle(w.title ?? "");
+    setEditCircle(w.circle_name ?? "");
+    setEditNsfw(w.nsfw ?? true);
+  };
 
   useEffect(() => {
     apiClient
@@ -684,6 +718,12 @@ export function AsmrPage() {
             >
               {favorites.has(detail.id) ? "♥ 已收藏（点击取消）" : "♡ 收藏"}
             </button>
+            <button
+              onClick={() => openEdit(detail)}
+              className="self-start rounded-full border border-border-strong px-4 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-foreground"
+            >
+              ✏️ 编辑元数据
+            </button>
             {similar.length > 0 && (
               <div>
                 <p className="mb-2 text-xs font-medium text-muted-foreground">相似作品</p>
@@ -717,6 +757,53 @@ export function AsmrPage() {
             )}
           </div>
         )}
+      </Dialog>
+
+      {/* 手动编辑元数据（刮削错误修正） */}
+      <Dialog open={editing !== null} onClose={() => setEditing(null)} title="✏️ 编辑元数据">
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">修正刮削错误（标题/社团/分级）。改完立即生效并刷新列表。</p>
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="font-medium">标题</span>
+            <input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="font-medium">社团</span>
+            <input
+              value={editCircle}
+              onChange={(e) => setEditCircle(e.target.value)}
+              className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={editNsfw}
+              onChange={(e) => setEditNsfw(e.target.checked)}
+              className="h-3.5 w-3.5 accent-[var(--primary)]"
+            />
+            成人内容（NSFW）
+          </label>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setEditing(null)}
+              className="rounded-full border border-border px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => void saveEdit()}
+              disabled={editBusy || !editTitle.trim()}
+              className="rounded-full bg-primary px-4 py-1.5 text-xs text-primary-text disabled:opacity-50"
+            >
+              {editBusy ? "保存中…" : "保存"}
+            </button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

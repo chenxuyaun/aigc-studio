@@ -4,6 +4,7 @@ import {
   Activity,
   Bot,
   BookOpen,
+  Clapperboard,
   FolderOpen,
   Headphones,
   LayoutDashboard,
@@ -41,50 +42,75 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
-const NAV: NavItem[] = [
-  { to: "/", label: "工作台", short: "首页", icon: LayoutDashboard, mobile: true },
-  { to: "/create", label: "AI 创作", short: "创作", icon: Wand2, mobile: true },
-  { to: "/prompts", label: "提示词库", short: "提示词", icon: Library, mobile: true },
-  { to: "/agents", label: "Agent 库", short: "Agent", icon: Bot, mobile: false },
-  { to: "/roleplay", label: "角色扮演", short: "角色", icon: MessageCircle, mobile: true },
-  { to: "/story", label: "创作工作室", short: "创作", icon: PenLine, mobile: true },
-  { to: "/knowledge", label: "知识库", short: "知识库", icon: BookOpen, mobile: true },
-  { to: "/tasks", label: "任务中心", short: "任务", icon: ListChecks, mobile: true },
-  { to: "/assets", label: "素材库", short: "素材", icon: FolderOpen, mobile: true },
-  { to: "/asmr", label: "ASMR 库", short: "ASMR", icon: Headphones, mobile: true },
+/** 导航分组：侧栏按场景分组展示（移动端底部导航仍用扁平 short 项）。 */
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
-    to: "/settings/providers",
-    label: "模型配置",
-    short: "模型",
-    icon: Server,
-    mobile: false,
-    adminOnly: true,
+    label: "创作",
+    items: [
+      { to: "/", label: "工作台", short: "首页", icon: LayoutDashboard, mobile: true },
+      { to: "/create", label: "AI 创作", short: "创作", icon: Wand2, mobile: true },
+      { to: "/works", label: "我的创作", short: "我的", icon: Clapperboard, mobile: true },
+    ],
   },
   {
-    to: "/settings/users",
-    label: "用户管理",
-    short: "用户",
-    icon: Users,
-    mobile: false,
-    adminOnly: true,
+    label: "写作与角色",
+    items: [
+      { to: "/story", label: "创作工作室", short: "写作", icon: PenLine, mobile: true },
+      { to: "/roleplay", label: "角色扮演", short: "角色", icon: MessageCircle, mobile: true },
+    ],
   },
   {
-    to: "/settings/logs",
-    label: "运行日志",
-    short: "日志",
-    icon: ScrollText,
-    mobile: false,
-    adminOnly: true,
+    label: "资源",
+    items: [
+      { to: "/prompts", label: "提示词库", short: "提示词", icon: Library, mobile: true },
+      { to: "/knowledge", label: "知识库", short: "知识库", icon: BookOpen, mobile: true },
+      { to: "/assets", label: "素材库", short: "素材", icon: FolderOpen, mobile: true },
+      { to: "/asmr", label: "ASMR 库", short: "ASMR", icon: Headphones, mobile: true },
+      { to: "/agents", label: "Agent 库", short: "Agent", icon: Bot, mobile: false },
+    ],
   },
   {
-    to: "/settings/upstream",
-    label: "上游状态",
-    short: "上游",
-    icon: Activity,
-    mobile: false,
-    adminOnly: true,
+    label: "系统",
+    items: [
+      { to: "/tasks", label: "任务中心", short: "任务", icon: ListChecks, mobile: true },
+      {
+        to: "/settings/providers",
+        label: "模型配置",
+        short: "模型",
+        icon: Server,
+        mobile: false,
+        adminOnly: true,
+      },
+      {
+        to: "/settings/users",
+        label: "用户管理",
+        short: "用户",
+        icon: Users,
+        mobile: false,
+        adminOnly: true,
+      },
+      {
+        to: "/settings/logs",
+        label: "运行日志",
+        short: "日志",
+        icon: ScrollText,
+        mobile: false,
+        adminOnly: true,
+      },
+      {
+        to: "/settings/upstream",
+        label: "上游状态",
+        short: "上游",
+        icon: Activity,
+        mobile: false,
+        adminOnly: true,
+      },
+    ],
   },
 ];
+
+// 扁平导航（移动端底部/悬浮导航用）
+const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 const SCOPE_LABELS: Record<string, string> = {
   knowledge: "知识库",
@@ -229,25 +255,36 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
             <span className="font-bold tracking-tight">AIGC Studio</span>
           </div>
-          <nav className="flex-1 space-y-1" aria-label="主导航">
-            {visibleNav.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/"}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
-                    isActive
-                      ? "bg-primary/12 font-semibold text-primary-text"
-                      : "font-medium text-muted-foreground hover:bg-secondary hover:text-foreground",
-                  )
-                }
-              >
-                <item.icon className="h-[18px] w-[18px]" aria-hidden />
-                {item.label}
-              </NavLink>
-            ))}
+          <nav className="flex-1 space-y-1 overflow-y-auto" aria-label="主导航">
+            {NAV_GROUPS.map((group) => {
+              const items = group.items.filter((n) => !n.adminOnly || user?.role === "admin");
+              if (items.length === 0) return null;
+              return (
+                <div key={group.label} className="mb-3">
+                  <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    {group.label}
+                  </p>
+                  {items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.to === "/"}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                          isActive
+                            ? "bg-primary/12 font-semibold text-primary-text"
+                            : "font-medium text-muted-foreground hover:bg-secondary hover:text-foreground",
+                        )
+                      }
+                    >
+                      <item.icon className="h-[18px] w-[18px]" aria-hidden />
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              );
+            })}
           </nav>
           <button
             onClick={logout}

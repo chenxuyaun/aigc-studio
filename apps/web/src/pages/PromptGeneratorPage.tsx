@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Field, Input, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { RoundtablePanel } from "@/components/creation/RoundtablePanel";
 import { AppError, apiClient } from "@/lib/apiClient";
 import { copyText } from "@/lib/clipboard";
+import { cn } from "@/lib/cn";
 
 interface StructuredPrompt {
   role: string;
@@ -44,6 +46,7 @@ export function PromptGeneratorPage() {
   });
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [genMode, setGenMode] = useState<"single" | "roundtable">("single");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<StructuredPrompt | null>(null);
   const [copied, setCopied] = useState(false);
@@ -86,6 +89,42 @@ export function PromptGeneratorPage() {
   return (
     <div>
       <PageHeader title="提示词生成器" description="填写想法，生成结构化提示词" />
+      {/* 模式切换：单次生成 / 创作圆桌 */}
+      <div className="flex gap-1 border-b border-border px-4 pt-2 md:px-6" role="tablist">
+        {(
+          [
+            { key: "single", label: "⚡ 单次生成" },
+            { key: "roundtable", label: "🎙️ 创作圆桌（多角色讨论定稿）" },
+          ] as { key: "single" | "roundtable"; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={genMode === t.key}
+            onClick={() => setGenMode(t.key)}
+            className={cn(
+              "rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+              genMode === t.key
+                ? "border-primary text-primary-text"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {genMode === "roundtable" ? (
+        <div className="p-4 md:p-6">
+          <RoundtablePanel
+            domain="prompt"
+            themeLabel="提示词目标"
+            themePlaceholder="例如：给一家精品咖啡店写一条小红书种草文案的提示词…"
+            extraLabel="附加要求（可选）"
+            extraPlaceholder="目标模型（图片/视频/LLM）/ 输出格式 / 约束…"
+          />
+        </div>
+      ) : (
       <div className="grid gap-4 p-4 md:grid-cols-2 md:p-6">
         {/* 表单 */}
         <div className="flex flex-col gap-4">
@@ -222,6 +261,7 @@ export function PromptGeneratorPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

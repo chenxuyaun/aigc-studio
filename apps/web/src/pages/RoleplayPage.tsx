@@ -17,6 +17,7 @@ import { LorePanel } from "@/pages/roleplay/LorePanel";
 import { RegexPanel } from "@/pages/roleplay/RegexPanel";
 import { SettingsPanel } from "@/pages/roleplay/SettingsPanel";
 import { MemoryPanel } from "@/pages/roleplay/MemoryPanel";
+import { StatusBookPanel } from "@/pages/roleplay/StatusBookPanel";
 import { DEFAULT_MODEL } from "@/lib/constants";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { SessionSidebar } from "@/pages/roleplay/SessionSidebar";
@@ -44,7 +45,7 @@ export function RoleplayPage() {
     [],
   );
   const authUser = useAuthStore((s) => s.user);
-  const { error: toastError } = useToast();
+  const { error: toastError, success: toastSuccess } = useToast();
 
   const {
     characters, selected, groupMode, isRoom, authorName, groupIds, groupStrategy,
@@ -64,6 +65,7 @@ export function RoleplayPage() {
   const charDisplayName = selected?.name ?? "";
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const kickMember = async (uid: string) => {
     if (!groupInfo) return;
@@ -75,6 +77,29 @@ export function RoleplayPage() {
       });
     } catch (e) {
       toastError(e instanceof Error ? e.message : "操作失败");
+    }
+  };
+
+  const publishWork = async () => {
+    if (!groupInfo || publishing) return;
+    setPublishing(true);
+    try {
+      const res = await apiClient.post<{
+        project_id: string;
+        chapter_id: string;
+        project_title: string;
+        error?: string;
+      }>("/creation/publish", { chat_id: groupInfo.chat_id });
+      if (res.error) {
+        toastError(res.error);
+        return;
+      }
+      toastSuccess(`《${res.project_title}》已存入创作工作室`);
+      setGroupInfoOpen(false);
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : "存档失败");
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -548,7 +573,7 @@ export function RoleplayPage() {
                     void send();
                   }
                 }}
-                placeholder="对角色说点什么…（{{char}}/{{user}} 宏可用）"
+                placeholder={isRoom ? "@AI 写歌：主题 [风格]，群里一起写歌…" : "对角色说点什么…（{{char}}/{{user}} 宏可用）"}
                 disabled={busy || !selected}
               />
               <Button onClick={() => void send()} disabled={busy || !selected}>
@@ -568,6 +593,7 @@ export function RoleplayPage() {
                 ["regex", "正则"],
                 ["settings", "设置"],
                 ["memory", "记忆"],
+                ["book", "状态账本"],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -615,6 +641,7 @@ export function RoleplayPage() {
                 onQuickRepliesChanged={setQuickReplies}
               />
             )}
+            {rightTab === "book" && <StatusBookPanel chatId={sessionId} />}
           </div>
 
           <div className="mt-3 border-t border-border pt-2">
@@ -669,6 +696,20 @@ export function RoleplayPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+            <div className="border-t border-border pt-3">
+              <Button
+                className="w-full"
+                loading={publishing}
+                disabled={publishing}
+                onClick={() => void publishWork()}
+              >
+                <BookOpen className="h-4 w-4" aria-hidden />
+                存入创作工作室（群演剧本存档）
+              </Button>
+              <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
+                把群演出整理成完整剧本，存进「创作工作室」继续连载或导出
+              </p>
             </div>
           </div>
         )}

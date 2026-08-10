@@ -12,11 +12,13 @@ import { CrewPanel } from "@/pages/storystudio/CrewPanel";
 import { SearchPanel } from "@/pages/storystudio/SearchPanel";
 import { SerialPanel } from "@/pages/storystudio/SerialPanel";
 import { WorldPanel } from "@/pages/storystudio/WorldPanel";
+import { CompassPanel } from "@/pages/storystudio/CompassPanel";
+import { WritingStylePanel } from "@/pages/storystudio/WritingStylePanel";
 
 import type { StoryBible, StoryChapter, StoryProject } from "@aigc/shared-types";
 import { DEFAULT_MODEL, FALLBACK_MODELS } from "@/lib/constants";
 
-type RightTab = "characters" | "world" | "search" | "serial";
+type RightTab = "characters" | "world" | "search" | "serial" | "compass" | "writing";
 
 /** 创作项目页：左章节树 / 中编辑器 / 右角色·世界书·连载。 */
 export function StoryProjectPage() {
@@ -272,6 +274,8 @@ export function StoryProjectPage() {
               ["world", "世界书"],
               ["search", "查找"],
               ["serial", "连载"],
+              ["compass", "创作罗盘"],
+              ["writing", "写法特征"],
             ] as [RightTab, string][]).map(([tab, label]) => (
               <button
                 key={tab}
@@ -303,6 +307,25 @@ export function StoryProjectPage() {
               />
             )}
             {rightTab === "serial" && <SerialPanel projectId={projectId} />}
+            {rightTab === "compass" && (
+              <CompassPanel
+                projectId={projectId}
+                settings={p.settings as Record<string, unknown> | undefined}
+                onChanged={() => void load()}
+              />
+            )}
+            {rightTab === "writing" && (
+              <WritingStylePanel
+                projectId={projectId}
+                settings={p.settings as Record<string, unknown> | undefined}
+                chapters={bible.chapters.map((c) => ({
+                  id: c.id,
+                  title: c.title || "",
+                  status: c.status,
+                }))}
+                onChanged={() => void load()}
+              />
+            )}
           </div>
         </aside>
       </div>

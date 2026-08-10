@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useSearchParams } from "react-router-dom";
+
 import { DEFAULT_MODEL } from "@/lib/constants";
 import { apiClient, streamSse } from "@/lib/apiClient";
 import { useToast } from "@/components/ui/Toast";
@@ -62,7 +64,7 @@ export function useRoleplayEngine() {
   const [autoInterval, setAutoInterval] = useState(8);
 
   // 右侧标签
-  const [rightTab, setRightTab] = useState<"lore" | "character" | "regex" | "settings" | "memory">("lore");
+  const [rightTab, setRightTab] = useState<"lore" | "character" | "regex" | "settings" | "memory" | "book">("lore");
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const busyRef = useRef(false);
@@ -523,6 +525,23 @@ export function useRoleplayEngine() {
   };
 
   const charsForBinding = selected?.filename ?? "";
+
+  // 从创作工作台跳转：?chat=<id> 自动打开刚建好的群
+  const [urlParams] = useSearchParams();
+  useEffect(() => {
+    const target = urlParams.get("chat");
+    if (!target) return;
+    void (async () => {
+      try {
+        const res = await apiClient.get<{ items: ChatSession[] }>("/roleplay/chats");
+        const s = res.items.find((x) => x.id === target);
+        if (s) await openSession(s);
+      } catch {
+        /* 会话不存在时静默 */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     characters, selected, groupMode, isRoom, authorName, groupIds, groupStrategy,

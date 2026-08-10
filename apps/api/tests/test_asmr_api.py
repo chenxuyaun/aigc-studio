@@ -200,3 +200,38 @@ async def test_global_search_includes_asmr(client, admin_token) -> None:
     assert r.status_code == 200
     scopes = {i["scope"] for i in r.json()["items"]}
     assert "asmr" in scopes
+
+
+async def test_edit_asmr_work_metadata(client, user_token) -> None:
+    """手动编辑元数据：修正标题/社团/分级并返回更新。"""
+    from app.models.asmr_work import AsmrWork
+    from tests.conftest import TestingSessionLocal
+
+    headers = {"Authorization": f"Bearer {user_token}"}
+    async with TestingSessionLocal() as session:
+        w = AsmrWork(
+            source="manual", source_work_id="TEST-001", title="原标题",
+            circle_name="原社团", nsfw=True,
+        )
+        session.add(w)
+        await session.commit()
+        wid = w.id
+
+    resp = await client.put(
+        f"/api/v1/asmr/works/{wid}",
+        json={"title": "修正标题", "circle_name": "修正社团", "nsfw": False},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    work = resp.json()["work"]
+    assert work["title"] == "修正标题"
+    assert work["circle_name"] == "修正社团"
+    assert work["nsfw"] is False
+
+    # 不存在的作品 404
+    resp = await client.put(
+        "/api/v1/asmr/works/no-such-id",
+        json={"title": "x"},
+        headers=headers,
+    )
+    assert resp.status_code == 404

@@ -86,6 +86,33 @@ async def cancel_task(
     return {"success": True, "data": None}
 
 
+@router.post("/{task_id}/retry")
+async def retry_task(
+    task_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict[str, object]:
+    """失败任务原地重试：重置状态重新入队（同参数同 provider；断点续跑外壳）。"""
+    task = await _get_owned_task(task_id, db, user)
+    if task.status != "failed":
+        raise HTTPException(status_code=409, detail="仅失败任务可重试")
+    task.status = "queued"
+    task.progress = 0
+    task.error_message = ""
+    task.completed_at = None
+    task.result = ""
+    await db.commit()
+    # 按类型重新入队（与创建时的分发一致：Celery 队列或进程内调度）
+    try:
+        from app.services.generation_service import _dispatch
+
+        _dispatch(task.id, task.task_type)
+    except Exception as exc:
+        task.status = "failed"
+        task.error_message = f"重试入队失败：{str(exc)[:120]}"
+        await db.commit()
+        raise HTTPException(status_code=400, detail=task.error_message)
+    return {"success": True, "data": None}
+
+
 @router.delete("/{task_id}")
 async def delete_task(
     task_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)

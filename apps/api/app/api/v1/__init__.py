@@ -7,16 +7,19 @@ from app.api.v1 import (
     assets,
     auth,
     character_cards,
+    creation,
     dashboard,
     health,
     knowledge,
     logs,
     memory,
+    mission,
     photography,
     projects,
     prompts,
     providers,
     roleplay,
+    roundtable,
     search,
     skills,
     story,
@@ -35,6 +38,7 @@ from app.api.v1.generations import video as gen_video
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
+router.include_router(creation.router, prefix="/creation", tags=["creation"])
 router.include_router(users.router, prefix="/users", tags=["users"])
 router.include_router(prompts.router, prefix="/prompts", tags=["prompts"])
 router.include_router(projects.router, prefix="/projects", tags=["projects"])
@@ -61,6 +65,8 @@ router.include_router(search.router, prefix="/search", tags=["search"])
 router.include_router(story.router, prefix="/story", tags=["story"])
 router.include_router(agentlist.router, prefix="", tags=["agentlist"])
 router.include_router(asmr.router, prefix="/asmr", tags=["asmr"])
+router.include_router(roundtable.router, prefix="/roundtable", tags=["roundtable"])
 router.include_router(health.router, prefix="/health", tags=["health"])
+router.include_router(mission.router, tags=["mission"])
 router.include_router(logs.router, prefix="/logs", tags=["logs"])
 router.include_router(memory.router, prefix="", tags=["memory"])

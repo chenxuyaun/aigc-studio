@@ -17,6 +17,7 @@ interface KnowledgeDoc {
   id: string;
   title: string;
   char_count: number;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -47,6 +48,7 @@ export function KnowledgePage() {
   const [askResult, setAskResult] = useState<AskResult | null>(null);
   const [askLoading, setAskLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showPendingOnly, setShowPendingOnly] = useState(false); // 候选确认区：只看 AI 待确认
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const docs = useQuery({
@@ -91,6 +93,18 @@ export function KnowledgePage() {
     },
     onError: (err) =>
       toast.error(err instanceof Error ? err.message : "删除失败，请重试"),
+  });
+
+  // 候选确认区：确认 AI 自动写入的素材（pending → confirmed，确认后才参与创作检索）
+  const confirmDoc = useMutation({
+    mutationFn: (id: string) =>
+      apiClient.put<{ success: boolean }>(`/knowledge/documents/${id}/confirm`, {}),
+    onSuccess: () => {
+      toast.success("已确认，开始参与创作检索");
+      void queryClient.invalidateQueries({ queryKey: ["knowledge", "documents"] });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "确认失败，请重试"),
   });
 
   async function handleUpload(files: FileList | null) {
@@ -195,10 +209,33 @@ export function KnowledgePage() {
           </div>
 
           <div className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
-              <BookOpen className="h-4 w-4" aria-hidden />
-              文档列表（{docs.data?.length ?? 0}）
-            </h3>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <h3 className="flex items-center gap-2 text-sm font-medium">
+                <BookOpen className="h-4 w-4" aria-hidden />
+                文档列表（{docs.data?.length ?? 0}）
+              </h3>
+              <div className="ml-auto flex items-center gap-1 rounded-full bg-muted p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShowPendingOnly(false)}
+                  className={`rounded-full px-3 py-1 ${!showPendingOnly ? "bg-surface font-medium shadow-sm" : "text-muted-foreground"}`}
+                >
+                  全部
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPendingOnly(true)}
+                  className={`rounded-full px-3 py-1 ${showPendingOnly ? "bg-surface font-medium shadow-sm" : "text-muted-foreground"}`}
+                >
+                  🕐 待确认（{docs.data?.filter((d) => d.status === "pending").length ?? 0}）
+                </button>
+              </div>
+            </div>
+            {showPendingOnly && (
+              <p className="mb-2 rounded-lg bg-amber-500/5 border border-amber-500/25 px-3 py-2 text-[11px] text-amber-600">
+                AI 自动写入的素材（创作范例回填等）默认待确认——确认前不参与创作检索，防幻觉污染。看过觉得好，点「确认」；不要就删。
+              </p>
+            )}
             {docs.isLoading ? (
               <p className="py-4 text-center text-sm text-muted-foreground">加载中…</p>
             ) : !docs.data?.length ? (
@@ -207,7 +244,9 @@ export function KnowledgePage() {
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {docs.data.map((doc) => (
+                {docs.data
+                  .filter((doc) => (showPendingOnly ? doc.status === "pending" : true))
+                  .map((doc) => (
                   <li key={doc.id} className="rounded-lg border border-border">
                     <div className="flex items-center gap-2 px-3 py-2">
                       <button
@@ -217,11 +256,27 @@ export function KnowledgePage() {
                           setExpandedId((prev) => (prev === doc.id ? null : doc.id))
                         }
                       >
-                        <span className="block truncate font-medium">{doc.title}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="block truncate font-medium">{doc.title}</span>
+                          {doc.status === "pending" && (
+                            <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-600">
+                              AI 待确认
+                            </span>
+                          )}
+                        </span>
                         <span className="block text-xs text-muted-foreground">
                           {doc.char_count} 字 · {formatDate(doc.updated_at)}
                         </span>
                       </button>
+                      {doc.status === "pending" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => confirmDoc.mutate(doc.id)}
+                        >
+                          ✓ 确认
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"

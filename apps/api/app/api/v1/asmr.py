@@ -455,3 +455,46 @@ async def sync_asmr(
     # 入库后清列表查询缓存（前缀失效）
     await cache_clear_prefix("asmr:works:")
     return {"ok": True, **result}
+
+
+# ===== 手动元数据编辑（MovieHub 手动匹配模式的对应物：刮削错了可以修） =====
+
+from pydantic import BaseModel, Field
+
+
+class AsmrWorkEditRequest(BaseModel):
+    """手动修正作品元数据（title/社团/分级/标签/封面）。"""
+
+    title: str | None = Field(default=None, max_length=500)
+    circle_name: str | None = Field(default=None, max_length=200)
+    nsfw: bool | None = None
+    tags: list[dict[str, str]] | None = None  # [{name, zh}]
+    cover_url: str | None = Field(default=None, max_length=1000)
+
+
+@router.put("/works/{work_id}")
+async def edit_asmr_work(
+    work_id: str,
+    req: AsmrWorkEditRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """手动修正元数据（刮削错误修正；修改后清列表缓存）。"""
+    w = (
+        await db.execute(select(AsmrWork).where(AsmrWork.id == work_id))
+    ).scalar_one_or_none()
+    if w is None:
+        raise HTTPException(status_code=404, detail="作品不存在")
+    if req.title is not None:
+        w.title = req.title.strip()
+    if req.circle_name is not None:
+        w.circle_name = req.circle_name.strip()
+    if req.nsfw is not None:
+        w.nsfw = req.nsfw
+    if req.tags is not None:
+        w.tags = json.dumps(req.tags, ensure_ascii=False)
+    if req.cover_url is not None:
+        w.cover_url = req.cover_url.strip()
+    await db.commit()
+    cache_clear_prefix("asmr:works")
+    return {"ok": True, "work": _work_dict(w)}

@@ -5,9 +5,11 @@ import { BookOpen, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { RoundtablePanel } from "@/components/creation/RoundtablePanel";
 import { EmptyState } from "@/components/ui/States";
 import { useMediaTask } from "@/hooks/useMediaTask";
 import { apiClient } from "@/lib/apiClient";
+import { cn } from "@/lib/cn";
 import { toClientApiPath } from "@/lib/paths";
 
 const STYLES = ["日式漫画", "美式漫画", "极简线条", "水彩插画", "赛博朋克"];
@@ -36,6 +38,7 @@ interface ComicCover {
 
 export function ComicGenPage() {
   const task = useMediaTask("/generations/comic/generate");
+  const [genMode, setGenMode] = useState<"single" | "roundtable">("single");
   const [prompt, setPrompt] = useState("");
   const [panels, setPanels] = useState(4);
   const [style, setStyle] = useState(STYLES[0]);
@@ -93,6 +96,48 @@ export function ComicGenPage() {
         title="漫画生成"
         description="输入主题，自动分镜 → 逐格出图 → 拼合成漫画页"
       />
+      {/* 模式切换：直接生成 / 创作圆桌 */}
+      <div className="flex gap-1 border-b border-border px-4 pt-2 md:px-6" role="tablist">
+        {(
+          [
+            { key: "single", label: "⚡ 直接生成" },
+            { key: "roundtable", label: "🎙️ 创作圆桌（多角色讨论分镜方案）" },
+          ] as { key: "single" | "roundtable"; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={genMode === t.key}
+            onClick={() => setGenMode(t.key)}
+            className={cn(
+              "rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+              genMode === t.key
+                ? "border-primary text-primary-text"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {genMode === "roundtable" ? (
+        <div className="p-4 md:p-6">
+          <RoundtablePanel
+            domain="comic"
+            themeLabel="漫画主题"
+            themePlaceholder="例如：一只会修钟表的猫，深夜帮老街的钟楼找回时间…"
+            extraLabel="附加要求（可选）"
+            extraPlaceholder="格数 / 画风（日式/美式/水彩）/ 角色设定…"
+            onFinal={(f) => {
+              if (f.content) {
+                setPrompt(f.content);
+                setGenMode("single");
+              }
+            }}
+          />
+        </div>
+      ) : (
       <div className="grid gap-6 p-4 md:p-6 lg:grid-cols-[380px_1fr]">
         <div className="space-y-4 rounded-[var(--radius-card)] border border-border bg-surface p-5">
           <Field label="漫画主题" required>
@@ -257,6 +302,7 @@ export function ComicGenPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

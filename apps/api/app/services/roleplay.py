@@ -56,6 +56,20 @@ def _record_memory_turn(
     _memory_tasks.add(task)
     task.add_done_callback(_memory_tasks.discard)
 
+def _speaker_lines(reply: str, name: str) -> str:
+    """从群聊 AI 回复中提取指定角色的台词行（形如「名字：台词」/「名字: 台词」）。
+
+    无该角色的台词行返回空串（避免把他人台词记到该角色头上）。
+    """
+    if not reply or not name:
+        return ""
+    lines = [ln.strip() for ln in reply.splitlines()]
+    prefix = f"{name}："
+    prefix2 = f"{name}:"
+    out = [ln for ln in lines if ln.startswith((prefix, prefix2))]
+    return "\n".join(out)
+
+
 _HISTORY_LIMIT = 40
 _MAX_RECENT_FOR_LORE = 6
 
@@ -430,6 +444,7 @@ async def _build_prompt(
     group_strategy: str = "natural",
     group_mode: str = "append",
     memory_summary: str = "",
+    status_book_text: str = "",
 ) -> tuple[str, str, list[str], str]:
     """组装 (system, user_prompt, worldbook_activated, speaker)。
 
@@ -454,6 +469,8 @@ async def _build_prompt(
     parts: list[str] = []
     if memory_summary:
         parts.append(f"【记忆摘要（此前对话的要点，保持连贯）】\n{memory_summary}")
+    if status_book_text:
+        parts.append(status_book_text)
 
     # 多层记忆注入（原著档案 + L3 画像 + L2 场景导航 → system 稳定部分；
     # L1 原子 + 原著事实检索 → user 动态部分，见下方 user_parts 开头）
@@ -725,10 +742,54 @@ async def roleplay_chat(
             work_messages[-1] = last
 
     memory_summary = ""
-    if session_id and not swipe:
+    # 状态批注账本：解析作者消息中的 //**角色[类别]：旧 -> 新** 批注并登记
+    # （跨对话保持角色状态一致；批注从消息中剥离，不计入正文/历史）
+    status_warnings: list[str] = []
+    if session_id and work_messages and not swipe:
         mem_chat = await sessions.get_chat(db, user_id, session_id)
         if mem_chat is not None:
             memory_summary = _chat_memory_summary(mem_chat)
+            from app.services.status_book import (
+                apply_book,
+                book_to_text,
+                merge_settings,
+                parse_annotations,
+                strip_annotations,
+            )
+
+            settings = json.loads(mem_chat.settings or "{}")
+            book: dict[str, dict[str, str]] = dict(settings.get("status_book") or {})
+            anns: list[dict[str, str]] = []
+            for m in work_messages:
+                if m.get("role") == "user":
+                    anns += parse_annotations(str(m.get("content") or ""))
+            if anns:
+                book, status_warnings = apply_book(book, anns)
+                mem_chat.settings = json.dumps(
+                    merge_settings(settings, book), ensure_ascii=False
+                )
+                await db.commit()
+                # 剥离批注：落库与展示都不带批注（messages 一并回写，落库用剥离后的）
+                work_messages = [
+                    {
+                        **m,
+                        "content": strip_annotations(str(m.get("content") or "")),
+                    }
+                    if m.get("role") == "user"
+                    else m
+                    for m in work_messages
+                ]
+                messages = work_messages
+            status_book_text = (
+                "【角色状态账本】（当前登记的状态，对话必须保持一致；如需更新请用 "
+                "//**角色名[类别]：旧 -> 新** 批注）\n" + book_to_text(book)
+                if book
+                else ""
+            )
+        else:
+            status_book_text = ""
+    else:
+        status_book_text = ""
 
     system_prompt, user_prompt, wb_activated, speaker = await _build_prompt(
         db,
@@ -742,6 +803,7 @@ async def roleplay_chat(
         group_strategy=group_strategy,
         group_mode=group_mode,
         memory_summary=memory_summary,
+        status_book_text=status_book_text,
     )
 
     resolved = await resolve_text_provider(db, model)
@@ -815,14 +877,25 @@ async def roleplay_chat(
         if mem_chat is not None:
             await _maybe_summarize(db, user_id, mem_chat, model or resolved.model)
 
-    # 多层记忆：L0 写入 gateway（fire-and-forget，不阻塞对话；群聊跳过）
-    if chat_id and (not group or len(cards) <= 1):
+    # 多层记忆：L0 写入 gateway（fire-and-forget，不阻塞对话）
+    if chat_id:
         last_user = next(
             (str(m.get("content") or "") for m in reversed(messages)
              if m.get("role") == "user"),
             "",
         )
-        _record_memory_turn(user_id, cards[0][0], chat_id, last_user, reply)
+        if not group or len(cards) <= 1:
+            _record_memory_turn(user_id, cards[0][0], chat_id, last_user, reply)
+        else:
+            # 群聊：回复按「角色名：」前缀拆分，各角色的台词写入各自记忆空间
+            # （角色跨作品延续演出记忆；无前缀行不归属任何角色，跳过）
+            for aid, card in cards:
+                name = str(card.get("name") or "")
+                if not name:
+                    continue
+                speaker = _speaker_lines(reply, name)
+                if speaker:
+                    _record_memory_turn(user_id, aid, chat_id, last_user, speaker)
 
     return {
         "reply": reply,
@@ -835,6 +908,7 @@ async def roleplay_chat(
         "prompt_tokens": prompt_tokens,
         "speaker": speaker,
         "auto_replies": auto_replies,
+        "status_warnings": status_warnings,
     }
 
 
@@ -872,6 +946,48 @@ async def roleplay_chat_stream(
             )
             work_messages[-1] = last
 
+    # 状态批注账本（与 roleplay_chat 一致）：解析作者批注登记状态，剥离批注，注入账本
+    status_warnings: list[str] = []
+    status_book_text = ""
+    if session_id and work_messages:
+        mem_chat = await sessions.get_chat(db, user_id, session_id)
+        if mem_chat is not None:
+            from app.services.status_book import (
+                apply_book,
+                book_to_text,
+                merge_settings,
+                parse_annotations,
+                strip_annotations,
+            )
+
+            settings = json.loads(mem_chat.settings or "{}")
+            book: dict[str, dict[str, str]] = dict(settings.get("status_book") or {})
+            anns: list[dict[str, str]] = []
+            for m in work_messages:
+                if m.get("role") == "user":
+                    anns += parse_annotations(str(m.get("content") or ""))
+            if anns:
+                book, status_warnings = apply_book(book, anns)
+                mem_chat.settings = json.dumps(
+                    merge_settings(settings, book), ensure_ascii=False
+                )
+                await db.commit()
+                work_messages = [
+                    {
+                        **m,
+                        "content": strip_annotations(str(m.get("content") or "")),
+                    }
+                    if m.get("role") == "user"
+                    else m
+                    for m in work_messages
+                ]
+                messages = work_messages
+            if book:
+                status_book_text = (
+                    "【角色状态账本】（当前登记的状态，对话必须保持一致；如需更新请用 "
+                    "//**角色名[类别]：旧 -> 新** 批注）\n" + book_to_text(book)
+                )
+
     system_prompt, user_prompt, wb_activated, speaker = await _build_prompt(
         db,
         user_id,
@@ -882,6 +998,7 @@ async def roleplay_chat_stream(
         note=note,
         group_strategy=group_strategy,
         group_mode=group_mode,
+        status_book_text=status_book_text,
     )
     resolved = await resolve_text_provider(db, model)
     provider = cast_text_provider(resolved.provider)
@@ -931,10 +1048,20 @@ async def roleplay_chat_stream(
             )
             chat_id = chat.id
 
-    # 多层记忆：L0 写入 gateway（fire-and-forget；群聊跳过）
-    if chat_id and (not group or len(cards) <= 1):
+    # 多层记忆：L0 写入 gateway（fire-and-forget，不阻塞对话）
+    if chat_id:
         last_user = str(messages[-1].get("content") or "") if messages else ""
-        _record_memory_turn(user_id, cards[0][0], chat_id, last_user, reply)
+        if not group or len(cards) <= 1:
+            _record_memory_turn(user_id, cards[0][0], chat_id, last_user, reply)
+        else:
+            # 群聊：回复按「角色名：」前缀拆分，各角色的台词写入各自记忆空间
+            for aid, card in cards:
+                name = str(card.get("name") or "")
+                if not name:
+                    continue
+                speaker = _speaker_lines(reply, name)
+                if speaker:
+                    _record_memory_turn(user_id, aid, chat_id, last_user, speaker)
 
     yield {
         "type": "done",
@@ -946,6 +1073,7 @@ async def roleplay_chat_stream(
         "chat_id": chat_id,
         "worldbook_hits": len(wb_activated),
         "speaker": speaker,
+        "status_warnings": status_warnings,
         "auto_replies": auto_replies,
         "prompt_tokens": _est_tok(system_prompt) + _est_tok(user_prompt),
     }

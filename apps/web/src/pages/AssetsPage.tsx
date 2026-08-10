@@ -7,7 +7,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { Asset, MediaAccess, Paginated } from "@aigc/shared-types";
 
 import { PageHeader } from "@/components/layout/PageHeader";
-import { PhotographyPage } from "@/pages/PhotographyPage";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -247,8 +246,11 @@ export function AssetsPage() {
         ))}
       </div>
       {section === "photography" && (
-        <div className="p-4 md:p-6">
-          <PhotographyPage />
+        <div className="flex flex-col items-center gap-3 p-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            写真摄影已升级为独立页面（参考图集管理 / 风格参考出图）
+          </p>
+          <Button onClick={() => navigate("/photography")}>打开写真摄影页 →</Button>
         </div>
       )}
       <div className={section === "assets" ? "space-y-4 p-4 md:p-6" : "hidden"}>

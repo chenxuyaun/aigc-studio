@@ -31,6 +31,8 @@ docker compose up -d --build    # 全栈
 docker compose logs -f api      # 日志
 cd apps/api && uv run pytest    # 后端测试
 cd apps/web && npx tsc --noEmit # 前端类型检查
+# GUI 测试（打生产前端 5000，必须 --workers=1 串行：beforeEach 每用例真实登录会轮换 refresh token，并行互相作废）
+cd apps/web && E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test --project=chromium-desktop --grep-invert @heavy --workers=1
 ```
 
 ## 当前状态（2026-08-07 更新）
@@ -42,6 +44,7 @@ cd apps/web && npx tsc --noEmit # 前端类型检查
 4. ✅ 提示词库治理：清理 168 垃圾 + 382 重复（剩 13,464 条）；`content_hash` 去重机制已启用
 5. ✅ 图片/视频生成真实链路修复（provider_configs 需含 grok-imagine-* 匹配行）
 6. ✅ 图片生成页「从提示词库选择」入口
+7. ✅ AI 导演工作室：`/create/studio`（主题→AI 选角→一键建组→群聊共创），后端 `POST /creation/plan|setup` + `tests/test_creation.py`
 
 **注意**：
 - E2E 登录态文件 `apps/web/e2e/.auth/` 含 token，已在 .gitignore

@@ -458,6 +458,20 @@ async def _comic_real_media(
         return None, reason
 
 
+# 进程内媒体任务串行锁：同 loop 内并发任务排队执行。
+# 背景：测试库为内存 SQLite 单连接（StaticPool），并发写会概率性
+# 「database is locked/连接竞争」导致全量回归随机失败；串行化后
+# 同时只执行一个任务，连接竞争消失。生产走 Celery 队列天然串行，不受影响。
+_media_exec_lock: asyncio.Lock | None = None
+
+
+def _media_lock() -> asyncio.Lock:
+    global _media_exec_lock
+    if _media_exec_lock is None or _media_exec_lock._loop is not asyncio.get_event_loop():
+        _media_exec_lock = asyncio.Lock()
+    return _media_exec_lock
+
+
 async def run_media_task(task_id: str) -> None:
     # 跨进程防双执行：celery worker 与 drain 可能同时拿到同一 queued 任务
     # （锁 TTL 900s > 全局 600s 任务超时，不手动释放）
@@ -465,6 +479,11 @@ async def run_media_task(task_id: str) -> None:
 
     if not await redis_lock(f"aigc:lock:media_task:{task_id}", ttl=900):
         return
+    async with _media_lock():
+        await _run_media_task_locked(task_id)
+
+
+async def _run_media_task_locked(task_id: str) -> None:
     async with AsyncSessionLocal() as db:
         task = (
             await db.execute(select(GenerationTask).where(GenerationTask.id == task_id))

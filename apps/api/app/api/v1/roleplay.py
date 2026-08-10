@@ -26,7 +26,9 @@ from app.models.roleplay_persona import RoleplayPersona
 from app.models.user import User
 from app.security.auth import get_current_user
 from app.services import sessions
+from app.services.director_assistant import director_chat_reply, is_director_cmd
 from app.services.media_access import sign_content_url
+from app.services.music_assistant import is_music_cmd, music_chat_reply
 from app.services.roleplay import list_characters, roleplay_chat, roleplay_chat_stream
 
 router = APIRouter()
@@ -93,6 +95,12 @@ class ChatUpdateRequest(BaseModel):
     max_tokens: int | None = None
     top_p: float | None = None
     remove_index: int | None = None  # 删除单条消息（按索引）
+
+
+class StatusBookUpdateRequest(BaseModel):
+    """状态账本整本覆盖：{角色名: {类别: 当前值}}。"""
+
+    book: dict[str, dict[str, str]] = Field(default_factory=dict)
 
 
 class RegexScriptRequest(BaseModel):
@@ -441,6 +449,40 @@ async def character_export(
 
 # ==== 聊天 ====
 
+async def _music_cmd_result(
+    db: AsyncSession,
+    user_id: str,
+    req: RoleplayChatRequest,
+) -> dict[str, Any] | None:
+    """群聊「@AI 写歌」指令拦截：命中返回音乐助手结果，否则 None。"""
+    if not req.session_id or not req.messages:
+        return None
+    last = req.messages[-1]
+    if last.get("role") != "user" or not is_music_cmd(last.get("content", "")):
+        return None
+    chat = await sessions.get_chat(db, user_id, req.session_id)
+    if chat is None or not chat.is_room:
+        return None
+    return await music_chat_reply(db, user_id, chat, req.messages)
+
+
+async def _director_cmd_result(
+    db: AsyncSession,
+    user_id: str,
+    req: RoleplayChatRequest,
+) -> dict[str, Any] | None:
+    """群聊「@AI 导演」指令拦截：命中返回导演结果，否则 None。"""
+    if not req.session_id or not req.messages:
+        return None
+    last = req.messages[-1]
+    if last.get("role") != "user" or not is_director_cmd(last.get("content", "")):
+        return None
+    chat = await sessions.get_chat(db, user_id, req.session_id)
+    if chat is None or not chat.is_room:
+        return None
+    return await director_chat_reply(db, user_id, chat, req.messages)
+
+
 @router.post("/chat")
 async def chat(
     req: RoleplayChatRequest,
@@ -448,6 +490,15 @@ async def chat(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """角色扮演对话（单角色 / 群聊 + 情绪标注 + 会话落库）。"""
+    # 群聊指令：@AI 写歌 / @AI 导演 → 群内助手（歌词创作 / 演出调度），群成员可见可继续 @
+    music = await _music_cmd_result(db, user.id, req)
+    if music is not None:
+        await db.commit()
+        return music
+    director = await _director_cmd_result(db, user.id, req)
+    if director is not None:
+        await db.commit()
+        return director
     # 多人房间：真人以 author 身份发言（【身份】前缀，AI 群聊可区分真人）
     if req.author.strip() and req.session_id:
         chat = await sessions.get_chat(db, user.id, req.session_id)
@@ -494,6 +545,63 @@ async def chat_stream(
     from collections.abc import AsyncIterator
 
     async def _gen() -> AsyncIterator[str]:
+        # 群聊指令：@AI 写歌 / @AI 导演 → 助手整段返回（非流式生成，一次性发全）
+        music = await _music_cmd_result(db, user.id, req)
+        if music is not None:
+            await db.commit()
+            if music.get("error"):
+                err = json.dumps({"type": "error", "error": music["error"]}, ensure_ascii=False)
+                yield f"data: {err}\n\n"
+            else:
+                done = json.dumps(
+                    {
+                        "type": "done",
+                        "reply": music["reply"],
+                        "mood": "",
+                        "mood_delta": 0,
+                        "character": music.get("character"),
+                        "model": music.get("model"),
+                        "chat_id": music.get("chat_id"),
+                        "worldbook_hits": 0,
+                    },
+                    ensure_ascii=False,
+                )
+                chunk = json.dumps(
+                    {"type": "chunk", "content": music["reply"]}, ensure_ascii=False
+                )
+                yield f"data: {chunk}\n\n"
+                yield f"data: {done}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+        director = await _director_cmd_result(db, user.id, req)
+        if director is not None:
+            await db.commit()
+            if director.get("error"):
+                err = json.dumps(
+                    {"type": "error", "error": director["error"]}, ensure_ascii=False
+                )
+                yield f"data: {err}\n\n"
+            else:
+                done = json.dumps(
+                    {
+                        "type": "done",
+                        "reply": director["reply"],
+                        "mood": "",
+                        "mood_delta": 0,
+                        "character": director.get("character"),
+                        "model": director.get("model"),
+                        "chat_id": director.get("chat_id"),
+                        "worldbook_hits": 0,
+                    },
+                    ensure_ascii=False,
+                )
+                chunk = json.dumps(
+                    {"type": "chunk", "content": director["reply"]}, ensure_ascii=False
+                )
+                yield f"data: {chunk}\n\n"
+                yield f"data: {done}\n\n"
+            yield "data: [DONE]\n\n"
+            return
         async for ev in roleplay_chat_stream(
             db,
             user.id,
@@ -583,6 +691,45 @@ async def chats_get(
     if chat is None:
         raise HTTPException(status_code=404, detail="会话不存在")
     return {"chat": _chat_dict(chat), "messages": sessions.chat_messages(chat)}
+
+
+@router.get("/chats/{chat_id}/status-book")
+async def chat_status_book_get(
+    chat_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """查看会话状态账本（角色状态登记，跨对话保持一致）。"""
+    chat = await sessions.get_chat(db, user.id, chat_id)
+    if chat is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    try:
+        settings = json.loads(chat.settings or "{}")
+    except Exception:
+        settings = {}
+    return {"book": settings.get("status_book") or {}}
+
+
+@router.put("/chats/{chat_id}/status-book")
+async def chat_status_book_put(
+    chat_id: str,
+    req: StatusBookUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """手动校正状态账本（整本覆盖，如「伤势=已恢复」）。"""
+    chat = await sessions.get_chat(db, user.id, chat_id)
+    if chat is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    from app.services.status_book import merge_settings
+
+    try:
+        settings = json.loads(chat.settings or "{}")
+    except Exception:
+        settings = {}
+    chat.settings = json.dumps(merge_settings(settings, req.book), ensure_ascii=False)
+    await db.commit()
+    return {"ok": True, "book": req.book}
 
 
 @router.put("/chats/{chat_id}")

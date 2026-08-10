@@ -1,15 +1,8 @@
-import { useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import {
-  AudioLines,
-  Camera,
-  Clapperboard,
-  Image as ImageIcon,
-  Sparkles,
-  Type as TypeIcon,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Sparkles } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 
 import type {
   DashboardStats, GenerationTask, Paginated, Prompt } from "@aigc/shared-types";
@@ -31,6 +24,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { apiClient } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/stores/auth";
+import { QUICK_TOOLS } from "@/shared/createTools";
 
 type CreateType = "image" | "text" | "video" | "audio";
 
@@ -48,14 +42,7 @@ const ROUTE: Record<CreateType, string> = {
   audio: "/create/audio",
 };
 
-const TOOLS = [
-  { icon: TypeIcon, label: "文本生成", to: "/create/text" },
-  { icon: ImageIcon, label: "图片生成", to: "/create/image" },
-  { icon: Clapperboard, label: "视频生成", to: "/create/video" },
-  { icon: AudioLines, label: "语音生成", to: "/create/audio" },
-  { icon: Sparkles, label: "提示词生成", to: "/create/prompt" },
-  { icon: Camera, label: "写真摄影", to: "/photography" },
-];
+const TOOLS = QUICK_TOOLS.map((t) => ({ icon: t.icon, label: t.title, to: t.to }));
 
 const TYPE_LABEL: Record<string, string> = {
   text: "文本",
@@ -64,10 +51,163 @@ const TYPE_LABEL: Record<string, string> = {
   audio: "语音",
 };
 
+// 近期新增功能速览（新功能入口地图：每个功能一句话 + 直达链接）
+interface Scene {
+  icon: string;
+  title: string; // 场景名（用户语言）
+  desc: string; // 什么时候用、怎么走
+  to: string; // 主入口
+  prompt?: string; // 预填目标模板（一个框驱动）
+  links: { label: string; to: string }[]; // 关联子功能直达
+}
+
+// 场景化入口：按「想做什么」组织（一个目标框驱动——点场景预填目标模板）
+const SCENES: Scene[] = [
+  {
+    icon: "🎵",
+    title: "写一首歌",
+    desc: "AI 写歌 → 1对1 打磨 → 圆桌共创，定稿自动入库",
+    to: "/create/music",
+    prompt: "写一首关于____的歌，贴合我平时的风格",
+    links: [
+      { label: "我的作品", to: "/works" },
+      { label: "创作圆桌", to: "/create/music" },
+    ],
+  },
+  {
+    icon: "📖",
+    title: "写一个故事",
+    desc: "项目 + 罗盘 + 写法特征，章节生成/修订/连载",
+    to: "/story",
+    prompt: "写一个关于____的故事：先检索相关背景，再写一个章节",
+    links: [
+      { label: "创作罗盘", to: "/story" },
+      { label: "写法特征", to: "/story" },
+      { label: "角色卡", to: "/create/character-card" },
+    ],
+  },
+  {
+    icon: "🎭",
+    title: "和角色聊天",
+    desc: "角色扮演 + 记忆 + 状态账本，群聊共创",
+    to: "/roleplay",
+    prompt: "让角色____评价一下：____",
+    links: [
+      { label: "状态账本", to: "/roleplay" },
+      { label: "SillyTavern", to: "/sillytavern" },
+    ],
+  },
+  {
+    icon: "🖼",
+    title: "生成图片 / 视频",
+    desc: "文生图 / 视频 / 漫画 / 写真，任务中心看进度",
+    to: "/create",
+    prompt: "生成一张____的图（画面描述要具体）",
+    links: [
+      { label: "提示词库", to: "/prompts" },
+      { label: "素材库", to: "/assets" },
+      { label: "任务中心", to: "/tasks" },
+    ],
+  },
+  {
+    icon: "📚",
+    title: "积累素材",
+    desc: "知识库导入 → AI 解读 → 创作自动参考；联网兜底",
+    to: "/knowledge",
+    prompt: "检索关于____的资料并整理要点",
+    links: [
+      { label: "待确认素材", to: "/knowledge" },
+      { label: "ASMR 库", to: "/asmr" },
+    ],
+  },
+  {
+    icon: "🗂",
+    title: "管理成果",
+    desc: "音乐作品 / 群演作品 / 素材 / 任务，统一回看",
+    to: "/works",
+    links: [
+      { label: "任务中心", to: "/tasks" },
+      { label: "全站搜索", to: "/search" },
+    ],
+  },
+];
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const [idea, setIdea] = useState("");
+  const ideaRef = useRef<HTMLTextAreaElement | null>(null);
+  // 任务总控（Mission）：目标 → 自动拆解执行
+  const [missionBusy, setMissionBusy] = useState(false);
+  const [missionLessons, setMissionLessons] = useState<{ goal: string; lesson: string; created_at: string }[]>([]);
+  const [missionRuns, setMissionRuns] = useState<
+    { id: string; goal: string; plan: { step: number; kind: string; title: string }[]; summary: string; created_at: string }[]
+  >([]);
+  // 成长档案（平台对你的了解：偏好聚合 + LLM 画像）
+  const [missionProfile, setMissionProfile] = useState<{
+    preferences: { styles: string[]; themes: string[]; steps: string[]; agents: { id: string; name: string }[] };
+    profile: string;
+  } | null>(null);
+  const [missionResult, setMissionResult] = useState<{
+    plan: { step: number; kind: string; title: string }[];
+    results: {
+      step: number;
+      kind: string;
+      title: string;
+      summary: string;
+      ok: boolean;
+      code?: { path: string; content: string }[];
+    }[];
+    summary: string;
+  } | null>(null);
+
+  async function runMission() {
+    const goal = idea.trim();
+    if (!goal || missionBusy) return;
+    setMissionBusy(true);
+    setMissionResult(null);
+    try {
+      const r = await apiClient.post<typeof missionResult>("/mission", { goal });
+      setMissionResult(r);
+      // 拉取沉淀的教训 + 历史会话（Reflection + 长期协作记忆）
+      apiClient
+        .get<{
+          lessons: { goal: string; lesson: string; created_at: string }[];
+          runs: {
+            id: string;
+            goal: string;
+            plan: { step: number; kind: string; title: string }[];
+            summary: string;
+            created_at: string;
+          }[];
+        }>("/mission/history")
+        .then((h) => {
+          setMissionLessons(h.lessons.slice(0, 5));
+          setMissionRuns(h.runs.slice(0, 5));
+        })
+        .catch(() => undefined);
+      // 拉取成长档案（平台对你的了解）
+      apiClient
+        .get<{
+          preferences: {
+            styles: string[];
+            themes: string[];
+            steps: string[];
+            agents: { id: string; name: string }[];
+          };
+          profile: string;
+        }>("/mission/profile")
+        .then((p) => setMissionProfile(p))
+        .catch(() => undefined);
+    } catch (e) {
+      setMissionResult({
+        plan: [],
+        results: [{ step: 1, kind: "text", title: "失败", summary: e instanceof Error ? e.message : "任务总控失败", ok: false }],
+        summary: "任务总控执行失败",
+      });
+    } finally {
+      setMissionBusy(false);
+    }
+  }
   const [type, setType] = useState<CreateType>("image");
   // 巡检接口仅 admin 可访问（安全加固）；普通用户不查询，避免 403 控制台噪音
   const isAdmin = useAuthStore((s) => s.user?.role === "admin");
@@ -128,6 +268,58 @@ export function DashboardPage() {
           </button>
         </div>
       )}
+      {/* 场景入口：按「想做什么」组织（先想场景，再进工具） */}
+      <section className="animate-enter mb-6">
+        <div className="mb-2 flex items-center gap-2">
+          <h2 className="text-[15px] font-semibold">🧭 你想做什么？</h2>
+          <span className="text-xs text-muted-foreground">选一个场景，工具会带好路</span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {SCENES.map((sc) => (
+            <div
+              key={sc.title}
+              className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3 transition-colors hover:border-primary"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{sc.icon}</span>
+                <span className="text-sm font-semibold">{sc.title}</span>
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">{sc.desc}</p>
+              <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+                {sc.prompt ? (
+                  <button
+                    onClick={() => {
+                      setIdea(sc.prompt ?? "");
+                      ideaRef.current?.focus();
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="rounded-full bg-primary px-3 py-1 text-xs text-primary-text hover:opacity-90"
+                    title="把目标模板填入输入框，交给任务总控"
+                  >
+                    🎯 用目标框
+                  </button>
+                ) : (
+                  <Link
+                    to={sc.to}
+                    className="rounded-full bg-primary px-3 py-1 text-xs text-primary-text hover:opacity-90"
+                  >
+                    开始 →
+                  </Link>
+                )}
+                {sc.links.map((l) => (
+                  <Link
+                    key={l.label}
+                    to={l.to}
+                    className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-primary hover:text-foreground"
+                  >
+                    {l.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
       <Card className="animate-enter p-6 sm:p-7">
         <h1 className="font-display text-2xl font-bold tracking-tight sm:text-[28px]">你想创作什么？</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -135,6 +327,7 @@ export function DashboardPage() {
         </p>
         <div className="mt-5 rounded-2xl border border-border-strong bg-background p-3.5">
           <textarea
+            ref={ideaRef}
             value={idea}
             onChange={(e) => setIdea(e.target.value)}
             rows={2}
@@ -166,8 +359,183 @@ export function DashboardPage() {
               <Sparkles className="h-4 w-4" aria-hidden />
               开始创作
             </button>
+            <button
+              onClick={() => void runMission()}
+              disabled={missionBusy || !idea.trim()}
+              title="交给任务总控：自动拆解成多步计划（写歌/生成/检索…）并执行"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary-text transition-all duration-200 hover:-translate-y-px hover:border-primary disabled:opacity-50"
+            >
+              🎯 {missionBusy ? "任务总控执行中…" : "交给任务总控"}
+            </button>
           </div>
         </div>
+
+        {/* 任务总控结果：计划 → 逐步执行 → 汇总 */}
+        {missionResult && (
+          <div className="mt-4 rounded-2xl border border-primary/25 bg-primary/5 p-4">
+            <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
+              🎯 任务总控
+              <span className="text-xs font-normal text-muted-foreground">{missionResult.summary}</span>
+            </p>
+            {missionProfile && (
+              <div className="mb-3 rounded-xl border border-border bg-surface p-3">
+                <p className="mb-1 text-xs font-semibold">🧬 成长档案（平台对你的了解）</p>
+                {missionProfile.profile && (
+                  <p className="mb-2 rounded-lg bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                    {missionProfile.profile}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-1.5 text-[11px]">
+                  {missionProfile.preferences.styles.map((s) => (
+                    <span key={`s-${s}`} className="rounded-full bg-primary/10 px-2 py-0.5 text-primary-text">
+                      🎵 {s}
+                    </span>
+                  ))}
+                  {missionProfile.preferences.themes.map((t) => (
+                    <span key={`t-${t}`} className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                      {t}
+                    </span>
+                  ))}
+                  {missionProfile.preferences.agents.map((a) => (
+                    <span key={a.id} className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-600">
+                      🤖 {a.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {missionResult.plan.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
+                {missionResult.plan.map((p) => (
+                  <span
+                    key={p.step}
+                    className="rounded-full bg-surface px-2.5 py-1 text-muted-foreground"
+                    title={(p as { reason?: string }).reason || p.kind}
+                  >
+                    {p.step}. {p.kind}
+                    {(p as { reason?: string }).reason ? " ⓘ" : ""}
+                    {p.title ? ` · ${p.title}` : ""}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              {missionResult.results.map((res) => (
+                <div key={res.step} className="rounded-xl border border-border bg-surface p-3">
+                  <p className="mb-1 text-xs font-semibold">
+                    {res.ok ? "✅" : "❌"} 步骤 {res.step} · {res.title}
+                  </p>
+                  <pre className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                    {res.summary}
+                  </pre>
+                  {/* 代码产物：文件列表 + 一键复制全部 + 下载项目包 */}
+                  {res.code && res.code.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                          📦 {res.code.length} 个文件
+                        </span>
+                        {missionResult && (
+                          <button
+                            onClick={() => {
+                              const runId = (missionResult as { run_id?: string }).run_id;
+                              if (!runId) return;
+                              window.open(`/api/v1/mission/runs/${runId}/artifacts/zip`, "_blank");
+                            }}
+                            className="rounded-full border border-border px-2.5 py-0.5 text-[10px] hover:border-primary"
+                          >
+                            ⬇️ 下载项目包 (zip)
+                          </button>
+                        )}
+                      </div>
+                      {res.code.map((f) => (
+                        <div key={f.path} className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-[11px] font-medium">📄 {f.path}</span>
+                            <span className="flex shrink-0 gap-1.5">
+                              {f.path.endsWith(".py") && (
+                                <button
+                                  onClick={() => void (async () => {
+                                    const runId = (missionResult as { run_id?: string }).run_id;
+                                    if (!runId) return;
+                                    try {
+                                      const r = await apiClient.post<{ ok: boolean; output: string }>(
+                                        `/mission/runs/${runId}/exec`,
+                                        { path: f.path },
+                                      );
+                                      alert(`${r.ok ? "✅ 执行成功" : "❌ 执行失败"}\n\n${r.output.slice(0, 1500)}`);
+                                    } catch (e) {
+                                      alert(`执行失败：${e instanceof Error ? e.message : "未知错误"}`);
+                                    }
+                                  })()}
+                                  className="rounded-full border border-border px-2 py-0.5 text-[10px] hover:border-primary"
+                                  title="在容器内执行（15s 超时，仅供验证）"
+                                >
+                                  ▶️ 运行
+                                </button>
+                              )}
+                              <button
+                                onClick={() => void navigator.clipboard.writeText(f.content)}
+                                className="rounded-full border border-border px-2 py-0.5 text-[10px] hover:border-primary"
+                              >
+                                复制
+                              </button>
+                            </span>
+                          </div>
+                          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] leading-relaxed text-muted-foreground">
+                            {f.content.slice(0, 1200)}
+                            {f.content.length > 1200 ? "\n…（已截断，可复制全文）" : ""}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {missionLessons.length > 0 && (
+              <div className="mt-2 rounded-xl border border-border bg-surface p-3">
+                <p className="mb-1 text-xs font-semibold">🧠 平台从失败中沉淀的教训（后续任务会自动避开）</p>
+                <ul className="list-disc pl-4 text-[11px] leading-relaxed text-muted-foreground">
+                  {missionLessons.map((l, i) => (
+                    <li key={i}>{l.lesson}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {missionRuns.length > 0 && (
+              <div className="mt-2 rounded-xl border border-border bg-surface p-3">
+                <p className="mb-1 text-xs font-semibold">🗂 历史任务（平台记得你下达过的目标，可回看再跑）</p>
+                <div className="flex flex-col gap-1.5">
+                  {missionRuns.map((run) => (
+                    <div key={run.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[11px] font-medium">{run.goal}</span>
+                        <span className="block text-[10px] text-muted-foreground">
+                          {run.summary} · {run.created_at ? new Date(run.created_at).toLocaleString("zh-CN") : ""}
+                        </span>
+                      </span>
+                      <button
+                        onClick={() => void (async () => {
+                          setMissionBusy(true);
+                          try {
+                            const r = await apiClient.post<typeof missionResult>(`/mission/runs/${run.id}/reuse`, {});
+                            setMissionResult(r);
+                          } finally {
+                            setMissionBusy(false);
+                          }
+                        })()}
+                        className="shrink-0 rounded-full border border-border px-2.5 py-1 text-[10px] hover:border-primary"
+                      >
+                        🔁 再跑
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap gap-2.5">
           {TOOLS.map((t) => (

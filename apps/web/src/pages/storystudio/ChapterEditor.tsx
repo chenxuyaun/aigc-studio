@@ -40,6 +40,8 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
   const [busy, setBusy] = useState(false);
   const [streaming, setStreaming] = useState("");
   const [reviseText, setReviseText] = useState("");
+  // AI 腔体检报告：生成完成后的分级质检（套话/机械句式/连接词/宣传腔/空洞修饰）
+  const [aiVoice, setAiVoice] = useState<{ kind: string; level: string; sample: string; suggestion: string }[]>([]);
   const [tab, setTab] = useState<"write" | "preview">("preview");
   const [toolLoop, setToolLoop] = useState(false);
   const savedRef = useRef(false);
@@ -97,6 +99,7 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
             setContent(String(ev.content ?? ""));
             setStreaming("");
             onChanged({ ...chapter, content: String(ev.content ?? ""), status: "done" });
+            if (Array.isArray(ev.ai_voice)) setAiVoice(ev.ai_voice as typeof aiVoice);
             toast.success(`生成完成（${ev.word_count ?? 0} 字）`);
           } else if (ev.type === "error") {
             toast.error(String(ev.error ?? "生成失败"));
@@ -251,6 +254,73 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
       ) : (
         <div className="markdown-body flex-1 overflow-y-auto rounded-xl border border-border bg-surface p-4">
           <MarkdownContent content={display || "（空）"} />
+        </div>
+      )}
+
+      {/* AI 腔体检报告（生成完成后自动出现；分级展示 + 一键消除） */}
+      {aiVoice.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs font-semibold text-amber-600">
+              🤖 AI 腔体检：发现 {aiVoice.length} 处
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              {aiVoice.filter((i) => i.level === "high").length} 处严重 ·{" "}
+              {aiVoice.filter((i) => i.level === "medium").length} 处中等 ·{" "}
+              {aiVoice.filter((i) => i.level === "info").length} 处提示
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto"
+              disabled={busy}
+              onClick={() => {
+                const samples = aiVoice.map((i) => i.sample).join("；");
+                const instruction = `消除 AI 腔（命中：${samples.slice(0, 200)}），保持情节与人物不变，换成人类自然的写法`;
+                setReviseText(instruction);
+                void (async () => {
+                  try {
+                    const params = new URLSearchParams({ instruction, model });
+                    const r = await apiClient.post<{ chapter_id: string; content: string; word_count: number }>(
+                      `/story/chapters/${chapter.id}/revise?${params.toString()}`,
+                    );
+                    setContent(r.content);
+                    onChanged({ ...chapter, content: r.content, word_count: r.word_count });
+                    setAiVoice([]);
+                    toast.success("已消除 AI 腔");
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "修订失败");
+                  }
+                })();
+              }}
+            >
+              一键消除 AI 腔
+            </Button>
+          </div>
+          <div className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+            {aiVoice.map((i, idx) => (
+              <div key={idx} className="flex items-start gap-2 rounded-md bg-surface px-2.5 py-1.5 text-[11px]">
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
+                    i.level === "high"
+                      ? "bg-destructive/10 text-destructive"
+                      : i.level === "medium"
+                        ? "bg-amber-500/15 text-amber-600"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {i.level === "high" ? "严重" : i.level === "medium" ? "中等" : "提示"}
+                </span>
+                <span className="shrink-0 font-medium">
+                  {i.kind === "cliche" ? "套话" : i.kind === "pattern" ? "机械句式" : i.kind === "connective" ? "连接词" : i.kind === "clickbait" ? "宣传腔" : "空洞修饰"}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground" title={i.sample}>
+                  {i.sample}
+                </span>
+                <span className="shrink-0 text-muted-foreground">→ {i.suggestion}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

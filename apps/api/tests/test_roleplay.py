@@ -10,6 +10,8 @@ import pytest
 from app.services import roleplay
 from PIL import Image, PngImagePlugin
 
+from tests.conftest import TestingSessionLocal
+
 
 def _make_card_png(card: dict) -> bytes:
     buf = io.BytesIO()
@@ -126,3 +128,96 @@ def test_extract_mood() -> None:
     assert _mood_delta("开心") == 1
     assert _mood_delta("生气") == -1
     assert _mood_delta("平静") == 0
+
+
+def test_speaker_lines_extracts_by_name() -> None:
+    """群聊回复按角色名前缀拆台词。"""
+    from app.services.roleplay import _speaker_lines
+
+    reply = "小雅：欢迎光临夜食缘。\n（她擦了擦桌子）\n老赵: 老板，来碗面。\n小雅：今晚有炖牛腩。"
+    assert _speaker_lines(reply, "小雅") == "小雅：欢迎光临夜食缘。\n小雅：今晚有炖牛腩。"
+    assert _speaker_lines(reply, "老赵") == "老赵: 老板，来碗面。"
+    assert _speaker_lines(reply, "不存在") == ""
+    assert _speaker_lines("", "小雅") == ""
+    assert _speaker_lines("没有前缀的回复", "小雅") == ""
+
+
+@pytest.mark.asyncio
+async def test_group_chat_records_per_character_memory(
+    client, user_token, monkeypatch
+) -> None:
+    """群聊演出：每个角色的台词写入各自的记忆空间（按 asset_id 区分）。"""
+    from app.models.asset import Asset
+    from app.models.roleplay_character import RoleplayCharacter
+    from app.models.user import User
+    from app.providers.base import TextResult
+    from app.services import sessions
+    from app.services.group_service import create_group
+    from app.services.provider_resolver import ResolvedTextProvider
+    from sqlalchemy import select
+
+    records: list[tuple[str, str, str, str]] = []
+
+    def fake_record(
+        user_id: str, asset_id: str, chat_id: str,
+        user_msg: str, assistant_msg: str,
+    ) -> None:
+        records.append((asset_id, chat_id, user_msg, assistant_msg))
+
+    monkeypatch.setattr("app.services.roleplay._record_memory_turn", fake_record)
+
+    async with TestingSessionLocal() as db:
+        u = (
+            await db.execute(select(User).where(User.username == "user1"))
+        ).scalar_one()
+        for aid, nm in (("char-mem-1", "小雅"), ("char-mem-2", "老赵")):
+            db.add(
+                Asset(
+                    id=aid, user_id=u.id, filename=f"{aid}.png",
+                    storage_key="", storage_backend="local",
+                    mime_type="image/png", size_bytes=0,
+                )
+            )
+            db.add(
+                RoleplayCharacter(
+                    asset_id=aid, user_id=u.id,
+                    name=nm, description="d", personality="p",
+                )
+            )
+        chat = await sessions.create_chat(
+            db, u.id, title="写歌群", character_asset_ids=["char-mem-1", "char-mem-2"],
+            group=True, is_room=True,
+        )
+        await create_group(db, owner_id=u.id, chat_id=chat.id, name="写歌群", description="")
+        await db.commit()
+        chat_id = chat.id
+
+    class _FakeProvider:
+        async def generate(self, prompt: str, model: str = "", **kwargs):
+            return TextResult(
+                content="小雅：欢迎光临。\n老赵：老板来碗面。",
+                model=model, provider="fake",
+            )
+
+    async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
+        return ResolvedTextProvider(
+            _FakeProvider(), "cpa", False, provider_config_id=None, source="fake"
+        )
+
+    monkeypatch.setattr("app.services.roleplay.resolve_text_provider", fake_resolver)
+    r = await client.post(
+        "/api/v1/roleplay/chat",
+        headers={"Authorization": f"Bearer {user_token}"},
+        json={
+            "character_asset_ids": ["char-mem-1", "char-mem-2"],
+            "session_id": chat_id,
+            "group": True,
+            "messages": [{"role": "user", "content": "开张了"}],
+        },
+    )
+    assert r.status_code == 200
+    # 每个角色各收到自己的台词记忆
+    by_asset = {asset: msg for asset, _c, _u, msg in records}
+    assert "小雅：欢迎光临。" in by_asset["char-mem-1"]
+    assert "老赵：老板来碗面。" in by_asset["char-mem-2"]
+    assert len(records) == 2

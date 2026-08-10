@@ -11,6 +11,7 @@ import { Field, Textarea } from "@/components/ui/Field";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { useToast } from "@/components/ui/Toast";
+import { RoundtablePanel } from "@/components/creation/RoundtablePanel";
 import { useChatSessions } from "@/hooks/useChatSessions";
 import { AppError, apiClient, streamSse } from "@/lib/apiClient";
 import { copyText } from "@/lib/clipboard";
@@ -48,6 +49,7 @@ export function TextGenPage() {
   const location = useLocation();
   const handoff = (location.state as { prompt?: string } | null)?.prompt ?? "";
   const isAdmin = useAuthStore((s) => s.user?.role === "admin");
+  const [mode, setMode] = useState<"chat" | "roundtable">("chat");
   const [input, setInput] = useState(handoff);
   const [model, setModel] = useState("");
   const {
@@ -205,6 +207,42 @@ export function TextGenPage() {
           </div>
         }
       />
+      {/* 模式切换：写作会话 / 创作圆桌 */}
+      <div className="flex gap-1 border-b border-border px-4 pt-2 md:px-6" role="tablist">
+        {(
+          [
+            { key: "chat", label: "✍️ 写作会话（1对1）" },
+            { key: "roundtable", label: "🎙️ 创作圆桌（多角色讨论定稿）" },
+          ] as { key: "chat" | "roundtable"; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={mode === t.key}
+            onClick={() => setMode(t.key)}
+            className={cn(
+              "rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+              mode === t.key
+                ? "border-primary text-primary-text"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "roundtable" ? (
+        <div className="p-4 md:p-6">
+          <RoundtablePanel
+            domain="copy"
+            themeLabel="创作需求"
+            themePlaceholder="例如：一家老社区理发店开了30年老板要退休了，写一篇告别推文…"
+            extraLabel="附加要求（可选）"
+            extraPlaceholder="风格/受众/字数/平台（公众号/小红书/朋友圈）…"
+          />
+        </div>
+      ) : (
       <div className="grid gap-4 p-4 md:grid-cols-[340px_1fr] md:p-6">
         <div className="flex flex-col gap-4">
           <div className="rounded-[var(--radius-card)] border border-border bg-surface p-3">
@@ -439,6 +477,7 @@ export function TextGenPage() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

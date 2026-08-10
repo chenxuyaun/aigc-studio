@@ -70,3 +70,9 @@ apps/web/e2e/.auth/
 # Playwright 产物
 apps/web/test-results/
 apps/web/playwright-report/
+
+# 运行备份与本地产物（勿提交）
+backups/
+.zcode/
+examples/
+apps/web/e2e/.auth/

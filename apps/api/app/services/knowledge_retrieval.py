@@ -16,10 +16,16 @@ MAX_CHUNKS_PER_DOC = 200  # 单文档最多参与检索的块数，防超大文�
 _TOKEN_RE = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]")
 _WS_RE = re.compile(r"\s+")
 
+# 高频虚字停用集：单字切分下「的/了/在」等虚字几乎与任何文本重叠，
+# 会让弱相关素材（如推理文档 vs 红歌主题）凑满命中分——过滤后只按实字计分
+_STOPWORDS = frozenset(
+    "的了在是我你他她它我们你们它们这那与和就也有却被把让对向从到都还又再着过而或但然却于"
+)
+
 
 def tokenize(text: str) -> list[str]:
-    """英文按词、中文按单字切分，统一小写。"""
-    return _TOKEN_RE.findall(text.lower())
+    """英文按词、中文按单字切分，统一小写；过滤高频虚字（避免虚字凑分）。"""
+    return [t for t in _TOKEN_RE.findall(text.lower()) if t not in _STOPWORDS]
 
 
 def chunk_text(content: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:

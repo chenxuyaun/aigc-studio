@@ -23,8 +23,12 @@ async def main():
         print("seeded initial data")
     else:
         print("users exist, skip seed")
-        # 系统预置模板（推理小说工作坊）幂等补充
+        # 系统预置模板（推理小说工作坊）+ 内置 Hermes Provider（幂等补充，任意库状态可跑）
         await seed_workflow_templates()
+        from seed_data import seed_hermes_provider
+
+        async with AsyncSessionLocal() as db:
+            await seed_hermes_provider(db)
         print("workflow templates ensured")
 
 asyncio.run(main())

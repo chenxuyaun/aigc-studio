@@ -17,6 +17,10 @@ class TextDocument(Base):
         String(36), ForeignKey("generation_tasks.id"), nullable=True
     )
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    # confirmed=已确认（参与检索）/ pending=AI 自动写入待确认（确认前不参与检索，防幻觉污染）
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="confirmed", server_default="confirmed"
+    )
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         TZDateTime(), server_default=func.now(), onupdate=func.now()

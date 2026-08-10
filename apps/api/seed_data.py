@@ -146,6 +146,44 @@ async def seed() -> None:
         else:
             print("Admin exists, skipping seed.")
         await seed_workflow_templates(db)
+        await seed_hermes_provider(db)
+
+
+async def seed_hermes_provider(db: Any | None = None) -> None:
+    """幂等内置「Hermes（本地 Ollama）」Provider：开箱即用默认模型。
+
+    - base_url 默认 host.docker.internal:11434（compose 部署时访问宿主机 Ollama），
+      可用 .env 的 OLLAMA_BASE_URL 覆盖（如裸机部署 http://127.0.0.1:11434/v1）
+    - priority=50：排在用户自建 Provider 之后（不抢占现有默认）；新环境无其他
+      Provider 时它就是自动默认
+    - 已存在同 base_url 的配置则跳过（用户改过就不动）
+    """
+    from app.core.config import settings as _s
+    from app.models.provider_config import ProviderConfig
+
+    base_url = (getattr(_s, "OLLAMA_BASE_URL", "") or "").strip() or "http://host.docker.internal:11434/v1"
+    exists = (
+        await db.execute(
+            select(ProviderConfig).where(ProviderConfig.base_url == base_url)
+        )
+    ).scalar_one_or_none()
+    if exists:
+        print("Hermes provider exists, skipping.")
+        return
+    db.add(
+        ProviderConfig(
+            name="Hermes（本地 Ollama）",
+            provider_type="openai_compatible",
+            base_url=base_url,
+            default_model="hermes3",
+            capabilities='{"text": true}',
+            is_enabled=True,
+            priority=50,
+            timeout_seconds=120,
+        )
+    )
+    await db.commit()
+    print("Hermes provider seeded.")
 
 
 async def seed_workflow_templates(db: Any | None = None) -> None:

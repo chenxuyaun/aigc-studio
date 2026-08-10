@@ -50,7 +50,19 @@ async def create_document(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> TextDocument:
-    doc = TextDocument(title=req.title.strip(), content=req.content, user_id=user.id)
+    content = req.content.strip()
+    # 入库即提炼：AI 生成「精华解读」附在文档末尾（读懂素材才能用得好；失败不阻塞）
+    interpretation = ""
+    if len(content) >= 80:
+        try:
+            from app.services.knowledge_materials import summarize_for_creation
+
+            interpretation = await summarize_for_creation(db, req.title, content)
+        except Exception:
+            interpretation = ""
+    if interpretation:
+        content = content + "\n\n" + interpretation
+    doc = TextDocument(title=req.title.strip(), content=content, user_id=user.id)
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
@@ -116,6 +128,19 @@ async def delete_document(
     return {"success": True}
 
 
+@router.put("/documents/{doc_id}/confirm")
+async def confirm_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, bool]:
+    """确认 AI 自动写入的素材（pending → confirmed）：确认后才参与创作检索。"""
+    doc = _owned_or_404(await db.get(TextDocument, doc_id), user)
+    doc.status = "confirmed"
+    await db.commit()
+    return {"success": True}
+
+
 @router.post("/ask")
 async def ask_knowledge(
     req: KnowledgeAskRequest,
@@ -123,16 +148,10 @@ async def ask_knowledge(
     user: User = Depends(get_current_user),
 ) -> dict[str, object]:
     question = req.question.strip()
-    # 检索范围：指定 doc_ids 或全部个人文档（上限 100 篇防拖慢）
-    q = select(TextDocument).where(TextDocument.user_id == user.id)
-    if req.doc_ids:
-        q = q.where(TextDocument.id.in_(req.doc_ids))
-    result = await db.execute(q.order_by(TextDocument.updated_at.desc()).limit(100))
-    docs = list(result.scalars().all())
+    # 检索范围：指定 doc_ids 或全部已确认个人文档（pending 待确认不参与；与创作检索共用底层）
+    from app.services.knowledge_materials import retrieve_kb_chunks
 
-    chunks = [
-        (doc.id, doc.title, text) for doc in docs for text in chunk_text(doc.content)
-    ]
+    chunks = await retrieve_kb_chunks(db, user.id, req.doc_ids)
     # AgentList 目录条目并入检索（项目/文章/对比表，作为外部选型资料）
     try:
         from app.models.agentlist import AgentArticle, AgentComparison, AgentProject
