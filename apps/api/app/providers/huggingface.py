@@ -34,6 +34,7 @@ def _to_int(value: object, default: int) -> int:
     """上游参数（object）安全转 int；不可转时回落默认值。"""
     return int(value) if isinstance(value, (int, float, str)) else default
 
+
 # ── 默认模型 ────────────────────────────────────────────────────────
 
 _DEFAULT_TEXT_MODEL = "gpt2"
@@ -98,7 +99,7 @@ class HuggingFaceTextProvider(TextProvider):
                 text = str(data)
             # 去除原始 prompt 前缀（gpt2 会把 input 也拼进去）
             if text.startswith(prompt):
-                text = text[len(prompt):].strip()
+                text = text[len(prompt) :].strip()
             return TextResult(
                 content=text or "（模型返回空文本）", model=target, provider="huggingface"
             )
@@ -129,9 +130,7 @@ class HuggingFaceImageProvider(ImageProvider):
         self.model = model
         self._cache: dict[str, bytes] = {}  # task_id → image bytes
 
-    async def submit(
-        self, prompt: str, model: str = "", **kwargs: object
-    ) -> dict[str, object]:
+    async def submit(self, prompt: str, model: str = "", **kwargs: object) -> dict[str, object]:
         import uuid
 
         # 忽略 provider 别名，避免请求 /models/huggingface
@@ -164,13 +163,9 @@ class HuggingFaceImageProvider(ImageProvider):
                 json=payload,
             )
             if resp.status_code == 401:
-                raise RuntimeError(
-                    "HuggingFace 需要鉴权：请在 .env 配置 HUGGINGFACE_TOKEN"
-                )
+                raise RuntimeError("HuggingFace 需要鉴权：请在 .env 配置 HUGGINGFACE_TOKEN")
             if resp.status_code != 200:
-                raise RuntimeError(
-                    f"HF image API {resp.status_code} ({target}): {resp.text[:200]}"
-                )
+                raise RuntimeError(f"HF image API {resp.status_code} ({target}): {resp.text[:200]}")
             # 偶发返回 JSON 错误而 content-type 仍是 application/json
             ctype = (resp.headers.get("content-type") or "").lower()
             if "application/json" in ctype:
@@ -203,9 +198,7 @@ class HuggingFaceSpeechProvider(SpeechProvider):
         self.model = model
         self._cache: dict[str, tuple[bytes, str]] = {}
 
-    async def submit(
-        self, text: str, model: str = "", **kwargs: object
-    ) -> dict[str, object]:
+    async def submit(self, text: str, model: str = "", **kwargs: object) -> dict[str, object]:
         import uuid
 
         target = model or self.model

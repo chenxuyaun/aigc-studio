@@ -23,7 +23,10 @@ class RoleplayGroup(Base):
         String(500), nullable=False, default="", server_default=""
     )
     invite_code: Mapped[str] = mapped_column(
-        String(12), nullable=False, index=True, unique=True,
+        String(12),
+        nullable=False,
+        index=True,
+        unique=True,
         default=lambda: uuid.uuid4().hex[:8],
     )
     created_at: Mapped[datetime] = mapped_column(

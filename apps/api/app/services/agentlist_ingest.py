@@ -166,9 +166,7 @@ async def sync_agentlist(db: AsyncSession, text: str | None = None) -> dict[str,
     counts = {"projects": 0, "articles": 0, "comparisons": 0}
 
     # 项目
-    existing = set(
-        (await db.execute(select(AgentProject.name))).scalars().all()
-    )
+    existing = set((await db.execute(select(AgentProject.name))).scalars().all())
     for p in parsed["projects"]:
         if not p["name"]:
             continue

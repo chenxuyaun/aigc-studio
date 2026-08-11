@@ -60,9 +60,7 @@ def _client(user_id: str, agent_id: str) -> Any | None:
     return client
 
 
-async def _call(
-    user_id: str, agent_id: str, method: str, *args: Any, **kwargs: Any
-) -> Any | None:
+async def _call(user_id: str, agent_id: str, method: str, *args: Any, **kwargs: Any) -> Any | None:
     """调用 gateway 方法；任何异常静默降级返回 None。"""
     client = _client(user_id, agent_id)
     if client is None:
@@ -75,31 +73,39 @@ async def _call(
 
 
 async def memory_add_conversation(
-    user_id: str, agent_id: str, chat_id: str,
+    user_id: str,
+    agent_id: str,
+    chat_id: str,
     messages: list[dict[str, str]],
 ) -> bool:
     """L0 写入本轮对话消息（写入即触发 gateway 端 L1 抽取调度）。"""
     result = await _call(
-        user_id, agent_id, "add_conversation",
-        messages=messages, session_id=chat_id,
+        user_id,
+        agent_id,
+        "add_conversation",
+        messages=messages,
+        session_id=chat_id,
     )
     return result is not None
 
 
 async def memory_search_atomic(
-    user_id: str, agent_id: str, query: str, limit: int = 5,
+    user_id: str,
+    agent_id: str,
+    query: str,
+    limit: int = 5,
 ) -> list[dict[str, Any]]:
     """L1 原子记忆检索（BM25/FTS，无 embedding 时纯关键词）。"""
-    result = await _call(
-        user_id, agent_id, "search_atomic", query, limit=limit
-    )
+    result = await _call(user_id, agent_id, "search_atomic", query, limit=limit)
     if not result or not isinstance(result, dict):
         return []
     return [m for m in (result.get("items") or result.get("records") or []) if isinstance(m, dict)]
 
 
 async def memory_query_atomic(
-    user_id: str, agent_id: str, limit: int = 5,
+    user_id: str,
+    agent_id: str,
+    limit: int = 5,
 ) -> list[dict[str, Any]]:
     """L1 原子记忆最近列表（检索空时的兜底召回）。"""
     result = await _call(user_id, agent_id, "query_atomic", limit=limit)
@@ -136,19 +142,22 @@ async def memory_clear(user_id: str, agent_id: str, chat_id: str | None = None) 
         )
         ids = []
         if isinstance(result, dict):
-            for m in (result.get("items") or []):
+            for m in result.get("items") or []:
                 if isinstance(m, dict) and m.get("id"):
                     ids.append(str(m["id"]))
         if ids:
             await _call(
-                user_id, agent_id, "delete_conversation",
-                message_ids=ids, session_id=chat_id,
+                user_id,
+                agent_id,
+                "delete_conversation",
+                message_ids=ids,
+                session_id=chat_id,
             )
     # L1：全部原子
     result = await _call(user_id, agent_id, "query_atomic", limit=1000)
     ids = []
     if isinstance(result, dict):
-        for m in (result.get("items") or []):
+        for m in result.get("items") or []:
             if isinstance(m, dict) and m.get("id"):
                 ids.append(str(m["id"]))
     if ids:

@@ -15,26 +15,20 @@ async def test_refresh_rotates_and_revokes_old(client, admin_token):
     assert resp.status_code == 200
     refresh = resp.json()["refresh_token"]
 
-    resp = await client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": refresh}
-    )
+    resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["access_token"]
     assert body["refresh_token"] != refresh
 
     # 旧 refresh 已被轮换撤销
-    resp = await client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": refresh}
-    )
+    resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
     assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_refresh_invalid_token(client):
-    resp = await client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": "not-a-real-token"}
-    )
+    resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": "not-a-real-token"})
     assert resp.status_code == 401
 
 
@@ -50,9 +44,7 @@ async def test_logout_revokes_all_refresh_tokens(client, admin_token):
     )
     refresh = login.json()["refresh_token"]
     # 需要先把这条也登出才能验证……用旧 token 列表方式：
-    resp = await client.post(
-        "/api/v1/auth/refresh", json={"refresh_token": refresh}
-    )
+    resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
     # 登出已撤销全部；但上面刚登录生成了新 token，这里应能刷新成功
     assert resp.status_code == 200
 

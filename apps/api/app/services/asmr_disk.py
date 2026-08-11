@@ -134,16 +134,18 @@ async def search_disk(
     if query:
         like = f"%{query.strip()}%"
         stmt = stmt.where(or_(AsmrNetdiskItem.name.like(like), AsmrNetdiskItem.path.like(like)))
-    total = (
-        await db.execute(select(func.count()).select_from(stmt.subquery()))
-    ).scalar_one()
+    total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (
-        await db.execute(
-            stmt.order_by(AsmrNetdiskItem.is_dir.desc(), AsmrNetdiskItem.modified.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await db.execute(
+                stmt.order_by(AsmrNetdiskItem.is_dir.desc(), AsmrNetdiskItem.modified.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {
         "items": [
             {

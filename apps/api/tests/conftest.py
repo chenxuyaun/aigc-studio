@@ -34,9 +34,16 @@ async def override_get_db():
 
 # 后台任务/健康检查/种子数据等直接引用 AsyncSessionLocal 的模块也走测试库
 def _install_test_sessions() -> None:
+    # 全局替换：所有「函数内延迟 from app.core.database import AsyncSessionLocal」
+    # 的模块（comic_service 等）也会拿到测试库——只替换个别模块属性不够
+    import app.core.database as database_mod
+
+    database_mod.AsyncSessionLocal = TestingSessionLocal  # type: ignore[attr-defined]
+
     import app.api.v1.health as health_mod
     import app.api.v1.tasks as tasks_mod
     import app.services.call_logger as call_logger_mod
+    import app.services.comic_service as comic_mod
     import app.services.task_runner as task_runner_mod
     import app.tasks.story_tasks as story_tasks_mod
     import seed_data as seed_mod
@@ -45,16 +52,37 @@ def _install_test_sessions() -> None:
         health_mod,
         tasks_mod,
         call_logger_mod,
+        comic_mod,
         task_runner_mod,
         story_tasks_mod,
         seed_mod,
     ):
         mod.AsyncSessionLocal = TestingSessionLocal  # type: ignore[attr-defined]
+
     # seed 的 init_db 会操作全局真实库：测试库已 create_all，替换为空操作
     async def _noop_init_db() -> None:
         return None
 
     seed_mod.init_db = _noop_init_db  # type: ignore[attr-defined]
+
+
+@pytest.fixture(autouse=True)
+def _ensure_tables():
+    """任意测试运行时：所有模块走测试库 + 表已存在。
+
+    关键：_install_test_sessions 不能只在 client fixture 里执行——
+    comic 等不用 client 的测试若仍连生产库，CI 空库会 no such table。
+    用同步 fixture：anyio 插件管理的测试也注入。
+    """
+    import asyncio
+
+    _install_test_sessions()
+
+    async def _create() -> None:
+        async with _test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.run(_create())
 
 
 @pytest_asyncio.fixture

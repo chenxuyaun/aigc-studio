@@ -1,5 +1,6 @@
 # ruff: noqa: T201
 """推理小说创作方法论入库：知识库文档 + 预置提示词（幂等）。"""
+
 import sys
 from pathlib import Path
 

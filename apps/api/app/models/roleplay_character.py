@@ -43,9 +43,7 @@ class RoleplayCharacter(Base):
     depth_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     # JSON 字符串：扩展字段兜底（creator/character_version/fav 等）
     settings: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
-    created_at: Mapped[datetime] = mapped_column(
-        TZDateTime(), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         TZDateTime(), server_default=func.now(), onupdate=func.now()
     )

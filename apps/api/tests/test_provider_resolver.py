@@ -79,23 +79,24 @@ async def test_disabled_provider_skipped(client, admin_token) -> None:
     from tests.conftest import TestingSessionLocal
 
     async with TestingSessionLocal() as db:
-        db.add(
-            ProviderConfig(
-                name="DisabledLLM",
-                provider_type="openai_compatible",
-                base_url="http://127.0.0.1:8000/v1",
-                default_model="disabled-model",
-                is_enabled=False,
-                priority=0,
-                encrypted_api_key=seal_secret("k"),
-            )
+        disabled = ProviderConfig(
+            name="DisabledLLM",
+            provider_type="openai_compatible",
+            base_url="http://127.0.0.1:8000/v1",
+            default_model="disabled-model",
+            is_enabled=False,
+            priority=0,
+            encrypted_api_key=seal_secret("k"),
         )
+        db.add(disabled)
         await db.commit()
+        await db.refresh(disabled)
 
-        # 禁用配置被跳过：解析到 env 兜底或抛 NoTextProviderError，绝不是被禁用的那个
+        # 禁用配置被跳过：解析到 env/其他启用兜底或抛 NoTextProviderError，
+        # 但绝不可能是被禁用的那个配置
         try:
             r = await resolve_text_provider(db, "disabled-model")
         except NoTextProviderError:
-            return  # 无 env 兜底：符合「无可用 provider 抛错」语义
+            return  # 无兜底：符合「无可用 provider 抛错」语义
         assert r.is_real is True
-        assert r.source == "env"  # 禁用配置不参与；真实 env 兜底（而非离线 mock）
+        assert r.provider_config_id != disabled.id

@@ -41,9 +41,7 @@ async def list_categories(db: AsyncSession = Depends(get_db)) -> dict[str, objec
 async def my_favorite_ids(
     db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ) -> dict[str, list[str]]:
-    rows = await db.execute(
-        select(AgentFavorite.agent_id).where(AgentFavorite.user_id == user.id)
-    )
+    rows = await db.execute(select(AgentFavorite.agent_id).where(AgentFavorite.user_id == user.id))
     return {"ids": [r for (r,) in rows.all()]}
 
 
@@ -64,9 +62,7 @@ async def my_favorites(
         base = base.where(vis)
     total = (
         await db.execute(
-            select(func.count())
-            .select_from(AgentFavorite)
-            .where(AgentFavorite.user_id == user.id)
+            select(func.count()).select_from(AgentFavorite).where(AgentFavorite.user_id == user.id)
         )
     ).scalar() or 0
     result = await db.execute(
@@ -243,6 +239,6 @@ def _with_list(a: Agent) -> dict[str, object]:
     data: dict[str, object] = {c.name: getattr(a, c.name) for c in a.__table__.columns}
     try:
         data["tools"] = json.loads(str(data.get("tools") or "[]"))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         data["tools"] = []
     return data

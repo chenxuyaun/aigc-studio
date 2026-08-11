@@ -40,6 +40,7 @@ async def test_agent_chat_runs_tools_then_answers(monkeypatch: pytest.MonkeyPatc
         return _FakeProvider(), "m"
 
     monkeypatch.setattr(ac, "_resolve_provider", fake_resolve)
+
     async def fake_call_tool(name: str, args: dict) -> str:
         return '[{"id": "t1", "status": "succeeded"}]'
 
@@ -72,9 +73,12 @@ async def test_agent_chat_provider_error_yields_chunk(monkeypatch: pytest.Monkey
         return _BrokenProvider(), "m"
 
     monkeypatch.setattr(ac, "_resolve_provider", fake_resolve)
-    events = [ev async for ev in ac.agent_chat_stream(
-        [{"role": "user", "content": "hi"}], "m", db=None, tools=None
-    )]
+    events = [
+        ev
+        async for ev in ac.agent_chat_stream(
+            [{"role": "user", "content": "hi"}], "m", db=None, tools=None
+        )
+    ]
     assert len(events) == 1
     assert events[0]["type"] == "chunk"
     assert "503" in events[0]["content"]

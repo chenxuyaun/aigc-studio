@@ -16,9 +16,7 @@ class MusicWork(Base):
 
     __tablename__ = "music_works"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), index=True)
     title: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     theme: Mapped[str] = mapped_column(String(500), nullable=False, default="")
@@ -33,9 +31,7 @@ class MusicWork(Base):
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="roundtable")
     # 自动标签：风格/主题/情感，逗号分隔（如 "民谣,劳动者,思乡"）
     tags: Mapped[str] = mapped_column(String(200), nullable=False, default="")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(), server_default=func.now(), onupdate=func.now()
     )

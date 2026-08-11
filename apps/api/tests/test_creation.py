@@ -48,8 +48,10 @@ async def _count(model) -> int:
 @pytest.mark.asyncio
 async def test_plan_returns_ai_cast(client, user_token, monkeypatch) -> None:
     """plan：mock AI 选角，返回角色方案 JSON。"""
+
     async def fake_plan(db, theme: str, user_id: str | None = None):
         return dict(_FIXED_PLAN)
+
     monkeypatch.setattr("app.services.creation_service.plan_project", fake_plan)
     r = await client.post(
         "/api/v1/creation/plan",
@@ -90,9 +92,11 @@ _FIXED_SCRIPT = {
 @pytest.mark.asyncio
 async def test_script_returns_act_outline(client, user_token, monkeypatch) -> None:
     """script：mock 编剧，返回分幕大纲 JSON。"""
+
     async def fake_script(db, *, theme: str, plan: dict | None = None, variants: int = 1):
         assert plan is not None  # 前端会带角色方案
         return dict(_FIXED_SCRIPT)
+
     monkeypatch.setattr("app.services.creation_service.script_project", fake_script)
     r = await client.post(
         "/api/v1/creation/script",
@@ -110,9 +114,11 @@ async def test_script_returns_act_outline(client, user_token, monkeypatch) -> No
 @pytest.mark.asyncio
 async def test_script_without_plan(client, user_token, monkeypatch) -> None:
     """script 不带角色方案也可（AI 自创角色）。"""
+
     async def fake_script(db, *, theme: str, plan: dict | None = None, variants: int = 1):
         assert plan is None
         return dict(_FIXED_SCRIPT)
+
     monkeypatch.setattr("app.services.creation_service.script_project", fake_script)
     r = await client.post(
         "/api/v1/creation/script",
@@ -144,19 +150,21 @@ async def test_setup_creates_chars_and_group(client, user_token) -> None:
         assert chat is not None
         assert chat.is_room is True
         assert chat.group is True
-        assert json.loads(chat.character_asset_ids) == [
-            c["asset_id"] for c in data["characters"]
-        ]
+        assert json.loads(chat.character_asset_ids) == [c["asset_id"] for c in data["characters"]]
         grp = await db.get(RoleplayGroup, data["chat_id"])
         assert grp is not None
         assert grp.name == "夜食缘"
         member = (
-            await db.execute(
-                select(RoleplayGroupMember).where(
-                    RoleplayGroupMember.group_id == data["chat_id"]
+            (
+                await db.execute(
+                    select(RoleplayGroupMember).where(
+                        RoleplayGroupMember.group_id == data["chat_id"]
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(member) == 1  # 群主
     assert await _count(RoleplayCharacter) == before_chars + 2
     assert await _count(RoleplayGroup) == before_groups + 1
@@ -199,9 +207,7 @@ async def test_setup_bad_plan_rejected(client, user_token) -> None:
 @pytest.mark.asyncio
 async def test_setup_requires_auth(client) -> None:
     """未登录 → 401。"""
-    r = await client.post(
-        "/api/v1/creation/setup", json={"theme": "深夜食堂"}
-    )
+    r = await client.post("/api/v1/creation/setup", json={"theme": "深夜食堂"})
     assert r.status_code == 401
 
 
@@ -247,8 +253,11 @@ async def test_setup_reuses_shared_characters(client, user_token) -> None:
     async with TestingSessionLocal() as db:
         db.add(
             RoleplayCharacter(
-                asset_id="shared-char-1", user_id="someone-else",
-                name="小雅", description="共享卡", personality="温柔",
+                asset_id="shared-char-1",
+                user_id="someone-else",
+                name="小雅",
+                description="共享卡",
+                personality="温柔",
                 is_shared=True,
             )
         )
@@ -273,14 +282,12 @@ async def test_plan_retrieves_theme_materials(client, user_token, monkeypatch) -
     from app.services.provider_resolver import ResolvedTextProvider
 
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         db.add(
             TextDocument(
                 title="深夜食堂设定",
                 content="深夜食堂位于巷尾，店主小雅擅长暖胃的炖菜，"
-                        "常客有失业程序员、单亲妈妈、退休厨师。",
+                "常客有失业程序员、单亲妈妈、退休厨师。",
                 user_id=u.id,
             )
         )
@@ -294,19 +301,16 @@ async def test_plan_retrieves_theme_materials(client, user_token, monkeypatch) -
             self.prompt = prompt
             return TextResult(
                 content=json.dumps(_FIXED_PLAN, ensure_ascii=False),
-                model=model, provider="fake",
+                model=model,
+                provider="fake",
             )
 
     rec = _RecordingProvider()
 
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
-        return ResolvedTextProvider(
-            rec, "cpa", False, provider_config_id=None, source="fake"
-        )
+        return ResolvedTextProvider(rec, "cpa", False, provider_config_id=None, source="fake")
 
-    monkeypatch.setattr(
-        "app.services.creation_service.resolve_text_provider", fake_resolver
-    )
+    monkeypatch.setattr("app.services.creation_service.resolve_text_provider", fake_resolver)
     r = await client.post(
         "/api/v1/creation/plan",
         headers=_headers(user_token),
@@ -329,13 +333,13 @@ async def test_plan_retrieves_character_pool(client, user_token, monkeypatch) ->
     from app.services.provider_resolver import ResolvedTextProvider
 
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         db.add(
             RoleplayCharacter(
-                asset_id="pool-char-1", user_id=u.id,
-                name="小雅", description="深夜食堂女店主，擅长炖菜",
+                asset_id="pool-char-1",
+                user_id=u.id,
+                name="小雅",
+                description="深夜食堂女店主，擅长炖菜",
                 personality="温柔体贴",
             )
         )
@@ -349,19 +353,16 @@ async def test_plan_retrieves_character_pool(client, user_token, monkeypatch) ->
             self.prompt = prompt
             return TextResult(
                 content=json.dumps(_FIXED_PLAN, ensure_ascii=False),
-                model=model, provider="fake",
+                model=model,
+                provider="fake",
             )
 
     rec = _RecordingProvider()
 
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
-        return ResolvedTextProvider(
-            rec, "cpa", False, provider_config_id=None, source="fake"
-        )
+        return ResolvedTextProvider(rec, "cpa", False, provider_config_id=None, source="fake")
 
-    monkeypatch.setattr(
-        "app.services.creation_service.resolve_text_provider", fake_resolver
-    )
+    monkeypatch.setattr("app.services.creation_service.resolve_text_provider", fake_resolver)
     r = await client.post(
         "/api/v1/creation/plan",
         headers=_headers(user_token),
@@ -383,13 +384,13 @@ async def test_setup_uses_asset_id_from_plan(client, user_token) -> None:
     from app.models.user import User
 
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         db.add(
             RoleplayCharacter(
-                asset_id="pool-char-2", user_id=u.id,
-                name="小雅", description="深夜食堂女店主",
+                asset_id="pool-char-2",
+                user_id=u.id,
+                name="小雅",
+                description="深夜食堂女店主",
                 personality="温柔",
             )
         )
@@ -401,14 +402,19 @@ async def test_setup_uses_asset_id_from_plan(client, user_token) -> None:
         "logline": "x",
         "characters": [
             {
-                "name": "小雅", "role": "店主",
-                "description": "深夜食堂女店主", "personality": "温柔",
+                "name": "小雅",
+                "role": "店主",
+                "description": "深夜食堂女店主",
+                "personality": "温柔",
                 "first_mes": "欢迎光临。",
-                "source": "existing", "asset_id": "pool-char-2",
+                "source": "existing",
+                "asset_id": "pool-char-2",
             },
             {
-                "name": "新客", "role": "常客",
-                "description": "新来的常客", "personality": "直爽",
+                "name": "新客",
+                "role": "常客",
+                "description": "新来的常客",
+                "personality": "直爽",
                 "first_mes": "老板，来碗面。",
                 "source": "new",
             },
@@ -442,12 +448,14 @@ async def test_publish_creates_story_project(client, user_token, monkeypatch) ->
     from app.services.provider_resolver import ResolvedTextProvider
 
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         chat = await _sessions.create_chat(
-            db, u.id, title="梨园谜案", character_asset_ids=[],
-            group=True, is_room=True,
+            db,
+            u.id,
+            title="梨园谜案",
+            character_asset_ids=[],
+            group=True,
+            is_room=True,
         )
         await _create_group(db, owner_id=u.id, chat_id=chat.id, name="梨园谜案", description="")
         await _sessions.append_message(
@@ -464,19 +472,16 @@ async def test_publish_creates_story_project(client, user_token, monkeypatch) ->
             self.prompt = prompt
             return TextResult(
                 content="**第一幕**\n雨夜梨园·后院\n子衿为墨尘裹伤……\n【子衿】雨声凄凉，却掩不住我心中的动容。",
-                model=model, provider="fake",
+                model=model,
+                provider="fake",
             )
 
     rec = _RecordingProvider()
 
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
-        return ResolvedTextProvider(
-            rec, "cpa", False, provider_config_id=None, source="fake"
-        )
+        return ResolvedTextProvider(rec, "cpa", False, provider_config_id=None, source="fake")
 
-    monkeypatch.setattr(
-        "app.services.creation_service.resolve_text_provider", fake_resolver
-    )
+    monkeypatch.setattr("app.services.creation_service.resolve_text_provider", fake_resolver)
     r = await client.post(
         "/api/v1/creation/publish",
         headers=_headers(user_token),
@@ -493,9 +498,7 @@ async def test_publish_creates_story_project(client, user_token, monkeypatch) ->
     async with TestingSessionLocal() as db:
         proj = await db.get(StoryProject, data["project_id"])
         assert proj is not None
-        owner = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        owner = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         assert proj.user_id == owner.id
         chap = await db.get(StoryChapter, data["chapter_id"])
         assert chap is not None
@@ -512,12 +515,14 @@ async def test_publish_empty_group_rejected(client, user_token) -> None:
     from app.services.group_service import create_group as _create_group
 
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         chat = await _sessions.create_chat(
-            db, u.id, title="空群", character_asset_ids=[],
-            group=True, is_room=True,
+            db,
+            u.id,
+            title="空群",
+            character_asset_ids=[],
+            group=True,
+            is_room=True,
         )
         await _create_group(db, owner_id=u.id, chat_id=chat.id, name="空群", description="")
         await db.commit()
@@ -547,9 +552,7 @@ async def test_script_variants_returns_multiple(client, user_token, monkeypatch)
     from app.services import creation_service
 
     async with TestingSessionLocal() as db:
-        result = await creation_service.script_project(
-            db, theme="x", plan=None, variants=3
-        )
+        result = await creation_service.script_project(db, theme="x", plan=None, variants=3)
     assert "variants" in result
     assert len(result["variants"]) == 3
     assert len(calls) == 3  # 并行调用了 3 次生成
@@ -582,13 +585,9 @@ async def test_review_returns_score_and_advice(client, user_token, monkeypatch) 
     rec = _RecordingProvider()
 
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
-        return ResolvedTextProvider(
-            rec, "cpa", False, provider_config_id=None, source="fake"
-        )
+        return ResolvedTextProvider(rec, "cpa", False, provider_config_id=None, source="fake")
 
-    monkeypatch.setattr(
-        "app.services.creation_service.resolve_text_provider", fake_resolver
-    )
+    monkeypatch.setattr("app.services.creation_service.resolve_text_provider", fake_resolver)
     r = await client.post(
         "/api/v1/creation/review",
         headers=_headers(user_token),
@@ -612,10 +611,13 @@ async def test_setup_invalid_asset_id_falls_back(client, user_token) -> None:
         "logline": "x",
         "characters": [
             {
-                "name": "小雅", "role": "店主",
-                "description": "d", "personality": "p",
+                "name": "小雅",
+                "role": "店主",
+                "description": "d",
+                "personality": "p",
                 "first_mes": "f",
-                "source": "existing", "asset_id": "no-such-asset",
+                "source": "existing",
+                "asset_id": "no-such-asset",
             },
         ],
     }

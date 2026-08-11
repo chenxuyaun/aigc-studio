@@ -37,9 +37,7 @@ async def list_projects(
 
     total = (await db.execute(count_query)).scalar() or 0
     result = await db.execute(
-        query.order_by(Project.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        query.order_by(Project.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     )
     items = result.scalars().all()
     return PaginatedResponse(

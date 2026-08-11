@@ -19,20 +19,24 @@ def test_detects_clickbait_high_level():
 def test_detects_pattern_and_connective_medium():
     issues = check_ai_voice("它不仅好看，而且实用。与此同时，价格也不贵。")
     kinds = {i["kind"] for i in issues}
-    assert "pattern" in kinds and "connective" in kinds
+    assert "pattern" in kinds
+    assert "connective" in kinds
     assert all(i["level"] == "medium" for i in issues if i["kind"] in ("pattern", "connective"))
 
 
 def test_detects_filler_info_level():
     issues = check_ai_voice("这个方案日益完善，不断优化。")
     fillers = [i for i in issues if i["kind"] == "filler"]
-    assert fillers and all(i["level"] == "info" for i in fillers)
+    assert fillers
+    assert all(i["level"] == "info" for i in fillers)
 
 
 def test_sorted_by_severity():
     issues = check_ai_voice("众所周知，我们不仅要有决心，还要有行动。")
     levels = [i["level"] for i in issues]
-    assert levels == sorted(levels, key=lambda x: {"high": 2, "medium": 1, "info": 0}[x], reverse=True)
+    assert levels == sorted(
+        levels, key=lambda x: {"high": 2, "medium": 1, "info": 0}[x], reverse=True
+    )
 
 
 def test_clean_text_no_hits():

@@ -89,8 +89,15 @@ async def _run_batch(run_count: int) -> dict[str, object]:
             if current_rid is None:
                 remain = run_count - acc
                 if remain <= 0:
-                    return {"ok": True, "phase": "done", "success": acc, "failed": 0,
-                            "total": run_count, "restart_count": restart_count, "error": ""}
+                    return {
+                        "ok": True,
+                        "phase": "done",
+                        "success": acc,
+                        "failed": 0,
+                        "total": run_count,
+                        "restart_count": restart_count,
+                        "error": "",
+                    }
                 r = await _start(client, key, remain)
                 if not r.get("ok"):
                     return r
@@ -100,7 +107,8 @@ async def _run_batch(run_count: int) -> dict[str, object]:
                     try:
                         s = await client.get(
                             f"{REGISTER_BASE}/api/run/status",
-                            headers=_headers(key), timeout=30,
+                            headers=_headers(key),
+                            timeout=30,
                         )
                     except Exception:
                         continue
@@ -117,7 +125,8 @@ async def _run_batch(run_count: int) -> dict[str, object]:
             try:
                 s = await client.get(
                     f"{REGISTER_BASE}/api/run/status",
-                    headers=_headers(key), timeout=30,
+                    headers=_headers(key),
+                    timeout=30,
                 )
             except Exception:
                 continue
@@ -156,7 +165,8 @@ async def _run_batch(run_count: int) -> dict[str, object]:
                 with contextlib.suppress(Exception):
                     await client.post(
                         f"{REGISTER_BASE}/api/run/stop",
-                        headers=_headers(key), timeout=30,
+                        headers=_headers(key),
+                        timeout=30,
                     )
                 acc += count  # 挂起 run 已完成的账号并入累计
                 current_rid = None

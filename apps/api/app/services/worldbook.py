@@ -29,7 +29,7 @@ def _load_json_list(raw: str | None) -> list[str]:
         v = json.loads(raw)
         if isinstance(v, list):
             return [str(x) for x in v if x]
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         pass
     return []
 
@@ -149,9 +149,11 @@ def match_worldbook(
 
         if constant:
             pass  # 常驻直接激活
-        elif not keywords or not any(
-            _keyword_matches(k, buffer, case_sensitive, whole_words) for k in keywords
-        ) or (selective and not _selective_pass(keysecondary, buffer, logic)):
+        elif (
+            not keywords
+            or not any(_keyword_matches(k, buffer, case_sensitive, whole_words) for k in keywords)
+            or (selective and not _selective_pass(keysecondary, buffer, logic))
+        ):
             continue
         if probability < 100 and rng.randint(1, 100) > probability:
             continue
@@ -218,9 +220,7 @@ def lorebook_to_st(entries: list[Any], book_name: str = "角色扮演世界书")
             "probability": int(getattr(e, "probability", 100)),
             "useProbability": True,
             "depth": int(getattr(e, "depth", 4)),
-            "role": {"system": 0, "user": 1, "assistant": 2}.get(
-                getattr(e, "role", "system"), 0
-            ),
+            "role": {"system": 0, "user": 1, "assistant": 2}.get(getattr(e, "role", "system"), 0),
             "caseSensitive": bool(getattr(e, "case_sensitive", False)) or None,
             "matchWholeWords": bool(getattr(e, "match_whole_words", False)) or None,
             "displayIndex": i,

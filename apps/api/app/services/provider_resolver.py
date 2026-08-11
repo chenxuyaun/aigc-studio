@@ -29,20 +29,24 @@ class ResolvedTextProvider:
 async def list_enabled_text_catalog(db: AsyncSession) -> list[dict[str, object]]:
     """前端模型下拉：启用的 text/openai 兼容配置（不含 mock）。"""
     rows = (
-        await db.execute(
-            select(ProviderConfig)
-            .where(
-                ProviderConfig.is_enabled.is_(True),
-                or_(
-                    ProviderConfig.provider_type.in_(
-                        ["text", "openai_compatible", "openai", "chat", "llm"]
+        (
+            await db.execute(
+                select(ProviderConfig)
+                .where(
+                    ProviderConfig.is_enabled.is_(True),
+                    or_(
+                        ProviderConfig.provider_type.in_(
+                            ["text", "openai_compatible", "openai", "chat", "llm"]
+                        ),
+                        ProviderConfig.provider_type == "",
                     ),
-                    ProviderConfig.provider_type == "",
-                ),
+                )
+                .order_by(ProviderConfig.priority.asc(), ProviderConfig.created_at.asc())
             )
-            .order_by(ProviderConfig.priority.asc(), ProviderConfig.created_at.asc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     items: list[dict[str, object]] = []
     for p in rows:
         if not (p.base_url or "").strip() and not (p.default_model or "").strip():
@@ -74,9 +78,7 @@ async def list_enabled_text_catalog(db: AsyncSession) -> list[dict[str, object]]
     return items
 
 
-async def resolve_text_provider(
-    db: AsyncSession, requested_model: str
-) -> ResolvedTextProvider:
+async def resolve_text_provider(db: AsyncSession, requested_model: str) -> ResolvedTextProvider:
     """解析文本 Provider。
 
     空 model 表示「自动」：选择优先级最高的启用真实 Provider（DB 优先、env 兜底）。
@@ -93,19 +95,23 @@ async def resolve_text_provider(
             return _from_row(by_id, model_override=by_id.default_model or requested)
 
     rows = (
-        await db.execute(
-            select(ProviderConfig)
-            .where(ProviderConfig.is_enabled.is_(True))
-            .order_by(ProviderConfig.priority.asc(), ProviderConfig.created_at.asc())
+        (
+            await db.execute(
+                select(ProviderConfig)
+                .where(ProviderConfig.is_enabled.is_(True))
+                .order_by(ProviderConfig.priority.asc(), ProviderConfig.created_at.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # 2) 按 default_model / name 匹配启用配置
     if requested:
         for p in rows:
             if not (p.base_url or "").strip():
                 continue
-            if p.default_model == requested or p.name == requested:
+            if p.is_enabled and (p.default_model == requested or p.name == requested):
                 return _from_row(p, model_override=requested)
 
     # 3) 任意启用的 text 类：显式请求时用请求 model 名打上游；自动时取最优配置

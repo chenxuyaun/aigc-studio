@@ -39,7 +39,7 @@ async def cache_get(key: str) -> str | None:
     if _disabled:
         return None
     try:
-        return await _redis().get(key)  # type: ignore[no-any-return]
+        return await _redis().get(key)
     except Exception:
         _disabled = True
         return None

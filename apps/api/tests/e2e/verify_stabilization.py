@@ -1,5 +1,6 @@
-# ruff: noqa: T201 E501
+# ruff: noqa: T201
 """稳定化升级线上验证（httpx 实现，避免 urllib 偶发卡死）。"""
+
 import sys
 import time
 from pathlib import Path
@@ -28,14 +29,21 @@ def env(k: str) -> str:
 
 def main() -> None:
     c = httpx.Client(timeout=60, base_url=BASE)
-    token = c.post("/auth/login", json={
-        "username": env("INITIAL_ADMIN_USERNAME"), "password": env("INITIAL_ADMIN_PASSWORD"),
-    }).json()["access_token"]
+    token = c.post(
+        "/auth/login",
+        json={
+            "username": env("INITIAL_ADMIN_USERNAME"),
+            "password": env("INITIAL_ADMIN_PASSWORD"),
+        },
+    ).json()["access_token"]
     h = {"Authorization": f"Bearer {token}"}
 
     # 1. worker 模式：image 任务（mock，走 celery worker 执行）
-    r = c.post("/generations/image/generate", headers=h,
-               json={"model": "mock", "prompt": "星夜猫", "width": 512, "height": 512}).json()
+    r = c.post(
+        "/generations/image/generate",
+        headers=h,
+        json={"model": "mock", "prompt": "星夜猫", "width": 512, "height": 512},
+    ).json()
     tid = r["id"]
     st = ""
     for _ in range(240):
@@ -49,9 +57,14 @@ def main() -> None:
     # 2. chapter 任务走 worker
     r = c.post("/story/projects", headers=h, json={"title": "稳定化验证", "genre": "测试"}).json()
     pid = r["project"]["id"]
-    cid = c.post(f"/story/projects/{pid}/chapters", headers=h, json={"title": "第一章"}).json()["chapter"]["id"]
-    rt = c.post(f"/story/chapters/{cid}/generate/task", headers=h,
-                json={"project_id": pid, "mode": "narrative"}).json()
+    cid = c.post(f"/story/projects/{pid}/chapters", headers=h, json={"title": "第一章"}).json()[
+        "chapter"
+    ]["id"]
+    rt = c.post(
+        f"/story/chapters/{cid}/generate/task",
+        headers=h,
+        json={"project_id": pid, "mode": "narrative"},
+    ).json()
     st = ""
     for _ in range(240):
         r = c.get(f"/tasks/{rt['task']['id']}", headers=h).json()
@@ -70,19 +83,32 @@ def main() -> None:
 
     # 4. EPUB 导出
     r = c.get(f"/story/projects/{pid}/export", headers=h, params={"format": "epub"})
-    check("EPUB 导出", r.status_code == 200 and r.content[:4] == b"PK\x03\x04",
-          f"{len(r.content)} bytes")
+    check(
+        "EPUB 导出",
+        r.status_code == 200 and r.content[:4] == b"PK\x03\x04",
+        f"{len(r.content)} bytes",
+    )
 
     # 5. catalog health 字段
     r = c.get("/providers/catalog", headers=h)
     items = r.json() if isinstance(r.json(), list) else []
-    check("catalog healthy 字段", all("healthy" in p for p in items),
-          str([(p["id"][:8], p.get("healthy")) for p in items[:3]]))
+    check(
+        "catalog healthy 字段",
+        all("healthy" in p for p in items),
+        str([(p["id"][:8], p.get("healthy")) for p in items[:3]]),
+    )
 
     # 6. 级联删 lore
-    c.post("/roleplay/lore", headers=h, json={
-        "project_id": pid, "keywords": ["测试"], "content": "t", "selective": True,
-    })
+    c.post(
+        "/roleplay/lore",
+        headers=h,
+        json={
+            "project_id": pid,
+            "keywords": ["测试"],
+            "content": "t",
+            "selective": True,
+        },
+    )
     c.delete(f"/story/projects/{pid}", headers=h)
     left = c.get(f"/roleplay/lore?project_id={pid}", headers=h).json()["items"]
     check("删项目级联删 lore", len(left) == 0, f"残留 {len(left)} 条")
@@ -90,9 +116,15 @@ def main() -> None:
     # 7. 流式生成（SSE）正常完成并定稿
     rp = c.post("/story/projects", headers=h, json={"title": "流式验证", "genre": "测试"}).json()
     pid2 = rp["project"]["id"]
-    cid2 = c.post(f"/story/projects/{pid2}/chapters", headers=h, json={"title": "流式章"}).json()["chapter"]["id"]
-    with c.stream("POST", f"/story/chapters/{cid2}/generate/stream", headers=h,
-                  json={"project_id": pid2, "mode": "narrative"}) as sr:
+    cid2 = c.post(f"/story/projects/{pid2}/chapters", headers=h, json={"title": "流式章"}).json()[
+        "chapter"
+    ]["id"]
+    with c.stream(
+        "POST",
+        f"/story/chapters/{cid2}/generate/stream",
+        headers=h,
+        json={"project_id": pid2, "mode": "narrative"},
+    ) as sr:
         sse = "".join(sr.iter_text())
     check("流式生成完成", '"type": "done"' in sse, sse[:80])
     full2 = c.get(f"/story/chapters/{cid2}", headers=h).json()["chapter"]

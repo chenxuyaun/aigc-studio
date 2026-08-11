@@ -25,6 +25,7 @@ from app.models.roleplay_chat import RoleplayChat
 from app.services.group_service import create_group
 from app.services.provider_resolver import resolve_text_provider
 from app.services.sessions import create_chat as create_chat_row
+from app.services.text_utils import result_text as _result_text
 
 _PLAN_PROMPT = """你是影视/小说项目的选角导演。根据创作主题，规划一个多人共创项目。
 
@@ -145,17 +146,21 @@ async def _retrieve_character_pool(
     from app.services.knowledge_retrieval import retrieve
 
     rows = (
-        await db.execute(
-            select(RoleplayCharacter)
-            .where(
-                or_(
-                    RoleplayCharacter.user_id == user_id,
-                    RoleplayCharacter.is_shared.is_(True),
+        (
+            await db.execute(
+                select(RoleplayCharacter)
+                .where(
+                    or_(
+                        RoleplayCharacter.user_id == user_id,
+                        RoleplayCharacter.is_shared.is_(True),
+                    )
                 )
+                .limit(300)
             )
-            .limit(300)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not rows:
         return []
     chunks = [
@@ -187,9 +192,7 @@ async def _retrieve_character_pool(
     return pool
 
 
-async def plan_project(
-    db: AsyncSession, theme: str, user_id: str | None = None
-) -> dict[str, Any]:
+async def plan_project(db: AsyncSession, theme: str, user_id: str | None = None) -> dict[str, Any]:
     """主题 → 角色方案。user_id 提供时先检索其知识库资料 + 已有角色池，
     选角参考（无命中不阻塞）。"""
     materials = ""
@@ -273,9 +276,6 @@ _REVIEW_PROMPT = """你是制片人视角的剧本评审。评审以下剧本大
 
 剧本大纲：
 {script}"""
-
-
-from app.services.text_utils import result_text as _result_text
 
 
 async def review_project(
@@ -368,9 +368,9 @@ async def publish_project(
         return {"error": "群里还没有演出内容，先演几场再来存档吧"}
 
     resolved = await resolve_text_provider(db, "")
-    provider = resolved.provider  # type: ignore[attr-defined]
+    provider = resolved.provider
     try:
-        result = await provider.generate(
+        result = await provider.generate(  # type: ignore[attr-defined]
             _PUBLISH_PROMPT.format(transcript=transcript),
             resolved.model,
             temperature=0.75,
@@ -398,9 +398,7 @@ async def publish_project(
         genre="群演剧本",
         character_asset_ids=char_ids if isinstance(char_ids, list) else [],
     )
-    chapter = await create_chapter(
-        db, user_id, project.id, title="群演完整剧本", outline=""
-    )
+    chapter = await create_chapter(db, user_id, project.id, title="群演完整剧本", outline="")
     await update_chapter_content(db, user_id, chapter.id, script_text)
     return {
         "project_id": project.id,
@@ -447,26 +445,26 @@ async def setup_project(
         return {"error": "角色方案无效，请重新规划"}
 
     # 一次性批量查已有角色（本人 + 共享）：AI 引用的 asset_id 优先，未引用则按名查重
-    ref_ids = [
-        str(c.get("asset_id") or "").strip()
-        for c in characters[:8]
-        if c.get("asset_id")
-    ]
+    ref_ids = [str(c.get("asset_id") or "").strip() for c in characters[:8] if c.get("asset_id")]
     names = [str(c.get("name") or "").strip()[:100] for c in characters[:8]]
     existing_rows = (
-        await db.execute(
-            select(RoleplayCharacter).where(
-                or_(
-                    RoleplayCharacter.asset_id.in_([i for i in ref_ids if i]),
-                    RoleplayCharacter.name.in_([n for n in names if n]),
-                ),
-                or_(
-                    RoleplayCharacter.user_id == owner_id,
-                    RoleplayCharacter.is_shared.is_(True),
-                ),
+        (
+            await db.execute(
+                select(RoleplayCharacter).where(
+                    or_(
+                        RoleplayCharacter.asset_id.in_([i for i in ref_ids if i]),
+                        RoleplayCharacter.name.in_([n for n in names if n]),
+                    ),
+                    or_(
+                        RoleplayCharacter.user_id == owner_id,
+                        RoleplayCharacter.is_shared.is_(True),
+                    ),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     by_asset: dict[str, RoleplayCharacter] = {r.asset_id: r for r in existing_rows}
     by_name: dict[str, RoleplayCharacter] = {r.name: r for r in existing_rows}
 
@@ -534,15 +532,19 @@ async def setup_project(
     # 建群（is_room 会话 + 群记录 + 群主入群）
     group_name = str(plan.get("group_name") or theme)[:100]
     chat = await create_chat_row(
-        db, owner_id,
+        db,
+        owner_id,
         title=group_name,
         character_asset_ids=char_ids,
         group=len(char_ids) > 1,
         is_room=True,
     )
     await create_group(
-        db, owner_id=owner_id, chat_id=chat.id,
-        name=group_name, description=str(plan.get("logline") or "")[:500],
+        db,
+        owner_id=owner_id,
+        chat_id=chat.id,
+        name=group_name,
+        description=str(plan.get("logline") or "")[:500],
     )
     await db.commit()
     await db.refresh(chat)

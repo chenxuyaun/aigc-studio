@@ -1,4 +1,4 @@
-# ruff: noqa: T201 E501
+# ruff: noqa: T201
 import asyncio
 from typing import Any
 
@@ -123,12 +123,25 @@ MYSTERY_WORKSHOP_TEMPLATE = {
 async def seed() -> None:
     await init_db()
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.username == settings.INITIAL_ADMIN_USERNAME))
+        result = await db.execute(
+            select(User).where(User.username == settings.INITIAL_ADMIN_USERNAME)
+        )
         if not result.scalar_one_or_none():
-            admin = User(username=settings.INITIAL_ADMIN_USERNAME, email=settings.INITIAL_ADMIN_EMAIL, password_hash=hash_password(settings.INITIAL_ADMIN_PASSWORD), role="admin")
+            admin = User(
+                username=settings.INITIAL_ADMIN_USERNAME,
+                email=settings.INITIAL_ADMIN_EMAIL,
+                password_hash=hash_password(settings.INITIAL_ADMIN_PASSWORD),
+                role="admin",
+            )
             db.add(admin)
             await db.flush()
-            categories = [PromptCategory(name="文本生成", sort_order=1), PromptCategory(name="图片生成", sort_order=2), PromptCategory(name="视频生成", sort_order=3), PromptCategory(name="语音生成", sort_order=4), PromptCategory(name="教育场景", sort_order=5)]
+            categories = [
+                PromptCategory(name="文本生成", sort_order=1),
+                PromptCategory(name="图片生成", sort_order=2),
+                PromptCategory(name="视频生成", sort_order=3),
+                PromptCategory(name="语音生成", sort_order=4),
+                PromptCategory(name="教育场景", sort_order=5),
+            ]
             for cat in categories:
                 db.add(cat)
             await db.flush()
@@ -140,7 +153,16 @@ async def seed() -> None:
                 ("教学方案设计", "请为{subject}设计教学方案", "text", 4),
             ]
             for title, content, ptype, cat_idx in prompts_data:
-                db.add(Prompt(title=title, content=content, prompt_type=ptype, author_id=admin.id, source_type="system_seed", category_id=categories[cat_idx].id))
+                db.add(
+                    Prompt(
+                        title=title,
+                        content=content,
+                        prompt_type=ptype,
+                        author_id=admin.id,
+                        source_type="system_seed",
+                        category_id=categories[cat_idx].id,
+                    )
+                )
             await db.commit()
             print("Seed created!")
         else:
@@ -161,11 +183,11 @@ async def seed_hermes_provider(db: Any | None = None) -> None:
     from app.core.config import settings as _s
     from app.models.provider_config import ProviderConfig
 
-    base_url = (getattr(_s, "OLLAMA_BASE_URL", "") or "").strip() or "http://host.docker.internal:11434/v1"
+    base_url = (
+        getattr(_s, "OLLAMA_BASE_URL", "") or ""
+    ).strip() or "http://host.docker.internal:11434/v1"
     exists = (
-        await db.execute(
-            select(ProviderConfig).where(ProviderConfig.base_url == base_url)
-        )
+        await db.execute(select(ProviderConfig).where(ProviderConfig.base_url == base_url))
     ).scalar_one_or_none()
     if exists:
         print("Hermes provider exists, skipping.")

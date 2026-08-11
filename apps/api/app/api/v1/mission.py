@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -43,23 +44,27 @@ async def mission_history(
     from app.models.mission_lesson import MissionLesson
 
     lessons = (
-        await db.execute(
-            select(MissionLesson)
-            .where(MissionLesson.user_id == user.id)
-            .order_by(MissionLesson.created_at.desc())
-            .limit(10)
+        (
+            await db.execute(
+                select(MissionLesson)
+                .where(MissionLesson.user_id == user.id)
+                .order_by(MissionLesson.created_at.desc())
+                .limit(10)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     runs = await mission_service.list_runs(db, user.id, limit=20)
     return {
         "lessons": [
             {
-                "id": l.id,
-                "goal": l.goal,
-                "lesson": l.lesson,
-                "created_at": str(l.created_at) if l.created_at else "",
+                "id": item.id,
+                "goal": item.goal,
+                "lesson": item.lesson,
+                "created_at": str(item.created_at) if item.created_at else "",
             }
-            for l in lessons
+            for item in lessons
         ],
         "runs": runs,
     }
@@ -116,13 +121,17 @@ async def agent_runs_history(
     from app.models.agent_run import AgentRun
 
     rows = (
-        await db.execute(
-            select(AgentRun)
-            .where(AgentRun.user_id == user.id)
-            .order_by(AgentRun.created_at.desc())
-            .limit(20)
+        (
+            await db.execute(
+                select(AgentRun)
+                .where(AgentRun.user_id == user.id)
+                .order_by(AgentRun.created_at.desc())
+                .limit(20)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {
         "runs": [
             {
@@ -143,7 +152,7 @@ async def mission_artifacts_zip(
     run_id: str,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> Any:
     """项目交付：把任务会话中的代码产物打包成 zip 下载。"""
     import io
     import zipfile
@@ -223,9 +232,13 @@ async def mission_exec(
         fp.parent.mkdir(parents=True, exist_ok=True)
         fp.write_text(content, encoding="utf-8")
         try:
-            proc = subprocess.run(
+            proc = await asyncio.to_thread(
+                subprocess.run,
                 [sys.executable, str(fp)],
-                capture_output=True, text=True, timeout=15, cwd=td,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                cwd=td,
             )
             out = (proc.stdout or "")[-2000:]
             if proc.stderr:

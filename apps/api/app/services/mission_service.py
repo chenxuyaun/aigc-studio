@@ -6,8 +6,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +17,8 @@ from app.services.text_utils import extract_json, result_text
 _PLAN_PROMPT = """你是任务总控大脑（AGI Orchestrator）。把用户的目标拆解成可执行的多步计划。
 规则：
 - 步骤类型 kind 只能是：music（写一首歌）/ text（生成文本内容）/ image（生成图片）/
-  video（生成视频）/ comic（生成漫画）/ search（联网检索资料）/ agent（调用 Agent 库中的智能体执行）/
+  video（生成视频）/ comic（生成漫画）/ search（联网检索资料）/ agent（调用 Agent 库中的智能体执行）
+/
   story（写一段故事章节）/ asmr（从 ASMR 库检索音频素材）/
   character（让角色扮演中的角色以角色口吻回应）/ memory（查询角色的记忆档案）/
   code（生成可运行的代码文件）
@@ -24,8 +26,16 @@ _PLAN_PROMPT = """你是任务总控大脑（AGI Orchestrator）。把用户的�
 - 若某步需要上一步的产出作为素材（如先检索再写），该步加 "input": "prev"
 - 若某步适合交给某个 Agent 执行（如资料整理、文案写作、专业分析），加 "agent": "Agent名"
 - character/memory 步骤可加 "char": "角色名"（角色库中的角色）
-输出 JSON（不要任何多余文字）：
-{{"plan": [{{"kind": "music", "prompt": "主题描述", "title": "这步产出的名称", "reason": "为什么用这个引擎（1 句话）", "input": "prev或省略"}}]}}
+输出 JSON（不要任何多余文字）
+：
+{{"plan": [{{"kind": "music", "prompt": "主题描述", "title": "这步产出的名称", "reason": "
+为什么用这个引擎（1
+句
+话
+）
+"
+,
+ "input": "prev或省略"}}]}}
 
 用户目标：{goal}
 
@@ -79,12 +89,16 @@ async def _available_agents(db: AsyncSession, user_id: str) -> list[dict[str, st
     from app.models.agent import Agent
 
     rows = (
-        await db.execute(
-            select(Agent)
-            .where((Agent.author_id == user_id) | (Agent.is_public.is_(True)))
-            .limit(20)
+        (
+            await db.execute(
+                select(Agent)
+                .where((Agent.author_id == user_id) | (Agent.is_public.is_(True)))
+                .limit(20)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [
         {
             "id": str(a.id),
@@ -102,19 +116,21 @@ async def _recent_lessons(db: AsyncSession, user_id: str, limit: int = 5) -> lis
     from app.models.mission_lesson import MissionLesson
 
     rows = (
-        await db.execute(
-            select(MissionLesson)
-            .where(MissionLesson.user_id == user_id)
-            .order_by(MissionLesson.created_at.desc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(MissionLesson)
+                .where(MissionLesson.user_id == user_id)
+                .order_by(MissionLesson.created_at.desc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [str(r.lesson) for r in rows if str(r.lesson).strip()]
 
 
-async def _save_lessons(
-    db: AsyncSession, user_id: str, goal: str, lessons: list[str]
-) -> None:
+async def _save_lessons(db: AsyncSession, user_id: str, goal: str, lessons: list[str]) -> None:
     from app.models.mission_lesson import MissionLesson
 
     for lesson in lessons:
@@ -133,7 +149,7 @@ async def plan_mission(db: AsyncSession, user_id: str, goal: str) -> list[dict[s
     lessons = await _recent_lessons(db, user_id)
     lessons_block = (
         "\n【历史教训】（本平台此前任务中沉淀，规划时必须避免重犯）\n"
-        + "\n".join(f"- {l}" for l in lessons)
+        + "\n".join(f"- {item}" for item in lessons)
         if lessons
         else ""
     )
@@ -193,21 +209,17 @@ async def _execute_agent(
     from app.models.agent import Agent
     from app.services.provider_resolver import resolve_text_provider
 
-    query = select(Agent).where(
-        (Agent.author_id == user_id) | (Agent.is_public.is_(True))
-    )
+    query = select(Agent).where((Agent.author_id == user_id) | (Agent.is_public.is_(True)))
     if agent_name:
         query = query.where(Agent.name == agent_name)
-    agent = (
-        await db.execute(query.order_by(Agent.use_count.desc()).limit(1))
-    ).scalars().first()
+    agent = (await db.execute(query.order_by(Agent.use_count.desc()).limit(1))).scalars().first()
     if agent is None:
         return {"summary": f"未找到可用 Agent（{agent_name or '任意'}）", "ok": False}
     agent_id = str(agent.id)
     try:
         lessons = await _recent_lessons(db, user_id, limit=3)
         memory_block = (
-            "\n\n【平台教训】（避免重犯）\n" + "\n".join(f"- {l}" for l in lessons)
+            "\n\n【平台教训】（避免重犯）\n" + "\n".join(f"- {item}" for item in lessons)
             if lessons
             else ""
         )
@@ -225,8 +237,10 @@ async def _execute_agent(
 
         db.add(
             AgentRun(
-                user_id=user_id, agent_id=agent_id,
-                goal=prompt[:500], result=text[:3000],
+                user_id=user_id,
+                agent_id=agent_id,
+                goal=prompt[:500],
+                result=text[:3000],
                 status="done" if text else "failed",
             )
         )
@@ -255,17 +269,17 @@ async def _execute_text(db: AsyncSession, user_id: str, prompt: str) -> dict[str
 async def _execute_music(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
     from app.api.v1.generations.music import MusicComposeRequest, compose_song
 
-    req = MusicComposeRequest(theme=prompt, style="", mood="", language="zh", verse_count=2, model="")
-    data = await compose_song(req, db, user_id)
+    req = MusicComposeRequest(
+        theme=prompt, style="", mood="", language="zh", verse_count=2, model=""
+    )
+    data = await compose_song(req, db, cast(Any, user_id))
     if data.get("error"):
         return {"summary": f"写歌失败：{data['error']}", "ok": False}
     lyrics = str(data.get("lyrics") or "")[:300]
     return {"summary": f"《{data.get('title') or '未命名'}》\n{lyrics}", "ok": True}
 
 
-async def _execute_code(
-    db: AsyncSession, user_id: str, prompt: str
-) -> dict[str, Any]:
+async def _execute_code(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
     """代码生成引擎：LLM 产出可运行文件集（files: [{path, content}]）。"""
     from app.services.provider_resolver import resolve_text_provider
 
@@ -306,11 +320,18 @@ async def _execute_media_task(
 
     try:
         task = await create_media_task(
-            db, user_id=user_id, task_type=task_type, model="",
+            db,
+            user_id=user_id,
+            task_type=task_type,
+            model="",
             params=_MediaParams(prompt=prompt, model=""),
             project_id=None,
         )
-        return {"summary": f"已提交{_KIND_LABELS.get(task_type, task_type)}任务（{task.id[:8]}…），可到任务中心查看进度", "ok": True, "task_id": task.id}
+        return {
+            "summary": f"已提交{_KIND_LABELS.get(task_type, task_type)}任务（{task.id[:8]}…），可到任务中心查看进度",  # noqa: E501
+            "ok": True,
+            "task_id": task.id,
+        }
     except Exception as exc:
         return {"summary": f"任务提交失败：{str(exc)[:120]}", "ok": False}
 
@@ -364,9 +385,7 @@ async def _execute_memory(
     if char is None:
         return {"summary": "未找到角色卡，无法查询记忆", "ok": False}
     profile = (
-        await db.execute(
-            select(CharacterProfile).where(CharacterProfile.asset_id == char.asset_id)
-        )
+        await db.execute(select(CharacterProfile).where(CharacterProfile.asset_id == char.asset_id))
     ).scalar_one_or_none()
     if profile is None or not (profile.identity or profile.personality or profile.speech_style):
         return {"summary": "该角色尚无记忆档案（可在角色扮演-记忆面板做原著蒸馏）", "ok": False}
@@ -411,16 +430,19 @@ async def _execute_asmr(db: AsyncSession, user_id: str, prompt: str) -> dict[str
     from app.models.asmr_work import AsmrWork
 
     rows = (
-        await db.execute(
-            select(AsmrWork)
-            .where(
-                AsmrWork.title.like(f"%{prompt[:30]}%")
-                | AsmrWork.tags.like(f"%{prompt[:30]}%")
+        (
+            await db.execute(
+                select(AsmrWork)
+                .where(
+                    AsmrWork.title.like(f"%{prompt[:30]}%") | AsmrWork.tags.like(f"%{prompt[:30]}%")
+                )
+                .order_by(AsmrWork.dl_count.desc())
+                .limit(3)
             )
-            .order_by(AsmrWork.dl_count.desc())
-            .limit(3)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not rows:
         return {"summary": "ASMR 库未命中该主题", "ok": False}
     import json as _json
@@ -428,13 +450,10 @@ async def _execute_asmr(db: AsyncSession, user_id: str, prompt: str) -> dict[str
     lines = []
     for w in rows:
         tags = ""
-        try:
+        with contextlib.suppress(Exception):
             tags = "、".join(
-                str(t.get("zh") or t.get("name") or "")
-                for t in _json.loads(w.tags or "[]")
+                str(t.get("zh") or t.get("name") or "") for t in _json.loads(w.tags or "[]")
             )[:60]
-        except Exception:
-            pass
         lines.append(f"《{w.title[:40]}》（{w.circle_name[:20]}）下载:{w.dl_count} 标签:{tags}")
     return {"summary": "\n".join(lines)[:600], "ok": True}
 
@@ -470,13 +489,9 @@ async def execute_step(
         if kind == "asmr":
             return await _execute_asmr(db, user_id, prompt)
         if kind == "character":
-            return await _execute_character(
-                db, user_id, prompt, str(step.get("char") or "")
-            )
+            return await _execute_character(db, user_id, prompt, str(step.get("char") or ""))
         if kind == "memory":
-            return await _execute_memory(
-                db, user_id, prompt, str(step.get("char") or "")
-            )
+            return await _execute_memory(db, user_id, prompt, str(step.get("char") or ""))
         if kind == "code":
             return await _execute_code(db, user_id, prompt)
     except Exception as exc:
@@ -521,7 +536,7 @@ async def run_mission(db: AsyncSession, user_id: str, goal: str) -> dict[str, An
     if not plan:
         # 降级：目标直接作为单步文本生成
         plan = [{"kind": "text", "prompt": goal, "title": "✍️ 直接生成", "input": ""}]
-    results = []
+    results: list[dict[str, Any]] = []
     prev_summary = ""
     for step in plan:
         outcome = await execute_step(db, user_id, step, prev_summary)
@@ -544,8 +559,12 @@ async def run_mission(db: AsyncSession, user_id: str, goal: str) -> dict[str, An
     mission = {
         "goal": goal,
         "plan": [
-            {"step": i + 1, "kind": s.get("kind"), "title": s.get("title"),
-             "reason": s.get("reason", "")}
+            {
+                "step": i + 1,
+                "kind": s.get("kind"),
+                "title": s.get("title"),
+                "reason": s.get("reason", ""),
+            }
             for i, s in enumerate(plan)
         ],
         "results": results,
@@ -558,7 +577,6 @@ async def run_mission(db: AsyncSession, user_id: str, goal: str) -> dict[str, An
 
 async def _save_run(db: AsyncSession, user_id: str, goal: str, mission: dict[str, Any]) -> str:
     """会话持久化：目标/计划/结果/汇总入库，返回 run_id。"""
-    import json
 
     from app.models.mission_run import MissionRun
 
@@ -578,20 +596,23 @@ async def _save_run(db: AsyncSession, user_id: str, goal: str, mission: dict[str
 
 async def list_runs(db: AsyncSession, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
     """任务历史（长期协作记忆）：最近 N 次会话。"""
-    import json
 
     from sqlalchemy import select
 
     from app.models.mission_run import MissionRun
 
     rows = (
-        await db.execute(
-            select(MissionRun)
-            .where(MissionRun.user_id == user_id)
-            .order_by(MissionRun.created_at.desc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(MissionRun)
+                .where(MissionRun.user_id == user_id)
+                .order_by(MissionRun.created_at.desc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [
         {
             "id": r.id,
@@ -607,7 +628,6 @@ async def list_runs(db: AsyncSession, user_id: str, limit: int = 20) -> list[dic
 
 async def get_run(db: AsyncSession, user_id: str, run_id: str) -> dict[str, Any] | None:
     """单次会话完整回看。"""
-    import json
 
     from sqlalchemy import select
 
@@ -615,9 +635,7 @@ async def get_run(db: AsyncSession, user_id: str, run_id: str) -> dict[str, Any]
 
     r = (
         await db.execute(
-            select(MissionRun).where(
-                MissionRun.id == run_id, MissionRun.user_id == user_id
-            )
+            select(MissionRun).where(MissionRun.id == run_id, MissionRun.user_id == user_id)
         )
     ).scalar_one_or_none()
     if r is None:

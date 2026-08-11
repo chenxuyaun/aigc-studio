@@ -87,29 +87,36 @@ def test_parse_cmd_style_and_mood() -> None:
 async def _seed_room_owner() -> str:
     """建一个 is_room 群（群主 user1）+ 一个角色卡（asset + 角色行）。"""
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         db.add(
             Asset(
-                id="char-music-1", user_id=u.id,
-                filename="char-music-1.png", storage_key="",
-                storage_backend="local", mime_type="image/png", size_bytes=0,
+                id="char-music-1",
+                user_id=u.id,
+                filename="char-music-1.png",
+                storage_key="",
+                storage_backend="local",
+                mime_type="image/png",
+                size_bytes=0,
             )
         )
         db.add(
             RoleplayCharacter(
-                asset_id="char-music-1", user_id=u.id,
-                name="测试角色", description="d", personality="p",
+                asset_id="char-music-1",
+                user_id=u.id,
+                name="测试角色",
+                description="d",
+                personality="p",
             )
         )
         chat = await sessions.create_chat(
-            db, u.id, title="写歌群", character_asset_ids=["char-music-1"],
-            group=True, is_room=True,
+            db,
+            u.id,
+            title="写歌群",
+            character_asset_ids=["char-music-1"],
+            group=True,
+            is_room=True,
         )
-        await create_group(
-            db, owner_id=u.id, chat_id=chat.id, name="写歌群", description=""
-        )
+        await create_group(db, owner_id=u.id, chat_id=chat.id, name="写歌群", description="")
         await db.commit()
         return chat.id
 
@@ -118,9 +125,7 @@ def _patch_provider(monkeypatch: pytest.MonkeyPatch, fake: _FakeProvider) -> Non
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
         return ResolvedTextProvider(fake, "cpa", False, provider_config_id=None, source="fake")
 
-    monkeypatch.setattr(
-        "app.services.music_assistant.resolve_text_provider", fake_resolver
-    )
+    monkeypatch.setattr("app.services.music_assistant.resolve_text_provider", fake_resolver)
 
 
 @pytest.mark.asyncio
@@ -138,9 +143,7 @@ async def test_group_music_first_round(client, user_token, monkeypatch) -> None:
             "session_id": chat_id,
             "group": True,
             "author": "旁白",
-            "messages": [
-                {"role": "user", "content": "@AI 写歌：80/90 童年 民谣"}
-            ],
+            "messages": [{"role": "user", "content": "@AI 写歌：80/90 童年 民谣"}],
         },
     )
     assert r.status_code == 200
@@ -178,9 +181,7 @@ async def test_group_music_followup_round(client, user_token, monkeypatch) -> No
             "character_asset_ids": ["char-music-1"],
             "session_id": chat_id,
             "group": True,
-            "messages": [
-                {"role": "user", "content": "@AI 写歌：80/90 童年"}
-            ],
+            "messages": [{"role": "user", "content": "@AI 写歌：80/90 童年"}],
         },
     )
     assert r1.status_code == 200
@@ -193,9 +194,7 @@ async def test_group_music_followup_round(client, user_token, monkeypatch) -> No
             "character_asset_ids": ["char-music-1"],
             "session_id": chat_id,
             "group": True,
-            "messages": [
-                {"role": "user", "content": "@AI 写歌：副歌改成知了和分西瓜"}
-            ],
+            "messages": [{"role": "user", "content": "@AI 写歌：副歌改成知了和分西瓜"}],
         },
     )
     assert r2.status_code == 200
@@ -212,12 +211,14 @@ async def test_group_music_private_chat_ignored(client, user_token, monkeypatch)
     """非群（普通会话）发 @AI 写歌 → 不触发音乐助手。"""
     await _seed_room_owner()  # 建角色卡（char-music-1）供私聊引用
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         chat = await sessions.create_chat(
-            db, u.id, title="私聊", character_asset_ids=["char-music-1"],
-            group=False, is_room=False,
+            db,
+            u.id,
+            title="私聊",
+            character_asset_ids=["char-music-1"],
+            group=False,
+            is_room=False,
         )
         await db.commit()
         chat_id = chat.id

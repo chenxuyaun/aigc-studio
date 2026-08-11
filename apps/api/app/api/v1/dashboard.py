@@ -56,8 +56,10 @@ async def get_stats(
     if scope:
         recent_q = recent_q.where(*scope)
     recent = (
-        await db.execute(recent_q.order_by(GenerationTask.created_at.desc()).limit(5))
-    ).scalars().all()
+        (await db.execute(recent_q.order_by(GenerationTask.created_at.desc()).limit(5)))
+        .scalars()
+        .all()
+    )
 
     return {
         "success": True,
@@ -104,6 +106,6 @@ async def latest_inspection(
         return {"report": None}
     try:
         data = json.loads(row.content)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         data = {"raw": row.content[:1000]}
     return {"report": data, "created_at": row.created_at.isoformat() if row.created_at else None}

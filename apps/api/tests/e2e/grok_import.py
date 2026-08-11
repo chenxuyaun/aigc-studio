@@ -1,4 +1,4 @@
-# ruff: noqa: T201 E501
+# ruff: noqa: T201
 """Grok 账号导入 + 验证脚本（用户导出 cookie 后运行）。
 
 用法：
@@ -22,7 +22,11 @@ WORKBENCH = "http://localhost:5000/api/v1"
 
 
 def admin_token() -> str:
-    r = httpx.post(f"{ADMIN}/auth/login", json={"username": "admin", "password": "grok2api_local_2026"}, timeout=15)
+    r = httpx.post(
+        f"{ADMIN}/auth/login",
+        json={"username": "admin", "password": "grok2api_local_2026"},
+        timeout=15,
+    )
     return r.json()["data"]["tokens"]["accessToken"]
 
 
@@ -82,10 +86,14 @@ def main() -> int:
     # 实测 grok-chat-fast
     if ok:
         r2 = httpx.post(
-            f"{WORKBENCH}/auth/login", json={"username": "admin", "password": "admin123"}, timeout=30
+            f"{WORKBENCH}/auth/login",
+            json={"username": "admin", "password": "admin123"},
+            timeout=30,
         )
         wh = {"Authorization": f"Bearer {r2.json()['access_token']}"}
-        items2 = httpx.get(f"{WORKBENCH}/roleplay/characters", headers=wh, timeout=30).json()["items"]
+        items2 = httpx.get(f"{WORKBENCH}/roleplay/characters", headers=wh, timeout=30).json()[
+            "items"
+        ]
         aid = items2[0]["asset_id"]
         r3 = httpx.post(
             f"{WORKBENCH}/roleplay/chat",

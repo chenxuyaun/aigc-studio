@@ -172,12 +172,16 @@ async def list_albums(
 
     total = (await db.execute(count_query)).scalar() or 0
     rows = (
-        await db.execute(
-            query.order_by(PhotoAlbum.updated_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await db.execute(
+                query.order_by(PhotoAlbum.updated_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return PaginatedResponse(
         items=[_album_response(a) for a in rows],
@@ -234,9 +238,7 @@ async def update_album(
     if data.get("cover_photo_id"):
         photo = (
             await db.execute(
-                select(Photo).where(
-                    Photo.id == data["cover_photo_id"], Photo.album_id == album.id
-                )
+                select(Photo).where(Photo.id == data["cover_photo_id"], Photo.album_id == album.id)
             )
         ).scalar_one_or_none()
         if not photo:
@@ -262,9 +264,7 @@ async def delete_album(
     if not _can_edit(album, user):
         raise HTTPException(status_code=403, detail="无权删除此相册")
 
-    photos = (
-        await db.execute(select(Photo).where(Photo.album_id == album.id))
-    ).scalars().all()
+    photos = (await db.execute(select(Photo).where(Photo.album_id == album.id))).scalars().all()
     for photo in photos:
         backend = getattr(photo, "storage_backend", None) or "local"
         with contextlib.suppress(Exception):
@@ -292,14 +292,18 @@ async def list_photos(
         await db.execute(select(func.count(Photo.id)).where(Photo.album_id == album.id))
     ).scalar() or 0
     rows = (
-        await db.execute(
-            select(Photo)
-            .where(Photo.album_id == album.id)
-            .order_by(Photo.sort_order.asc(), Photo.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await db.execute(
+                select(Photo)
+                .where(Photo.album_id == album.id)
+                .order_by(Photo.sort_order.asc(), Photo.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return PaginatedResponse(
         items=[_photo_response(p) for p in rows],

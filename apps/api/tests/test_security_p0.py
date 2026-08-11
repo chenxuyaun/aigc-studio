@@ -95,9 +95,7 @@ async def test_task_events_require_auth(client, admin_token):
     assert bare.status_code == 401
 
     # 带 token 应能建立流（读一行即可）
-    async with client.stream(
-        "GET", f"/api/v1/tasks/{task_id}/events", headers=headers
-    ) as stream:
+    async with client.stream("GET", f"/api/v1/tasks/{task_id}/events", headers=headers) as stream:
         assert stream.status_code == 200
         line = None
         async for raw in stream.aiter_lines():

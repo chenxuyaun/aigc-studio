@@ -9,9 +9,14 @@ from app.tasks.generation_tasks import _RETRYABLE
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
-    name="asmr_sync_task", time_limit=2700, soft_time_limit=2580,
-    max_retries=2, autoretry_for=_RETRYABLE, retry_backoff=True,
-    retry_backoff_max=120, retry_jitter=True,
+    name="asmr_sync_task",
+    time_limit=2700,
+    soft_time_limit=2580,
+    max_retries=2,
+    autoretry_for=_RETRYABLE,
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
 )
 def asmr_sync_task(
     mode: str = "daily",

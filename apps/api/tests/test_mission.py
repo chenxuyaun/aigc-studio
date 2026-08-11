@@ -6,7 +6,6 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.services import mission_service
 
 
@@ -59,9 +58,10 @@ async def test_run_mission_falls_back_to_text(client):
     """拆解失败 → 降级为单步文本生成（不抛异常）。"""
     with (
         patch("app.services.mission_service.plan_mission", new=AsyncMock(return_value=[])),
-        patch("app.services.mission_service._execute_text", new=AsyncMock(
-            return_value={"summary": "生成结果", "ok": True}
-        )),
+        patch(
+            "app.services.mission_service._execute_text",
+            new=AsyncMock(return_value={"summary": "生成结果", "ok": True}),
+        ),
         patch("app.services.mission_service._save_run", new=AsyncMock(return_value="run-1")),
     ):
         result = await mission_service.run_mission(None, "u1", "写一段欢迎词")
@@ -73,15 +73,21 @@ async def test_run_mission_falls_back_to_text(client):
 async def test_execute_agent_runs_and_leaves_state(client):
     """Agent 执行器：Identity 加载 → 生成 → State 留痕 + use_count 增长。"""
     from app.models.agent import Agent
+
     from tests.conftest import TestingSessionLocal
 
     async with TestingSessionLocal() as session:
-        session.add(Agent(
-            id="agent-rt-1", name="资料整理员", author_id="u1",
-            description="把资料整理成清单",
-            system_prompt="你是资料整理员，输出结构化清单。",
-            agent_type="generic", use_count=0,
-        ))
+        session.add(
+            Agent(
+                id="agent-rt-1",
+                name="资料整理员",
+                author_id="u1",
+                description="把资料整理成清单",
+                system_prompt="你是资料整理员，输出结构化清单。",
+                agent_type="generic",
+                use_count=0,
+            )
+        )
         await session.commit()
 
     fake_resolver = AsyncMock()
@@ -90,14 +96,15 @@ async def test_execute_agent_runs_and_leaves_state(client):
     )()
     fake_resolver.model = "mock"
     async with TestingSessionLocal() as session:
-        with patch("app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver):
+        with patch(
+            "app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver
+        ):
             out = await mission_service._execute_agent(session, "u1", "整理行动清单", "资料整理员")
     assert out["ok"] is True
     assert "资料整理员" in out["summary"]
 
-    from sqlalchemy import select
-
     from app.models.agent_run import AgentRun
+    from sqlalchemy import select
 
     async with TestingSessionLocal() as session:
         runs = (await session.execute(select(AgentRun))).scalars().all()
@@ -111,27 +118,46 @@ async def test_execute_agent_runs_and_leaves_state(client):
 async def test_aggregate_preferences_and_injection(client):
     """成长档案：从创作记录聚合偏好，注入文本含【用户偏好】块。"""
     from app.services.profile_service import aggregate_preferences, build_profile_text
+
     from tests.conftest import TestingSessionLocal
 
     # 造数据：一首民谣作品 + 一条 mission run
     async with TestingSessionLocal() as session:
-        from sqlalchemy import select
-
         from app.models.mission_run import MissionRun
         from app.models.music_work import MusicWork
         from app.models.user import User
+        from sqlalchemy import select
 
         uid = (await session.execute(select(User.id).where(User.username == "admin"))).scalar_one()
-        session.add(MusicWork(user_id=uid, title="试听", theme="故乡", style="民谣", tags="民谣,思乡", lyrics="词", source="roundtable"))
-        session.add(MissionRun(user_id=uid, goal="写歌", plan='[{"kind": "music", "title": "写歌"}]', results="[]", summary="ok"))
+        session.add(
+            MusicWork(
+                user_id=uid,
+                title="试听",
+                theme="故乡",
+                style="民谣",
+                tags="民谣,思乡",
+                lyrics="词",
+                source="roundtable",
+            )
+        )
+        session.add(
+            MissionRun(
+                user_id=uid,
+                goal="写歌",
+                plan='[{"kind": "music", "title": "写歌"}]',
+                results="[]",
+                summary="ok",
+            )
+        )
         await session.commit()
 
     async with TestingSessionLocal() as session:
+        from app.models.user import User as _User
         from sqlalchemy import select as _select
 
-        from app.models.user import User as _User
-
-        _uid = (await session.execute(_select(_User.id).where(_User.username == "admin"))).scalar_one()
+        _uid = (
+            await session.execute(_select(_User.id).where(_User.username == "admin"))
+        ).scalar_one()
         prefs = await aggregate_preferences(session, str(_uid))
         assert "民谣" in prefs["styles"] or "思乡" in prefs["themes"]
         text = await build_profile_text(session, str(_uid))
@@ -148,7 +174,8 @@ async def test_execute_story_and_asmr_kinds(client):
     fake_resolver.model = "mock"
     with patch("app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver):
         out = await mission_service._execute_story(None, "u1", "写戏园一幕")
-    assert out["ok"] is True and "老周" in out["summary"]
+    assert out["ok"] is True
+    assert "老周" in out["summary"]
 
     from tests.conftest import TestingSessionLocal
 
@@ -161,15 +188,26 @@ async def test_execute_story_and_asmr_kinds(client):
 async def test_execute_character_and_memory_kinds(client):
     """角色/记忆引擎融合：角色卡回应；无记忆档案时 ok=False。"""
     from app.models.roleplay_character import RoleplayCharacter
+
     from tests.conftest import TestingSessionLocal
 
     async with TestingSessionLocal() as session:
-        session.add(RoleplayCharacter(
-            asset_id="char-fuse-1", user_id="u1", name="老周",
-            description="戏园守门人，沉默寡言", personality="念旧",
-            scenario="", first_mes="", mes_example="", system_prompt="",
-            post_history_instructions="", creator_notes="", tags="[]",
-        ))
+        session.add(
+            RoleplayCharacter(
+                asset_id="char-fuse-1",
+                user_id="u1",
+                name="老周",
+                description="戏园守门人，沉默寡言",
+                personality="念旧",
+                scenario="",
+                first_mes="",
+                mes_example="",
+                system_prompt="",
+                post_history_instructions="",
+                creator_notes="",
+                tags="[]",
+            )
+        )
         await session.commit()
 
     fake_resolver = AsyncMock()
@@ -178,9 +216,12 @@ async def test_execute_character_and_memory_kinds(client):
     )()
     fake_resolver.model = "mock"
     async with TestingSessionLocal() as session:
-        with patch("app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver):
+        with patch(
+            "app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver
+        ):
             out = await mission_service._execute_character(session, "u1", "聊聊守门的日子", "老周")
-        assert out["ok"] is True and "老周" in out["summary"]
+        assert out["ok"] is True
+        assert "老周" in out["summary"]
         # 无记忆档案 → ok=False（不抛异常）
         out2 = await mission_service._execute_memory(session, "u1", "查记忆", "老周")
     assert out2["ok"] is False
@@ -197,7 +238,10 @@ async def test_execute_code_kind_generates_files(client):
             "content": json.dumps(
                 {
                     "files": [
-                        {"path": "app.py", "content": "from flask import Flask\napp = Flask(__name__)\n"},
+                        {
+                            "path": "app.py",
+                            "content": "from flask import Flask\napp = Flask(__name__)\n",
+                        },
                         {"path": "README.md", "content": "# 待办应用"},
                     ],
                     "note": "python app.py",

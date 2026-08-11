@@ -6,7 +6,6 @@
 - 完成判定：run 结束且累计 >= run_count
 """
 
-
 import httpx
 import pytest
 from app.tasks import register_batch

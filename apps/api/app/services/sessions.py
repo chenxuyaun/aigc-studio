@@ -27,7 +27,7 @@ def _load_messages(raw: str | None) -> list[dict[str, Any]]:
     try:
         v = json.loads(raw)
         return v if isinstance(v, list) else []
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return []
 
 
@@ -123,7 +123,7 @@ def export_jsonl(chat: RoleplayChat) -> str:
     """导出为 SillyTavern JSONL（首行 metadata + 每行消息）。"""
     try:
         char_ids = json.loads(chat.character_asset_ids or "[]")
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         char_ids = []
     meta = {
         "chat_metadata": {
@@ -214,7 +214,7 @@ def get_settings(chat: RoleplayChat) -> dict[str, Any]:
     try:
         v = json.loads(chat.settings or "{}")
         return v if isinstance(v, dict) else {}
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return {}
 
 

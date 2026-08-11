@@ -36,11 +36,11 @@ CARD_FIELDS = (
 _CARD_SYSTEM = (
     "你是角色卡设计师。根据用户描述设计一个角色扮演角色，"
     "只输出 JSON："
-    "{\"name\":\"角色名\",\"description\":\"角色外观与背景描述\","
-    "\"personality\":\"性格特征\",\"scenario\":\"初始场景\","
-    "\"first_mes\":\"角色开口第一句话\",\"mes_example\":\"示例对话(一行,"
-    "{{user}}:/{{char}}: 格式)\","
-    "\"alternate_greetings\":[\"备用开场白1\"],\"creator_notes\":\"创作备注\"}"
+    '{"name":"角色名","description":"角色外观与背景描述",'
+    '"personality":"性格特征","scenario":"初始场景",'
+    '"first_mes":"角色开口第一句话","mes_example":"示例对话(一行,'
+    '{{user}}:/{{char}}: 格式)",'
+    '"alternate_greetings":["备用开场白1"],"creator_notes":"创作备注"}'
 )
 
 _FALLBACK_CARD = {
@@ -134,9 +134,7 @@ def parse_character_card(data: bytes) -> dict[str, Any]:
 def _pack_character_png(avatar: Image.Image, card: dict[str, Any]) -> bytes:
     """头像图 + tEXt 块 chara（V2 base64 JSON）→ PNG 字节。"""
     buf = io.BytesIO()
-    chara_b64 = base64.b64encode(
-        json.dumps(_to_v2(card), ensure_ascii=False).encode()
-    ).decode()
+    chara_b64 = base64.b64encode(json.dumps(_to_v2(card), ensure_ascii=False).encode()).decode()
     meta = PngImagePlugin.PngInfo()
     meta.add_text("chara", chara_b64)
     avatar.save(buf, format="PNG", pnginfo=meta)
@@ -232,8 +230,17 @@ async def _build_character_json(description: str, style: str = "") -> dict[str, 
     card["alternate_greetings"] = []
     card["tags"] = []
     card["character_book"] = {}
-    for k in ("name", "description", "personality", "scenario", "first_mes", "mes_example",
-              "system_prompt", "post_history_instructions", "creator_notes"):
+    for k in (
+        "name",
+        "description",
+        "personality",
+        "scenario",
+        "first_mes",
+        "mes_example",
+        "system_prompt",
+        "post_history_instructions",
+        "creator_notes",
+    ):
         v = str(data.get(k) or "").strip()
         if v:
             card[k] = v

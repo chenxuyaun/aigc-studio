@@ -115,34 +115,40 @@ async def _run_serial_tick() -> dict[str, Any]:
     async with AsyncSessionLocal() as db:
         now = datetime.now(UTC)
         schedules = (
-            await db.execute(
-                select(SerialSchedule).where(
-                    SerialSchedule.status == "active",
-                    SerialSchedule.next_run_at <= now,
+            (
+                await db.execute(
+                    select(SerialSchedule).where(
+                        SerialSchedule.status == "active",
+                        SerialSchedule.next_run_at <= now,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         created = 0
         skipped = 0
         for s in schedules:
             try:
                 # 上一章未完成则跳过本 tick（避免并发重复生成）
                 rows = (
-                    await db.execute(
-                        select(StoryChapter)
-                        .where(StoryChapter.project_id == s.project_id)
-                        .order_by(StoryChapter.chapter_no.desc())
+                    (
+                        await db.execute(
+                            select(StoryChapter)
+                            .where(StoryChapter.project_id == s.project_id)
+                            .order_by(StoryChapter.chapter_no.desc())
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 if rows and rows[0].status != "done":
                     skipped += 1
                     s.next_run_at = now + timedelta(minutes=s.interval_minutes)
                     await db.commit()
                     continue
                 for _ in range(max(1, s.batch_size)):
-                    chapter = await story_forge.create_chapter(
-                        db, s.user_id, s.project_id
-                    )
+                    chapter = await story_forge.create_chapter(db, s.user_id, s.project_id)
                     task = GenerationTask(
                         id=str(uuid.uuid4()),
                         task_type="chapter",
@@ -197,8 +203,13 @@ def _celery_task(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]
         _retryable = (sqlalchemy.exc.OperationalError, sqlalchemy.exc.TimeoutError)
 
         @shared_task(  # type: ignore[untyped-decorator]
-            name=name, bind=True, max_retries=2, autoretry_for=_retryable,
-            retry_backoff=True, retry_backoff_max=60, retry_jitter=True,
+            name=name,
+            bind=True,
+            max_retries=2,
+            autoretry_for=_retryable,
+            retry_backoff=True,
+            retry_backoff_max=60,
+            retry_jitter=True,
         )
         def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
             return fn(*args, **kwargs)
@@ -224,6 +235,7 @@ def serial_tick() -> dict[str, Any]:  # pragma: no cover - celery
 # 实测 kombu send_task 在 uvicorn（运行中的 asyncio loop）环境下消息会静默丢失，
 # 导致任务永远 queued。为此 worker 周期性扫描 DB 中 queued 任务直接执行：
 # send_task 成功时任务会被置 processing（drain 跳过），消息丢失时由 drain 兜底执行。
+
 
 @_celery_task("drain_queued_tasks")
 def drain_queued_tasks() -> dict[str, Any]:  # pragma: no cover - celery
@@ -251,19 +263,23 @@ async def _run_drain() -> dict[str, Any]:
         now = datetime.now(UTC)
         stale_before = now - _td(minutes=5)
         rows = (
-            await db.execute(
-                select(GenerationTask)
-                .where(
-                    (GenerationTask.status == "queued")
-                    | (
-                        (GenerationTask.status == "processing")
-                        & (GenerationTask.updated_at < stale_before)
+            (
+                await db.execute(
+                    select(GenerationTask)
+                    .where(
+                        (GenerationTask.status == "queued")
+                        | (
+                            (GenerationTask.status == "processing")
+                            & (GenerationTask.updated_at < stale_before)
+                        )
                     )
+                    .order_by(GenerationTask.created_at.asc())
+                    .limit(10)
                 )
-                .order_by(GenerationTask.created_at.asc())
-                .limit(10)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for t in rows:
             # 原子抢占：只抢 still queued / 超时 processing 的任务
             claimed_row = await db.execute(

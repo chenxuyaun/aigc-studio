@@ -21,6 +21,7 @@ def _prompt_hash(title: str, content: str) -> str:
 
     return hashlib.sha256(f"{title}\n{content}".encode()).hexdigest()
 
+
 router = APIRouter()
 
 
@@ -146,9 +147,7 @@ async def list_prompts(
     )
 
 
-async def _set_prompt_tags(
-    db: AsyncSession, prompt: Prompt, tags: list[str] | None
-) -> None:
+async def _set_prompt_tags(db: AsyncSession, prompt: Prompt, tags: list[str] | None) -> None:
     """按名称 upsert 标签并重建 prompt 的标签关系（空列表清空）。
 
     bulk 删除/插入关系行；调用方在 commit 后 expire 集合再重新查询，
@@ -158,9 +157,7 @@ async def _set_prompt_tags(
     from app.models.prompt_tag_relation import PromptTagRelation
 
     names = [t.strip()[:50] for t in (tags or []) if t and t.strip()]
-    await db.execute(
-        sa_delete(PromptTagRelation).where(PromptTagRelation.prompt_id == prompt.id)
-    )
+    await db.execute(sa_delete(PromptTagRelation).where(PromptTagRelation.prompt_id == prompt.id))
     for name in dict.fromkeys(names):  # 去重保序
         tag = (
             await db.execute(select(PromptTag).where(PromptTag.name == name))
@@ -218,9 +215,7 @@ async def create_prompt(
 
 
 @router.get("/shared/{prompt_id}", response_model=PromptResponse)
-async def get_shared_prompt(
-    prompt_id: str, db: AsyncSession = Depends(get_db)
-) -> Prompt:
+async def get_shared_prompt(prompt_id: str, db: AsyncSession = Depends(get_db)) -> Prompt:
     """公开分享：无需登录，仅公开提示词可读（私有项一律 404，不泄露存在性）。"""
     result = await db.execute(
         select(Prompt).options(selectinload(Prompt.tags)).where(Prompt.id == prompt_id)

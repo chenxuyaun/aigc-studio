@@ -1,5 +1,6 @@
 # ruff: noqa: T201
 """补跑《双城交换杀人》三项 503 失败项：案件设计 / 第3章 / 校对，带重试退避。"""
+
 import sys
 import time
 from pathlib import Path
@@ -51,26 +52,51 @@ def main() -> None:
     h = {"Authorization": f"Bearer {token}"}
 
     # 1. 补跑案件设计（主编）
-    r = post_retry(c, h, f"/story/projects/{PID}/crew", {
-        "project_id": PID, "stage": "director", "model": MODEL,
-    })
-    check("案件设计（主编）", "error" not in r and bool(r.get("direction")),
-          str(r.get("direction", ""))[:100])
+    r = post_retry(
+        c,
+        h,
+        f"/story/projects/{PID}/crew",
+        {
+            "project_id": PID,
+            "stage": "director",
+            "model": MODEL,
+        },
+    )
+    check(
+        "案件设计（主编）",
+        "error" not in r and bool(r.get("direction")),
+        str(r.get("direction", ""))[:100],
+    )
 
     # 2. 补跑第 3 章生成
-    r = post_retry(c, h, "/story/chapters/86a300ef-f165-4da0-ac34-6065939bcaaa/generate", {
-        "project_id": PID, "mode": "narrative", "model": MODEL, "max_tokens": 1600,
-    })
+    r = post_retry(
+        c,
+        h,
+        "/story/chapters/86a300ef-f165-4da0-ac34-6065939bcaaa/generate",
+        {
+            "project_id": PID,
+            "mode": "narrative",
+            "model": MODEL,
+            "max_tokens": 1600,
+        },
+    )
     if "error" in r:
         check("章节3生成（补跑）", False, str(r.get("error"))[:120])
     else:
         check("章节3生成（补跑）", True, f"{r.get('word_count')} 字")
 
     # 3. 补跑校对（逻辑验证）
-    r = post_retry(c, h, f"/story/projects/{PID}/crew", {
-        "project_id": PID, "stage": "editor", "model": MODEL,
-        "chapter_id": "86a300ef-f165-4da0-ac34-6065939bcaaa",
-    })
+    r = post_retry(
+        c,
+        h,
+        f"/story/projects/{PID}/crew",
+        {
+            "project_id": PID,
+            "stage": "editor",
+            "model": MODEL,
+            "chapter_id": "86a300ef-f165-4da0-ac34-6065939bcaaa",
+        },
+    )
     if "error" in r:
         check("推理逻辑验证（校对）", False, str(r.get("error"))[:120])
     else:

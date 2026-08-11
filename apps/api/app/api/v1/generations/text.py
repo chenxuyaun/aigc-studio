@@ -36,12 +36,16 @@ async def _build_knowledge_context(
     if not doc_ids:
         return "", []
     docs = (
-        await db.execute(
-            select(TextDocument).where(
-                TextDocument.user_id == user.id, TextDocument.id.in_(doc_ids)
+        (
+            await db.execute(
+                select(TextDocument).where(
+                    TextDocument.user_id == user.id, TextDocument.id.in_(doc_ids)
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     chunks = [(doc.id, doc.title, t) for doc in docs for t in chunk_text(doc.content)]
     hits = retrieve(chunks, question, top_k=max_chunks)
     if not hits:

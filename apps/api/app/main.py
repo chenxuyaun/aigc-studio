@@ -114,9 +114,7 @@ async def request_id_middleware(request: Request, call_next):  # type: ignore[no
     # X-Request-ID：仅接受客户端合法格式（36 位 UUID 或 ≤64 字符的字母数字连字符），
     # 防止用任意长/控制字符污染日志与响应头
     raw_rid = request.headers.get("X-Request-ID", "")
-    if raw_rid and len(raw_rid) <= 64 and all(
-        c.isalnum() or c in "-_" for c in raw_rid
-    ):
+    if raw_rid and len(raw_rid) <= 64 and all(c.isalnum() or c in "-_" for c in raw_rid):
         request_id = raw_rid
     else:
         request_id = str(uuid.uuid4())
@@ -174,10 +172,7 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     request_id = getattr(request.state, "request_id", "")
     # 只回传字段/规则摘要，不回显 input 原始值（可能含密码/密钥）
-    details = [
-        {"loc": list(e.get("loc") or []), "msg": e.get("msg", "")}
-        for e in exc.errors()
-    ]
+    details = [{"loc": list(e.get("loc") or []), "msg": e.get("msg", "")} for e in exc.errors()]
     return JSONResponse(
         status_code=422,
         content=_error_body("VALIDATION_ERROR", "请求参数校验失败", request_id, details),

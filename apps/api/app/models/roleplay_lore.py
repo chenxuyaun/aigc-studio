@@ -49,19 +49,13 @@ class RoleplayLoreEntry(Base):
         String(10), nullable=False, server_default="AND_ANY"
     )
     # before / after / atDepth
-    position: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="before"
-    )
+    position: Mapped[str] = mapped_column(String(20), nullable=False, server_default="before")
     order_value: Mapped[int] = mapped_column(
         Integer, nullable=False, default=100, server_default="100"
     )
     # atDepth 时的深度（距末尾第 N 条后）与注入角色
-    depth: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=4, server_default="4"
-    )
-    role: Mapped[str] = mapped_column(
-        String(10), nullable=False, server_default="system"
-    )
+    depth: Mapped[int] = mapped_column(Integer, nullable=False, default=4, server_default="4")
+    role: Mapped[str] = mapped_column(String(10), nullable=False, server_default="system")
     scan_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)
     case_sensitive: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
@@ -72,9 +66,5 @@ class RoleplayLoreEntry(Base):
     probability: Mapped[int] = mapped_column(
         Integer, nullable=False, default=100, server_default="100"
     )
-    enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        TZDateTime(), server_default=func.now()
-    )
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), server_default=func.now())

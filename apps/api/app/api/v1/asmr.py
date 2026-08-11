@@ -8,6 +8,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -87,12 +88,15 @@ async def list_works(
     LIKE 全表扫描热路径：结果走 Redis 缓存（10 分钟 TTL，同步后清前缀失效）。
     """
     # 缓存 key：过滤/排序/分页参数的稳定哈希（用户维度不影响数据，可共享）
-    cache_key = "asmr:works:v1:" + hashlib.sha256(
-        json.dumps(
-            [q.strip().lower(), tag.strip().lower(), nsfw, lang, source, sort, page, page_size],
-            ensure_ascii=False,
-        ).encode()
-    ).hexdigest()
+    cache_key = (
+        "asmr:works:v1:"
+        + hashlib.sha256(
+            json.dumps(
+                [q.strip().lower(), tag.strip().lower(), nsfw, lang, source, sort, page, page_size],
+                ensure_ascii=False,
+            ).encode()
+        ).hexdigest()
+    )
     cached = await cache_json_get(cache_key)
     if cached is not None and isinstance(cached, dict):
         return cached
@@ -122,9 +126,7 @@ async def list_works(
     if source:
         stmt = stmt.where(AsmrWork.source == source)
 
-    total = (
-        await db.execute(select(func.count()).select_from(stmt.subquery()))
-    ).scalar_one()
+    total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     order: Any = AsmrWork.release_date.desc()
     if sort == "rate":
         order = AsmrWork.rate_average.desc()
@@ -133,12 +135,16 @@ async def list_works(
     elif sort == "price":
         order = AsmrWork.price.desc()
     rows = (
-        await db.execute(
-            stmt.order_by(order, AsmrWork.id.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await db.execute(
+                stmt.order_by(order, AsmrWork.id.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     payload: dict[str, Any] = {
         "items": [_work_dict(w) for w in rows],
         "total": total,
@@ -161,9 +167,7 @@ async def get_cover(
     本地库 work_id 为 UUID 不可枚举，配合全局限流防滥用。
     """
 
-    w = (
-        await db.execute(select(AsmrWork).where(AsmrWork.id == work_id))
-    ).scalar_one_or_none()
+    w = (await db.execute(select(AsmrWork).where(AsmrWork.id == work_id))).scalar_one_or_none()
     if w is None or not w.cover_url:
         raise HTTPException(status_code=404, detail="封面不存在")
 
@@ -188,7 +192,7 @@ async def get_cover(
                     headers={"User-Agent": "Mozilla/5.0", "Referer": "https://asmr.one/"},
                 )
                 resp.raise_for_status()
-                data = resp.content[:4 * 1024 * 1024]
+                data = resp.content[: 4 * 1024 * 1024]
             if data:
                 await get_storage("local").put(key, data, "image/jpeg")
         except Exception:
@@ -211,9 +215,7 @@ async def similar_works(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """相似作品：标签重叠 + 同声优加分（同分级优先）。"""
-    w = (
-        await db.execute(select(AsmrWork).where(AsmrWork.id == work_id))
-    ).scalar_one_or_none()
+    w = (await db.execute(select(AsmrWork).where(AsmrWork.id == work_id))).scalar_one_or_none()
     if w is None:
         raise HTTPException(status_code=404, detail="作品不存在")
     my_tags = {str(t.get("name") or "") for t in _json_list(w.tags)}
@@ -226,12 +228,8 @@ async def similar_works(
     )
     tag_likes = [_like_pattern(t) for t in list(my_tags)[:10]]
     if tag_likes:
-        stmt = stmt.where(
-            or_(*[AsmrWork.tags.like(pat, escape="\\") for pat in tag_likes])
-        )
-    stmt = stmt.order_by(
-        AsmrWork.release_date.desc(), AsmrWork.id.desc()
-    ).limit(500)
+        stmt = stmt.where(or_(*[AsmrWork.tags.like(pat, escape="\\") for pat in tag_likes]))
+    stmt = stmt.order_by(AsmrWork.release_date.desc(), AsmrWork.id.desc()).limit(500)
     rows = (await db.execute(stmt)).scalars().all()
 
     scored: list[tuple[int, AsmrWork]] = []
@@ -245,16 +243,20 @@ async def similar_works(
     # 标签命中不足时补最近发布的作品（避免相似推荐空窗）
     if len(scored) < limit:
         more = (
-            await db.execute(
-                select(AsmrWork)
-                .where(
-                    AsmrWork.id != work_id,
-                    AsmrWork.nsfw == w.nsfw,
+            (
+                await db.execute(
+                    select(AsmrWork)
+                    .where(
+                        AsmrWork.id != work_id,
+                        AsmrWork.nsfw == w.nsfw,
+                    )
+                    .order_by(AsmrWork.release_date.desc(), AsmrWork.id.desc())
+                    .limit(limit * 3)
                 )
-                .order_by(AsmrWork.release_date.desc(), AsmrWork.id.desc())
-                .limit(limit * 3)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         seen = {o.id for _, o in scored}
         for other in more:
             if other.id in seen:
@@ -276,9 +278,7 @@ async def get_work(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    w = (
-        await db.execute(select(AsmrWork).where(AsmrWork.id == work_id))
-    ).scalar_one_or_none()
+    w = (await db.execute(select(AsmrWork).where(AsmrWork.id == work_id))).scalar_one_or_none()
     if w is None:
         raise HTTPException(status_code=404, detail="作品不存在")
     d = _work_dict(w, with_details=True)
@@ -306,9 +306,7 @@ async def favorite_work(
 ) -> dict[str, Any]:
     from app.models.asmr_favorite import AsmrFavorite
 
-    w = (
-        await db.execute(select(AsmrWork.id).where(AsmrWork.id == work_id))
-    ).scalar_one_or_none()
+    w = (await db.execute(select(AsmrWork.id).where(AsmrWork.id == work_id))).scalar_one_or_none()
     if w is None:
         raise HTTPException(status_code=404, detail="作品不存在")
     exists = (
@@ -359,21 +357,23 @@ async def list_favorites(
 
     total = (
         await db.execute(
-            select(func.count())
-            .select_from(AsmrFavorite)
-            .where(AsmrFavorite.user_id == user.id)
+            select(func.count()).select_from(AsmrFavorite).where(AsmrFavorite.user_id == user.id)
         )
     ).scalar_one()
     rows = (
-        await db.execute(
-            select(AsmrWork)
-            .join(AsmrFavorite, AsmrFavorite.work_id == AsmrWork.id)
-            .where(AsmrFavorite.user_id == user.id)
-            .order_by(AsmrFavorite.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await db.execute(
+                select(AsmrWork)
+                .join(AsmrFavorite, AsmrFavorite.work_id == AsmrWork.id)
+                .where(AsmrFavorite.user_id == user.id)
+                .order_by(AsmrFavorite.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {
         "items": [_work_dict(w) for w in rows],
         "total": total,
@@ -445,8 +445,10 @@ async def sync_asmr(
                 )
             else:
                 result = await asmr_ingest.ingest_asmr_one(
-                    db, max_pages=asmr_ingest.MAX_PAGES,
-                    keyword=keyword, update_existing=update_existing,
+                    db,
+                    max_pages=asmr_ingest.MAX_PAGES,
+                    keyword=keyword,
+                    update_existing=update_existing,
                 )
                 scrapers = await asmr_ingest.ingest_from_scrapers(db)
                 result["scrapers"] = scrapers
@@ -458,8 +460,6 @@ async def sync_asmr(
 
 
 # ===== 手动元数据编辑（MovieHub 手动匹配模式的对应物：刮削错了可以修） =====
-
-from pydantic import BaseModel, Field
 
 
 class AsmrWorkEditRequest(BaseModel):
@@ -480,9 +480,7 @@ async def edit_asmr_work(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """手动修正元数据（刮削错误修正；修改后清列表缓存）。"""
-    w = (
-        await db.execute(select(AsmrWork).where(AsmrWork.id == work_id))
-    ).scalar_one_or_none()
+    w = (await db.execute(select(AsmrWork).where(AsmrWork.id == work_id))).scalar_one_or_none()
     if w is None:
         raise HTTPException(status_code=404, detail="作品不存在")
     if req.title is not None:
@@ -496,5 +494,5 @@ async def edit_asmr_work(
     if req.cover_url is not None:
         w.cover_url = req.cover_url.strip()
     await db.commit()
-    cache_clear_prefix("asmr:works")
+    await cache_clear_prefix("asmr:works")
     return {"ok": True, "work": _work_dict(w)}

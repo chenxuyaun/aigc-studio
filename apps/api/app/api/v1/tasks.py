@@ -109,7 +109,7 @@ async def retry_task(
         task.status = "failed"
         task.error_message = f"重试入队失败：{str(exc)[:120]}"
         await db.commit()
-        raise HTTPException(status_code=400, detail=task.error_message)
+        raise HTTPException(status_code=400, detail=task.error_message) from None
     return {"success": True, "data": None}
 
 

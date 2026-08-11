@@ -15,8 +15,11 @@ _running: set[asyncio.Task[Any]] = set()
 
 
 def _dispatch_distill(
-    user_id: str, asset_id: str, doc_id: str | None = None,
-    text: str | None = None, book_title: str | None = None,
+    user_id: str,
+    asset_id: str,
+    doc_id: str | None = None,
+    text: str | None = None,
+    book_title: str | None = None,
 ) -> None:
     """进程内调度（默认）；USE_CELERY_WORKER=1 时投递队列。"""
     from app.core.config import settings
@@ -35,8 +38,11 @@ def _dispatch_distill(
 
 
 async def _run_distill(
-    user_id: str, asset_id: str, doc_id: str | None = None,
-    text: str | None = None, book_title: str | None = None,
+    user_id: str,
+    asset_id: str,
+    doc_id: str | None = None,
+    text: str | None = None,
+    book_title: str | None = None,
 ) -> dict[str, Any]:
     """执行蒸馏（任务内，写 profile.status 终态）。"""
     from app.core.database import engine
@@ -68,8 +74,13 @@ def _celery_task(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]
         _retryable = (sqlalchemy.exc.OperationalError, sqlalchemy.exc.TimeoutError)
 
         @shared_task(  # type: ignore[untyped-decorator]
-            name=name, bind=True, max_retries=2, autoretry_for=_retryable,
-            retry_backoff=True, retry_backoff_max=60, retry_jitter=True,
+            name=name,
+            bind=True,
+            max_retries=2,
+            autoretry_for=_retryable,
+            retry_backoff=True,
+            retry_backoff_max=60,
+            retry_jitter=True,
         )
         def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
             return fn(*args, **kwargs)
@@ -81,8 +92,11 @@ def _celery_task(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]
 
 @_celery_task("distill_character_task")
 def distill_character_task(
-    user_id: str = "", asset_id: str = "", doc_id: str | None = None,
-    text: str | None = None, book_title: str | None = None,
+    user_id: str = "",
+    asset_id: str = "",
+    doc_id: str | None = None,
+    text: str | None = None,
+    book_title: str | None = None,
 ) -> dict[str, Any]:  # pragma: no cover - celery
     """原著蒸馏（celery 入口）。"""
     return asyncio.run(_run_distill(user_id, asset_id, doc_id, text, book_title))

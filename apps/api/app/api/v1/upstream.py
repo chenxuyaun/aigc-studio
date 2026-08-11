@@ -161,9 +161,7 @@ async def _cpa_status(db: AsyncSession) -> dict[str, object]:
     key = ""
     try:
         row = (
-            await db.execute(
-                select(ProviderConfig).where(ProviderConfig.name.contains("cpa"))
-            )
+            await db.execute(select(ProviderConfig).where(ProviderConfig.name.contains("cpa")))
         ).scalar_one_or_none()
         if row and row.encrypted_api_key:
             key = open_secret(row.encrypted_api_key)

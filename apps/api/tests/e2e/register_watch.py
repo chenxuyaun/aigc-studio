@@ -7,6 +7,7 @@
 
 用法: python register_watch.py [target=10] [max_wall_min=240]
 """
+
 import json
 import sys
 import time
@@ -24,6 +25,7 @@ TARGET = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 MAX_WALL = int(sys.argv[2]) if len(sys.argv) > 2 else 240  # 分钟
 STALL_MIN = 25  # 挂起判定：计数 25 分钟无变化
 
+
 def api(method, path, body=None):
     req = urllib.request.Request(BASE + path, method=method)
     req.add_header("X-Internal-Key", KEY)
@@ -35,11 +37,13 @@ def api(method, path, body=None):
     with urllib.request.urlopen(req, data=data, timeout=20) as r:
         return json.loads(r.read() or b"{}")
 
+
 def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
-acc = 0            # 跨 run 累计 success+failed
-current_rid = None # 当前跟踪的 runId
+
+acc = 0  # 跨 run 累计 success+failed
+current_rid = None  # 当前跟踪的 runId
 last_count = None  # 当前 run 的上一次计数快照
 stall_since = time.time()
 runs_restarted = 0
@@ -53,7 +57,9 @@ try:
         # 接管时把该 run 已有计数计入 acc（否则重启 watcher 会丢失历史注册统计）
         acc = (s0.get("success") or 0) + (s0.get("failed") or 0)
         last_count = acc
-        log(f"接管已运行 run {str(current_rid)[:8]} (success={s0.get('success')} failed={s0.get('failed')}) 累计={acc}")
+        log(
+            f"接管已运行 run {str(current_rid)[:8]} (success={s0.get('success')} failed={s0.get('failed')}) 累计={acc}"
+        )
 except Exception:
     pass
 
@@ -111,12 +117,16 @@ while time.time() < deadline:
         stall_since = time.time()
         log(f"检测到外部 run 切换 → {str(rid)[:8]}")
     if count != last_count:
-        log(f"run {str(current_rid)[:8]} 推进: success={s.get('success')} failed={s.get('failed')} 本 run={count} 累计={acc}")
+        log(
+            f"run {str(current_rid)[:8]} 推进: success={s.get('success')} failed={s.get('failed')} 本 run={count} 累计={acc}"
+        )
         last_count = count
         stall_since = time.time()
     if phase in ("idle", "done", "stopped", "killed", "failed", "error"):
         acc += count
-        log(f"run {str(current_rid)[:8]} 结束 (phase={phase})，本 run 计数={count}，累计={acc}/{TARGET}")
+        log(
+            f"run {str(current_rid)[:8]} 结束 (phase={phase})，本 run 计数={count}，累计={acc}/{TARGET}"
+        )
         current_rid = None
         continue
     if phase == "running" and time.time() - stall_since > STALL_MIN * 60:

@@ -28,9 +28,7 @@ async def test_provider_settings_by_alias_name(client, admin_token):
         )
         await db.commit()
 
-        base_url, api_key, default_model = (
-            await _provider_settings(db, "grok")
-        ) or ("", "", "")
+        base_url, api_key, default_model = (await _provider_settings(db, "grok")) or ("", "", "")
         assert base_url == "http://127.0.0.1:8000/v1"
         assert api_key == "test-key"
         assert default_model == "grok-chat-fast"

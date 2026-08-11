@@ -8,8 +8,14 @@ from app.services import roundtable_service
 def test_domains_available() -> None:
     """六个内容创作领域齐备，每个都有完整模板。"""
     keys = (
-        "label", "cast", "task_first", "task_mid", "task_critic",
-        "task_reply", "task_fix", "final",
+        "label",
+        "cast",
+        "task_first",
+        "task_mid",
+        "task_critic",
+        "task_reply",
+        "task_fix",
+        "final",
     )
     for d in ("copy", "prompt", "character_card", "image", "video", "comic"):
         tpl = roundtable_service._DOMAINS[d]

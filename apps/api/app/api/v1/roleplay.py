@@ -36,6 +36,7 @@ router = APIRouter()
 
 # ==== 请求模型 ====
 
+
 class RoleplayChatRequest(BaseModel):
     character_asset_ids: list[str] = Field(max_length=20)
     messages: list[dict[str, str]] = Field(max_length=200)
@@ -130,12 +131,13 @@ class PersonaRequest(BaseModel):
 
 # ==== 辅助 ====
 
+
 def _lore_dict(e: RoleplayLoreEntry) -> dict[str, Any]:
     def _j(raw: str | None) -> list[str]:
         try:
             v = json.loads(raw or "[]")
             return [str(x) for x in v] if isinstance(v, list) else []
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return []
 
     return {
@@ -165,7 +167,7 @@ def _character_dict(c: RoleplayCharacter) -> dict[str, Any]:
     def _j(raw: str | None, default: Any) -> Any:
         try:
             return json.loads(raw or "")
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return default
 
     return {
@@ -191,11 +193,11 @@ def _character_dict(c: RoleplayCharacter) -> dict[str, Any]:
 def _chat_dict(c: RoleplayChat) -> dict[str, Any]:
     try:
         char_ids = json.loads(c.character_asset_ids or "[]")
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         char_ids = []
     try:
         settings = json.loads(c.settings or "{}")
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         settings = {}
     return {
         "id": c.id,
@@ -216,6 +218,7 @@ def _chat_dict(c: RoleplayChat) -> dict[str, Any]:
 
 # ==== 角色卡 ====
 
+
 @router.put("/characters/{asset_id}/share")
 async def toggle_character_share(
     asset_id: str,
@@ -228,9 +231,7 @@ async def toggle_character_share(
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="仅管理员可设置共享")
     row = (
-        await db.execute(
-            select(RoleplayCharacter).where(RoleplayCharacter.asset_id == asset_id)
-        )
+        await db.execute(select(RoleplayCharacter).where(RoleplayCharacter.asset_id == asset_id))
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="角色卡不存在")
@@ -255,7 +256,9 @@ async def characters(
                 await db.execute(
                     select(RoleplayCharacter).where(RoleplayCharacter.asset_id.in_(ids))
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         }
     else:
         rows = {}
@@ -274,9 +277,7 @@ async def character_detail(
     from app.models.asset import Asset
 
     asset = (
-        await db.execute(
-            select(Asset).where(Asset.id == asset_id, Asset.user_id == user.id)
-        )
+        await db.execute(select(Asset).where(Asset.id == asset_id, Asset.user_id == user.id))
     ).scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="角色卡不存在")
@@ -311,9 +312,21 @@ async def character_update(
     if row is None or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="角色卡不存在")
     allowed = {
-        "name", "description", "personality", "scenario", "first_mes", "mes_example",
-        "alternate_greetings", "system_prompt", "post_history_instructions",
-        "creator_notes", "tags", "character_book", "talkativeness", "depth_prompt", "settings",
+        "name",
+        "description",
+        "personality",
+        "scenario",
+        "first_mes",
+        "mes_example",
+        "alternate_greetings",
+        "system_prompt",
+        "post_history_instructions",
+        "creator_notes",
+        "tags",
+        "character_book",
+        "talkativeness",
+        "depth_prompt",
+        "settings",
     }
     for k, v in body.items():
         if k not in allowed:
@@ -340,9 +353,7 @@ async def character_delete(
     from app.models.asset import Asset
 
     asset = (
-        await db.execute(
-            select(Asset).where(Asset.id == asset_id, Asset.user_id == user.id)
-        )
+        await db.execute(select(Asset).where(Asset.id == asset_id, Asset.user_id == user.id))
     ).scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="角色卡不存在")
@@ -419,9 +430,7 @@ async def character_export(
     from app.storage import get_storage
 
     asset = (
-        await db.execute(
-            select(Asset).where(Asset.id == asset_id, Asset.user_id == user.id)
-        )
+        await db.execute(select(Asset).where(Asset.id == asset_id, Asset.user_id == user.id))
     ).scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="角色卡不存在")
@@ -434,6 +443,7 @@ async def character_export(
     card = _character_dict(row) if row else {}
     if not card:
         from app.services.roleplay import parse_character_png
+
         card = parse_character_png(png or b"")
     # 剥离内部字段，避免写进 V2 角色卡 JSON
     card = {k: v for k, v in card.items() if k not in ("asset_id", "url")}
@@ -448,6 +458,7 @@ async def character_export(
 
 
 # ==== 聊天 ====
+
 
 async def _music_cmd_result(
     db: AsyncSession,
@@ -566,9 +577,7 @@ async def chat_stream(
                     },
                     ensure_ascii=False,
                 )
-                chunk = json.dumps(
-                    {"type": "chunk", "content": music["reply"]}, ensure_ascii=False
-                )
+                chunk = json.dumps({"type": "chunk", "content": music["reply"]}, ensure_ascii=False)
                 yield f"data: {chunk}\n\n"
                 yield f"data: {done}\n\n"
             yield "data: [DONE]\n\n"
@@ -577,9 +586,7 @@ async def chat_stream(
         if director is not None:
             await db.commit()
             if director.get("error"):
-                err = json.dumps(
-                    {"type": "error", "error": director["error"]}, ensure_ascii=False
-                )
+                err = json.dumps({"type": "error", "error": director["error"]}, ensure_ascii=False)
                 yield f"data: {err}\n\n"
             else:
                 done = json.dumps(
@@ -808,9 +815,7 @@ async def chats_export(
     return Response(
         content=content.encode("utf-8"),
         media_type="application/x-ndjson",
-        headers={
-            "Content-Disposition": f'attachment; filename="chat-{chat_id[:8]}.jsonl"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="chat-{chat_id[:8]}.jsonl"'},
     )
 
 
@@ -833,6 +838,7 @@ async def chats_import(
 
 
 # ==== 世界书 ====
+
 
 @router.get("/lore")
 async def list_lore(
@@ -955,6 +961,7 @@ async def delete_lore(
 
 # ==== 世界书导入导出（SillyTavern lorebook 互通） ====
 
+
 @router.get("/lore/export")
 async def lore_export(
     character_name: str = "",
@@ -1015,18 +1022,23 @@ async def lore_import(
 
 # ==== 正则脚本 ====
 
+
 @router.get("/regex-scripts")
 async def regex_list(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     rows = (
-        await db.execute(
-            select(RegexScript)
-            .where(RegexScript.user_id == user.id)
-            .order_by(RegexScript.created_at.asc())
+        (
+            await db.execute(
+                select(RegexScript)
+                .where(RegexScript.user_id == user.id)
+                .order_by(RegexScript.created_at.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {
         "items": [
             {
@@ -1075,9 +1087,7 @@ async def regex_update(
 ) -> dict[str, Any]:
     row = (
         await db.execute(
-            select(RegexScript).where(
-                RegexScript.id == script_id, RegexScript.user_id == user.id
-            )
+            select(RegexScript).where(RegexScript.id == script_id, RegexScript.user_id == user.id)
         )
     ).scalar_one_or_none()
     if row is None:
@@ -1101,9 +1111,7 @@ async def regex_delete(
 ) -> dict[str, Any]:
     row = (
         await db.execute(
-            select(RegexScript).where(
-                RegexScript.id == script_id, RegexScript.user_id == user.id
-            )
+            select(RegexScript).where(RegexScript.id == script_id, RegexScript.user_id == user.id)
         )
     ).scalar_one_or_none()
     if row is None:
@@ -1114,6 +1122,7 @@ async def regex_delete(
 
 
 # ==== 快捷回复 ====
+
 
 @router.get("/quick-replies")
 async def quick_replies_list(
@@ -1175,9 +1184,7 @@ async def quick_replies_delete(
 ) -> dict[str, Any]:
     row = (
         await db.execute(
-            select(QuickReply).where(
-                QuickReply.id == reply_id, QuickReply.user_id == user.id
-            )
+            select(QuickReply).where(QuickReply.id == reply_id, QuickReply.user_id == user.id)
         )
     ).scalar_one_or_none()
     if row is None:
@@ -1189,18 +1196,23 @@ async def quick_replies_delete(
 
 # ==== 用户形象 ====
 
+
 @router.get("/personas")
 async def personas_list(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     rows = (
-        await db.execute(
-            select(RoleplayPersona)
-            .where(RoleplayPersona.user_id == user.id)
-            .order_by(RoleplayPersona.created_at.asc())
+        (
+            await db.execute(
+                select(RoleplayPersona)
+                .where(RoleplayPersona.user_id == user.id)
+                .order_by(RoleplayPersona.created_at.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {
         "items": [
             {
@@ -1254,6 +1266,7 @@ async def personas_delete(
 
 # ==== 完整群（多人创作） ====
 
+
 class GroupCreateRequest(BaseModel):
     """建群：创建 is_room 会话 + 群资料。"""
 
@@ -1285,7 +1298,8 @@ async def groups_create(
     from app.services import group_service
 
     chat = await sessions.create_chat(
-        db, user.id,
+        db,
+        user.id,
         title=req.title or "新群",
         character_asset_ids=req.character_asset_ids or [],
         group=len(req.character_asset_ids) > 1,
@@ -1295,8 +1309,11 @@ async def groups_create(
         max_tokens=req.max_tokens,
     )
     group = await group_service.create_group(
-        db, owner_id=user.id, chat_id=chat.id,
-        name=req.title or "新群", description=req.description,
+        db,
+        owner_id=user.id,
+        chat_id=chat.id,
+        name=req.title or "新群",
+        description=req.description,
     )
     await db.commit()
     await db.refresh(chat)
@@ -1377,8 +1394,12 @@ async def groups_update(
     from app.services import group_service
 
     group, err = await group_service.update_group(
-        db, chat_id, actor_id=user.id,
-        name=req.name, description=req.description, reset_invite=req.reset_invite,
+        db,
+        chat_id,
+        actor_id=user.id,
+        name=req.name,
+        description=req.description,
+        reset_invite=req.reset_invite,
     )
     if group is None:
         raise HTTPException(status_code=400, detail=err)

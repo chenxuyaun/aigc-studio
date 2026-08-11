@@ -126,9 +126,7 @@ async def _route_chat(body: dict[str, Any], db: AsyncSession | None) -> dict[str
             }
         }
     messages = body.get("messages") or []
-    prompt = "\n".join(
-        str(m.get("content") or "") for m in messages if m.get("content")
-    )
+    prompt = "\n".join(str(m.get("content") or "") for m in messages if m.get("content"))
     try:
         result = await provider.generate(prompt, model=model)
     except Exception as exc:
@@ -154,9 +152,7 @@ async def _route_chat(body: dict[str, Any], db: AsyncSession | None) -> dict[str
     }
 
 
-async def _stream_chat(
-    body: dict[str, Any], db: AsyncSession | None
-) -> AsyncIterator[str]:
+async def _stream_chat(body: dict[str, Any], db: AsyncSession | None) -> AsyncIterator[str]:
     """流式：整段生成后按字符切 SSE（MVP 简化，SillyTavern 兼容）。"""
     result = await _route_chat(body, db)
     if "error" in result:

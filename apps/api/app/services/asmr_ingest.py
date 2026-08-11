@@ -53,8 +53,12 @@ def _parse_tags(tags: list[dict[str, Any]]) -> list[dict[str, str]]:
         if not name:
             continue
         i18n = t.get("i18n") or {}
-        zh = _i18n_name(i18n.get("zh-cn"), "") or _i18n_name(i18n.get("zh"), "") \
-            or _i18n_name(i18n.get("en-us"), "") or name
+        zh = (
+            _i18n_name(i18n.get("zh-cn"), "")
+            or _i18n_name(i18n.get("zh"), "")
+            or _i18n_name(i18n.get("en-us"), "")
+            or name
+        )
         out.append({"name": name, "zh": zh})
     return out
 
@@ -71,9 +75,7 @@ def _parse_langs(editions: list[Any] | None) -> tuple[list[str], bool]:
             continue
         if lang and lang not in langs:
             langs.append(lang)
-    has_chinese = any(
-        lang.startswith("CHI") or lang in ("ZHS", "ZHT", "CHT") for lang in langs
-    )
+    has_chinese = any(lang.startswith("CHI") or lang in ("ZHS", "ZHT", "CHT") for lang in langs)
     return langs, has_chinese
 
 
@@ -170,17 +172,13 @@ async def ingest_asmr_one(
                         AsmrWork.source_work_id.in_(page_ids),
                     )
                 )
-                existing_rows = {
-                    str(swid): wid for wid, swid in existing.all()
-                }
+                existing_rows = {str(swid): wid for wid, swid in existing.all()}
             for fields in page_fields:
                 exists = existing_rows.get(fields["source_work_id"])
                 if exists:
                     if update_existing:
                         row = (
-                            await db.execute(
-                                select(AsmrWork).where(AsmrWork.id == exists)
-                            )
+                            await db.execute(select(AsmrWork).where(AsmrWork.id == exists))
                         ).scalar_one()
                         row.title = fields["title"]
                         row.circle_name = fields["circle_name"]
@@ -211,7 +209,10 @@ async def ingest_asmr_one(
             if pages % 100 == 0:
                 logger.info(
                     "asmr_progress",
-                    pages=pages, inserted=inserted, skipped=skipped, updated=updated,
+                    pages=pages,
+                    inserted=inserted,
+                    skipped=skipped,
+                    updated=updated,
                 )
             await asyncio.sleep(REQUEST_INTERVAL)
     return {
@@ -292,9 +293,7 @@ async def run_sync(
 
 
 async def stats(db: AsyncSession) -> dict[str, Any]:
-    total = (
-        await db.execute(select(func.count()).select_from(AsmrWork))
-    ).scalar_one()
+    total = (await db.execute(select(func.count()).select_from(AsmrWork))).scalar_one()
     nsfw_count = (
         await db.execute(select(func.count()).select_from(AsmrWork).where(AsmrWork.nsfw.is_(True)))
     ).scalar_one()
@@ -307,9 +306,7 @@ async def stats(db: AsyncSession) -> dict[str, Any]:
         for source in ("asmr_one", "asmrmoon", "asmrgay")
     }
     latest = (
-        await db.execute(
-            select(func.max(AsmrWork.updated_at)).select_from(AsmrWork)
-        )
+        await db.execute(select(func.max(AsmrWork.updated_at)).select_from(AsmrWork))
     ).scalar_one()
     return {
         "total": total,

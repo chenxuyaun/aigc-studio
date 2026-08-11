@@ -31,9 +31,7 @@ class StoryProject(Base):
     character_asset_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     # JSON 字符串：扩展设置（默认模型、语言、视角等）
     settings: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
-    created_at: Mapped[datetime] = mapped_column(
-        TZDateTime(), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         TZDateTime(), server_default=func.now(), onupdate=func.now()
     )

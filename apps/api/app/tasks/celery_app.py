@@ -96,6 +96,5 @@ celery_app.conf.update(
             "task": "daily_backup",
             "schedule": crontab(minute=0, hour=2),
         },
-
     },
 )

@@ -32,6 +32,7 @@ class _Entry:
 
 # ==== 世界书引擎 ====
 
+
 def test_keyword_match_and_position() -> None:
     entries = [
         _Entry(id="a", keywords=["月亮石"], content="月亮石是魔法之源", position="before"),
@@ -82,12 +83,20 @@ def test_regex_keyword() -> None:
 def test_selective_secondary_keyword() -> None:
     entries = [
         _Entry(
-            id="s1", keywords=["魔法"], keysecondary=["月亮石"],
-            selective=True, selective_logic="AND_ANY", content="选择性命中",
+            id="s1",
+            keywords=["魔法"],
+            keysecondary=["月亮石"],
+            selective=True,
+            selective_logic="AND_ANY",
+            content="选择性命中",
         ),
         _Entry(
-            id="s2", keywords=["魔法"], keysecondary=["月亮石"],
-            selective=True, selective_logic="AND_ALL", content="全都要",
+            id="s2",
+            keywords=["魔法"],
+            keysecondary=["月亮石"],
+            selective=True,
+            selective_logic="AND_ALL",
+            content="全都要",
         ),
     ]
     result = match_worldbook(entries, ["魔法真有趣，月亮石很亮"])
@@ -101,8 +110,12 @@ def test_selective_secondary_keyword() -> None:
 def test_order_sorting_and_at_depth() -> None:
     entries = [
         _Entry(
-            id="d1", keywords=["月亮石"], order_value=50,
-            position="atDepth", depth=3, content="深注入",
+            id="d1",
+            keywords=["月亮石"],
+            order_value=50,
+            position="atDepth",
+            depth=3,
+            content="深注入",
         ),
         _Entry(id="o1", keywords=["月亮石"], order_value=200, content="高优先级"),
         _Entry(id="o2", keywords=["月亮石"], order_value=100, content="中优先级"),
@@ -137,6 +150,7 @@ def test_budget_limit() -> None:
 
 
 # ==== 宏系统 ====
+
 
 def test_macros_names_and_fields() -> None:
     ctx = {
@@ -182,6 +196,7 @@ def test_macros_time_and_tools() -> None:
 
 # ==== 会话 ====
 
+
 class _FakeChat:
     def __init__(self, **kw) -> None:  # type: ignore[no-untyped-def]
         self.id = kw.get("id", "c1")
@@ -204,7 +219,9 @@ def test_export_jsonl_format() -> None:
             [
                 {"role": "user", "content": "你好", "created_at": "2026-08-03T10:00:00+00:00"},
                 {
-                    "role": "assistant", "content": "喵~", "mood": "开心",
+                    "role": "assistant",
+                    "content": "喵~",
+                    "mood": "开心",
                     "created_at": "2026-08-03T10:00:01+00:00",
                 },
             ],
@@ -237,6 +254,7 @@ def test_import_jsonl_roundtrip() -> None:
         )
     )
     text = sessions.export_jsonl(chat)
+
     class _DB:  # 最小 fake：import_jsonl 只调 db.add
         def __init__(self) -> None:
             self.added: list[object] = []
@@ -260,6 +278,7 @@ def test_messages_load_empty() -> None:
 
 
 # ==== atDepth 深度注入接入 prompt 管线 ====
+
 
 @pytest.mark.anyio
 async def test_build_prompt_at_depth_injection(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -353,8 +372,7 @@ def test_alternate_greetings_selection() -> None:
     assert set(alts2) == {"A", "B", "C"}
     # 空开场白
     assert (
-        rp._greeting_candidates({"name": "露娜", "first_mes": "", "alternate_greetings": []})
-        == []
+        rp._greeting_candidates({"name": "露娜", "first_mes": "", "alternate_greetings": []}) == []
     )
 
 
@@ -526,7 +544,7 @@ async def test_branch_chat() -> None:
         temperature=0.7,
         max_tokens=512,
         top_p=None,
-        settings='{}',
+        settings="{}",
     )
 
     class _DB:

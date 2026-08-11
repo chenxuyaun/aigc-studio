@@ -70,6 +70,8 @@ ignore = [
 [tool.mypy]
 python_version = "3.14"
 strict = true
+# 模型输出 JSON 解析返回 Any 是平台常态（extract_json 收窄后仍 Any）——不视为错误
+warn_return_any = false
 warn_unreachable = true
 warn_unused_configs = true
 show_error_codes = true

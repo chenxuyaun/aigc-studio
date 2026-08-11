@@ -24,7 +24,7 @@ from app.schemas.knowledge import (
 )
 from app.security.auth import get_current_user
 from app.services.call_logger import log_call
-from app.services.knowledge_retrieval import chunk_text, retrieve
+from app.services.knowledge_retrieval import retrieve
 from app.services.provider_resolver import resolve_text_provider
 
 router = APIRouter()
@@ -160,8 +160,12 @@ async def ask_knowledge(
         for proj in (
             await db.execute(
                 select(
-                    AgentProject.id, AgentProject.name, AgentProject.description,
-                    AgentProject.categories, AgentProject.language, AgentProject.stars,
+                    AgentProject.id,
+                    AgentProject.name,
+                    AgentProject.description,
+                    AgentProject.categories,
+                    AgentProject.language,
+                    AgentProject.stars,
                 ).limit(500)
             )
         ).all():
@@ -182,7 +186,9 @@ async def ask_knowledge(
         for cmp_ in (
             await db.execute(
                 select(
-                    AgentComparison.id, AgentComparison.title, AgentComparison.description,
+                    AgentComparison.id,
+                    AgentComparison.title,
+                    AgentComparison.description,
                 ).limit(50)
             )
         ).all():
@@ -192,9 +198,7 @@ async def ask_knowledge(
     hits = retrieve(chunks, question, top_k=req.max_chunks)
 
     if hits:
-        sections = "\n\n".join(
-            f"【{title}】\n{text}" for _, title, text, _ in hits
-        )
+        sections = "\n\n".join(f"【{title}】\n{text}" for _, title, text, _ in hits)
         prompt = f"{_SYSTEM_PROMPT}\n\n【资料】\n{sections}\n\n【问题】\n{question}"
     else:
         # 无命中：不带资料直接答，由模型说明资料不足

@@ -42,6 +42,7 @@ export function RoleplayPage() {
     () => () => {
       if (roomPollRef.current != null) window.clearInterval(roomPollRef.current);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
   const authUser = useAuthStore((s) => s.user);

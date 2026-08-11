@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -33,10 +34,7 @@ async def roundtable_domains(
 ) -> dict[str, Any]:
     """可用创作领域列表。"""
     return {
-        "domains": [
-            {"id": k, "label": v["label"]}
-            for k, v in roundtable_service._DOMAINS.items()
-        ]
+        "domains": [{"id": k, "label": v["label"]} for k, v in roundtable_service._DOMAINS.items()]
     }
 
 
@@ -48,7 +46,7 @@ async def roundtable_stream(
 ) -> StreamingResponse:
     """通用创作圆桌（SSE）：定制阵容 → 逐轮真讨论 → 主编把关定稿。"""
 
-    async def _gen():
+    async def _gen() -> AsyncIterator[str]:
         async for line in roundtable_service.stream_roundtable(
             db,
             user_id=user.id,

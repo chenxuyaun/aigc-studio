@@ -66,9 +66,7 @@ async def _attach_health(items: list[ProviderPublicItem]) -> None:
 
         async with AsyncSessionLocal() as db:
             cfg = (
-                await db.execute(
-                    select(ProviderConfig).where(ProviderConfig.id == item.id)
-                )
+                await db.execute(select(ProviderConfig).where(ProviderConfig.id == item.id))
             ).scalar_one_or_none()
             base = (cfg.base_url if cfg else "") or ""
         if not base:

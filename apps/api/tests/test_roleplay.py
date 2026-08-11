@@ -16,9 +16,7 @@ from tests.conftest import TestingSessionLocal
 def _make_card_png(card: dict) -> bytes:
     buf = io.BytesIO()
     meta = PngImagePlugin.PngInfo()
-    meta.add_text(
-        "chara", base64.b64encode(json.dumps(card, ensure_ascii=False).encode()).decode()
-    )
+    meta.add_text("chara", base64.b64encode(json.dumps(card, ensure_ascii=False).encode()).decode())
     Image.new("RGB", (64, 64), (100, 120, 140)).save(buf, format="PNG", pnginfo=meta)
     return buf.getvalue()
 
@@ -45,9 +43,7 @@ def test_parse_character_png_invalid() -> None:
 
 def test_parse_character_png_v2_nested() -> None:
     """兼容 V2 嵌套 data 结构。"""
-    png = _make_card_png(
-        {"name": "外层", "data": {"name": "内层名", "first_mes": "内层开场"}}
-    )
+    png = _make_card_png({"name": "外层", "data": {"name": "内层名", "first_mes": "内层开场"}})
     parsed = roleplay.parse_character_png(png)
     assert parsed["name"] == "外层"  # 顶层优先
     png2 = _make_card_png({"data": {"name": "内层名", "first_mes": "内层开场"}})
@@ -143,9 +139,7 @@ def test_speaker_lines_extracts_by_name() -> None:
 
 
 @pytest.mark.asyncio
-async def test_group_chat_records_per_character_memory(
-    client, user_token, monkeypatch
-) -> None:
+async def test_group_chat_records_per_character_memory(client, user_token, monkeypatch) -> None:
     """群聊演出：每个角色的台词写入各自的记忆空间（按 asset_id 区分）。"""
     from app.models.asset import Asset
     from app.models.roleplay_character import RoleplayCharacter
@@ -159,34 +153,46 @@ async def test_group_chat_records_per_character_memory(
     records: list[tuple[str, str, str, str]] = []
 
     def fake_record(
-        user_id: str, asset_id: str, chat_id: str,
-        user_msg: str, assistant_msg: str,
+        user_id: str,
+        asset_id: str,
+        chat_id: str,
+        user_msg: str,
+        assistant_msg: str,
     ) -> None:
         records.append((asset_id, chat_id, user_msg, assistant_msg))
 
     monkeypatch.setattr("app.services.roleplay._record_memory_turn", fake_record)
 
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         for aid, nm in (("char-mem-1", "小雅"), ("char-mem-2", "老赵")):
             db.add(
                 Asset(
-                    id=aid, user_id=u.id, filename=f"{aid}.png",
-                    storage_key="", storage_backend="local",
-                    mime_type="image/png", size_bytes=0,
+                    id=aid,
+                    user_id=u.id,
+                    filename=f"{aid}.png",
+                    storage_key="",
+                    storage_backend="local",
+                    mime_type="image/png",
+                    size_bytes=0,
                 )
             )
             db.add(
                 RoleplayCharacter(
-                    asset_id=aid, user_id=u.id,
-                    name=nm, description="d", personality="p",
+                    asset_id=aid,
+                    user_id=u.id,
+                    name=nm,
+                    description="d",
+                    personality="p",
                 )
             )
         chat = await sessions.create_chat(
-            db, u.id, title="写歌群", character_asset_ids=["char-mem-1", "char-mem-2"],
-            group=True, is_room=True,
+            db,
+            u.id,
+            title="写歌群",
+            character_asset_ids=["char-mem-1", "char-mem-2"],
+            group=True,
+            is_room=True,
         )
         await create_group(db, owner_id=u.id, chat_id=chat.id, name="写歌群", description="")
         await db.commit()
@@ -196,7 +202,8 @@ async def test_group_chat_records_per_character_memory(
         async def generate(self, prompt: str, model: str = "", **kwargs):
             return TextResult(
                 content="小雅：欢迎光临。\n老赵：老板来碗面。",
-                model=model, provider="fake",
+                model=model,
+                provider="fake",
             )
 
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:

@@ -57,9 +57,7 @@ async def _admin_token(client: httpx.AsyncClient) -> str:
     return str(token)
 
 
-async def _fetch_all_accounts(
-    client: httpx.AsyncClient, token: str
-) -> list[dict[str, object]]:
+async def _fetch_all_accounts(client: httpx.AsyncClient, token: str) -> list[dict[str, object]]:
     accounts: list[dict[str, object]] = []
     page = 1
     while True:
@@ -80,9 +78,7 @@ async def _fetch_all_accounts(
     return accounts
 
 
-async def _disable_accounts(
-    client: httpx.AsyncClient, token: str, ids: list[str]
-) -> int:
+async def _disable_accounts(client: httpx.AsyncClient, token: str, ids: list[str]) -> int:
     if not ids:
         return 0
     r = await client.patch(
@@ -136,9 +132,7 @@ async def _check_once() -> dict[str, object]:
 
         summary: dict[str, object] = {
             "total": total,
-            "active": sum(
-                1 for a in accounts if (a.get("authStatus") or "") == "active"
-            ),
+            "active": sum(1 for a in accounts if (a.get("authStatus") or "") == "active"),
             "bad": len(bad),
             "disabled": disabled,
             "disabled_ids": disable_ids[:20],

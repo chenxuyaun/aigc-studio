@@ -9,8 +9,12 @@ from app.tasks.generation_tasks import _RETRYABLE
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
-    name="agentlist_sync_task", max_retries=2,
-    autoretry_for=_RETRYABLE, retry_backoff=True, retry_backoff_max=120, retry_jitter=True,
+    name="agentlist_sync_task",
+    max_retries=2,
+    autoretry_for=_RETRYABLE,
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
 )
 def agentlist_sync_task() -> dict[str, object]:
     """下载 llms-full.txt 并幂等入库（与手动 sync 同一路径）。"""

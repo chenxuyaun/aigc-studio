@@ -62,9 +62,7 @@ async def test_photography_album_and_upload_flow(client, admin_token):
     assert body["cover_url"]
 
     # 内容可下载
-    content = await client.get(
-        f"/api/v1/photography/photos/{photo_id}/content", headers=headers
-    )
+    content = await client.get(f"/api/v1/photography/photos/{photo_id}/content", headers=headers)
     assert content.status_code == 200
     assert content.headers["content-type"].startswith("image/")
     assert content.content.startswith(b"\x89PNG")

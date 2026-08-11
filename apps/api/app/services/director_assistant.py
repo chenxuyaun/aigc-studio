@@ -18,6 +18,7 @@ from app.models.roleplay_character import RoleplayCharacter
 from app.models.roleplay_chat import RoleplayChat
 from app.services import sessions
 from app.services.provider_resolver import resolve_text_provider
+from app.services.text_utils import result_text as _result_text
 
 DIRECTOR_CMD_PREFIXES = ("@AI 导演", "@AI导演", "@ai 导演", "@ai导演")
 DIRECTOR_TAG = "🎬【AI 导演】"
@@ -61,9 +62,6 @@ _SUMMARY_SYSTEM = """你是「AI 导演」兼场记。把群里已演出的内�
 - 300-500 字，可直接复制存档为剧本章节"""
 
 
-from app.services.text_utils import result_text as _result_text
-
-
 async def _load_cast(db: AsyncSession, chat: RoleplayChat) -> list[dict[str, str]]:
     """群角色表：asset_id → 名字/性格/定位（用于导演安排出场）。"""
     import json as _json
@@ -75,12 +73,14 @@ async def _load_cast(db: AsyncSession, chat: RoleplayChat) -> list[dict[str, str
     if not char_ids:
         return []
     rows = (
-        await db.execute(
-            select(RoleplayCharacter).where(
-                RoleplayCharacter.asset_id.in_(char_ids)
+        (
+            await db.execute(
+                select(RoleplayCharacter).where(RoleplayCharacter.asset_id.in_(char_ids))
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [
         {
             "name": str(r.name or r.asset_id),
@@ -94,9 +94,7 @@ async def _load_cast(db: AsyncSession, chat: RoleplayChat) -> list[dict[str, str
 def _format_cast(cast: list[dict[str, str]]) -> str:
     if not cast:
         return "（群内暂无角色卡，可由导演临时安排群成员身份）"
-    return "\n".join(
-        f"- {c['name']}：{c['personality']}" for c in cast
-    )
+    return "\n".join(f"- {c['name']}：{c['personality']}" for c in cast)
 
 
 def _history_block(history: list[dict[str, str]], limit: int = 14) -> str:
@@ -118,32 +116,24 @@ async def director_chat_reply(
     messages: list[dict[str, str]],
 ) -> dict[str, Any]:
     """群聊「@AI 导演」指令处理：开演/推进/总结 → 落库 → 返回 roleplay 同构结果。"""
-    last_user = next(
-        (m for m in reversed(messages) if m.get("role") == "user"), None
-    )
+    last_user = next((m for m in reversed(messages) if m.get("role") == "user"), None)
     content = str(last_user.get("content") or "") if last_user else ""
     instruction = _strip_prefix(content)
     is_summary = is_summary_cmd(content)
 
     cast = await _load_cast(db, chat)
     stored = sessions.chat_messages(chat)
-    history = [
-        {"role": m.get("role", ""), "content": str(m.get("content") or "")}
-        for m in stored
-    ]
+    history = [{"role": m.get("role", ""), "content": str(m.get("content") or "")} for m in stored]
     # 已演内容只统计非指令消息（去掉本群导演/音乐助手的指令与回复之外的都算演出）
     cast_block = _format_cast(cast)
     hist_block = _history_block(history)
 
     try:
         resolved = await resolve_text_provider(db, "")
-        provider = resolved.provider  # type: ignore[attr-defined]
+        provider = resolved.provider
         if is_summary:
-            prompt = (
-                f"剧组：《{chat.title}》\n\n已演内容：\n{hist_block}\n\n"
-                "请总结为剧本段落。"
-            )
-            result = await provider.generate(
+            prompt = f"剧组：《{chat.title}》\n\n已演内容：\n{hist_block}\n\n请总结为剧本段落。"
+            result = await provider.generate(  # type: ignore[attr-defined]
                 prompt, resolved.model, system=_SUMMARY_SYSTEM, temperature=0.7
             )
             reply = f"**剧本段落（可复制存档）**\n\n{_result_text(result).strip()}"
@@ -154,7 +144,7 @@ async def director_chat_reply(
                 f"角色表：\n{cast_block}\n\n已演内容：\n{hist_block}\n\n"
                 "请输出本场演出指令。"
             )
-            result = await provider.generate(
+            result = await provider.generate(  # type: ignore[attr-defined]
                 prompt, resolved.model, system=_DIRECTOR_SYSTEM, temperature=0.85
             )
             reply = _result_text(result).strip()
@@ -162,15 +152,9 @@ async def director_chat_reply(
         return {"error": f"导演调度失败：{str(exc)[:200]}"}
 
     # 落库：用户指令（若服务端尚未记录）+ 导演指令
-    if last_user and (
-        not stored or stored[-1].get("content") != last_user.get("content")
-    ):
-        await sessions.append_message(
-            db, chat, {"role": "user", "content": content}
-        )
-    await sessions.append_message(
-        db, chat, {"role": "assistant", "content": DIRECTOR_TAG + reply}
-    )
+    if last_user and (not stored or stored[-1].get("content") != last_user.get("content")):
+        await sessions.append_message(db, chat, {"role": "user", "content": content})
+    await sessions.append_message(db, chat, {"role": "assistant", "content": DIRECTOR_TAG + reply})
 
     return {
         "reply": DIRECTOR_TAG + reply,

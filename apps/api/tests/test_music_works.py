@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from app.models.music_work import MusicWork
 
 from tests.conftest import TestingSessionLocal
@@ -33,9 +34,7 @@ async def test_save_and_list_work(client, user_token) -> None:
     assert r.status_code == 200
     assert r.json()["title"] == "归灯"
 
-    r2 = await client.get(
-        "/api/v1/generations/music/works", headers=_headers(user_token)
-    )
+    r2 = await client.get("/api/v1/generations/music/works", headers=_headers(user_token))
     assert r2.status_code == 200
     items = r2.json()["items"]
     assert len(items) >= 1
@@ -163,63 +162,51 @@ def test_severe_checks_detects_rewritable_problems() -> None:
     assert not _severe_checks([])
 
 
-async def test_backfill_work_material_saves_and_dedups() -> None:
-    """好作品回填知识库：首次保存，同标题去重，防刷限流。"""
+async def test_backfill_work_material_saves_and_dedups(client) -> None:
+    """好作品回填知识库（真实库验证）：首次保存；同标题二次调用被查重拦截；防刷限流。"""
     from unittest.mock import AsyncMock, patch
 
-    from app.api.v1.generations.music import (
-        _backfill_lock,
-        _backfill_work_material,
-    )
+    import app.api.v1.generations.music as music_mod
+    from app.models.text_document import TextDocument
+    from sqlalchemy import func, select
 
-    fake_session = AsyncMock()
-    fake_session.__aenter__ = AsyncMock(return_value=fake_session)
-    fake_result = MagicMock()
-    fake_result.scalar_one_or_none.return_value = None  # 同步方法，用 MagicMock
-    fake_session.execute = AsyncMock(return_value=fake_result)  # execute 是 async
-    fake_session.commit = AsyncMock()
+    from tests.conftest import TestingSessionLocal
 
-    lyrics = "【主歌1】老闸口吱呀响，红薯粥的热气冲进菜场，孩子把纸条贴在砖墙。" * 10  # 足够长
+    lyrics = "【主歌1】老闸口吱呀响，红薯粥的热气冲进菜场，孩子把纸条贴在砖墙。" * 12
 
-    with (
-        patch("app.api.v1.generations.music._backfill_lock", {}),
-        patch(
-            "app.core.database.AsyncSessionLocal",
-            return_value=fake_session,
-        ),
-        patch(
-            "app.services.knowledge_materials.summarize_for_creation",
-            new=AsyncMock(return_value="【AI 精华解读】…"),
-        ),
-    ):
-        await _backfill_work_material(
-            user_id="u1", work_title="灯火巷口", theme="歌颂劳动者",
-            lyrics=lyrics, chords="C G", arrangement="民谣",
-        )
-        await _backfill_work_material(
-            user_id="u1", work_title="灯火巷口", theme="歌颂劳动者",
-            lyrics=lyrics, chords="C G", arrangement="民谣",
-        )
-    assert fake_session.add.call_count == 1, "同标题第二次调用应去重"
-    assert fake_session.commit.await_count == 1
-    # 防刷：不同标题但 10 分钟内也不该再写（进程内窗口）
-    with (
-        patch("app.api.v1.generations.music._backfill_lock", {"u1": 10**9}),
-        patch("app.core.database.AsyncSessionLocal") as m_session,
-    ):
-        await _backfill_work_material(
-            user_id="u1", work_title="另一首", theme="x",
-            lyrics=lyrics, chords="", arrangement="",
-        )
-    m_session.assert_not_called()
+    async with TestingSessionLocal() as db:
+        with (
+            patch("app.core.database.AsyncSessionLocal", return_value=db),
+            # 防刷窗口置负：两次调用都过防刷，第二次由「查重」拦截（测试意图）
+            patch("app.api.v1.generations.music._BACKFILL_MIN_INTERVAL", -1),
+            patch(
+                "app.services.knowledge_materials.summarize_for_creation",
+                new=AsyncMock(return_value="【AI 精华解读】…"),
+            ),
+        ):
+            await music_mod._backfill_work_material(
+                user_id="u1", work_title="灯火巷口", theme="歌颂劳动者",
+                lyrics=lyrics, chords="C G", arrangement="民谣",
+            )
+            await music_mod._backfill_work_material(
+                user_id="u1", work_title="灯火巷口", theme="歌颂劳动者",
+                lyrics=lyrics, chords="C G", arrangement="民谣",
+            )
 
-
-# ---------- 自动打标签 ----------
+    async with TestingSessionLocal() as db2:
+        count = (
+            await db2.execute(
+                select(func.count(TextDocument.id)).where(
+                    TextDocument.user_id == "u1",
+                    TextDocument.title == "创作范例·灯火巷口",
+                )
+            )
+        ).scalar_one()
+    assert count == 1, "同标题第二次调用应被查重拦截（只存一份）"
 
 
 async def test_auto_tags_llm_extracts(client) -> None:
     """LLM 从歌词提取风格/主题标签；逗号分隔。"""
-    from unittest.mock import AsyncMock, patch
 
     from app.services.music_works import _auto_tags
 
@@ -235,7 +222,6 @@ async def test_auto_tags_llm_extracts(client) -> None:
 
 async def test_auto_tags_fallback_to_style(client) -> None:
     """LLM 失败降级为风格标签（保存不阻塞）。"""
-    from unittest.mock import AsyncMock, patch
 
     from app.services.music_works import _auto_tags
 
@@ -290,7 +276,6 @@ def test_validate_lyrics_balanced_lines_no_warning() -> None:
 
 async def test_extract_fix_list_returns_fixes(client) -> None:
     """讨论中含批评+替代：结构化提取为必改清单。"""
-    from unittest.mock import AsyncMock, patch
 
     from app.api.v1.generations.music import _extract_fix_list
 
@@ -310,7 +295,6 @@ async def test_extract_fix_list_returns_fixes(client) -> None:
 
 async def test_extract_fix_list_empty_without_criticism(client) -> None:
     """讨论无批评：直接返回空（不调用 LLM）。"""
-    from unittest.mock import AsyncMock, patch
 
     from app.api.v1.generations.music import _extract_fix_list
 

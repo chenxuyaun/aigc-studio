@@ -80,8 +80,6 @@ async def test_photo_access_url_requires_auth(client, admin_token):
     denied = await client.get(f"/api/v1/photography/photos/{photo_id}/access-url")
     assert denied.status_code == 401
 
-    ok = await client.get(
-        f"/api/v1/photography/photos/{photo_id}/access-url", headers=headers
-    )
+    ok = await client.get(f"/api/v1/photography/photos/{photo_id}/access-url", headers=headers)
     assert ok.status_code == 200
     assert "url" in ok.json()

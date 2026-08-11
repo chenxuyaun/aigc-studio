@@ -58,9 +58,7 @@ _TAG_PROMPT = """为一首歌提取 2-4 个标签（风格/主题/情感，每�
 {lyrics}"""
 
 
-async def _auto_tags(
-    db: AsyncSession, title: str, theme: str, style: str, lyrics: str
-) -> str:
+async def _auto_tags(db: AsyncSession, title: str, theme: str, style: str, lyrics: str) -> str:
     """LLM 自动打标签（风格/主题/情感）；失败降级为风格标签（不阻塞保存）。"""
     try:
         from app.services.provider_resolver import resolve_text_provider
@@ -110,9 +108,7 @@ async def list_works(
     if q.strip():
         kw = f"%{q.strip()}%"
         stmt = stmt.where(
-            MusicWork.title.like(kw)
-            | MusicWork.theme.like(kw)
-            | MusicWork.style.like(kw)
+            MusicWork.title.like(kw) | MusicWork.theme.like(kw) | MusicWork.style.like(kw)
         )
     if tag.strip():
         stmt = stmt.where(MusicWork.tags.like(f"%{tag.strip()}%"))
@@ -122,12 +118,10 @@ async def list_works(
 
 async def delete_work(db: AsyncSession, user_id: str, work_id: str) -> bool:
     result = await db.execute(
-        delete(MusicWork).where(
-            MusicWork.id == work_id, MusicWork.user_id == user_id
-        )
+        delete(MusicWork).where(MusicWork.id == work_id, MusicWork.user_id == user_id)
     )
     await db.commit()
-    return result.rowcount > 0
+    return bool(getattr(result, "rowcount", 0))
 
 
 def _work_dict(w: MusicWork) -> dict[str, Any]:

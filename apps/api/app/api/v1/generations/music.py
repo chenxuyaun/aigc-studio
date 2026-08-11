@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -17,6 +19,8 @@ from app.schemas.generation import MusicGenerationRequest, TaskResponse
 from app.security.auth import get_current_user
 from app.services.generation_service import create_media_task
 from app.services.provider_resolver import resolve_text_provider
+from app.services.text_utils import result_text as _provider_text
+from app.services.text_utils import sse_event as _sse_event
 
 router = APIRouter()
 
@@ -161,29 +165,29 @@ _DISCUSS_SYSTEM = """你是「音乐讨论室」的创作伙伴：顶级词曲�
 # 各风格专属的歌词特征与制作参数（解决"都是一个调调"：风格差异必须体现在歌词里）
 _STYLE_PROFILES: dict[str, str] = {
     "古风": "歌词特征：化用古典诗词与典故（如《诗经》、宋词意象），文言词句与白话自然交织，"
-            "意象用山水/舟楫/锦书/烛影等古典符号但要有新意，可带戏曲唱腔感的衬词；"
-            "制作：五声调式（宫商角徵羽）色彩、笛/箫/古筝/琵琶、慢板 60-80 BPM、空灵混响",
+    "意象用山水/舟楫/锦书/烛影等古典符号但要有新意，可带戏曲唱腔感的衬词；"
+    "制作：五声调式（宫商角徵羽）色彩、笛/箫/古筝/琵琶、慢板 60-80 BPM、空灵混响",
     "中国风": "歌词特征：现代口语为主，融入传统意象（茶/巷/檐/信笺/灯火）做隐喻，"
-              "副歌有一句可流传的金句，兼具流行传唱度与东方韵味；"
-              "制作：流行编曲骨架+民乐点缀（二胡/笛子/古筝）、80-100 BPM、副歌渐强",
+    "副歌有一句可流传的金句，兼具流行传唱度与东方韵味；"
+    "制作：流行编曲骨架+民乐点缀（二胡/笛子/古筝）、80-100 BPM、副歌渐强",
     "民谣": "歌词特征：叙事诗式白描，像在讲一个真实的故事（具体地名/职业/物件），"
-            "冷峻克制的情感，留白多于抒情，允许方言/口语颗粒感；"
-            "制作：木吉他/口琴/手风琴、70-90 BPM、贴近话筒的人声",
+    "冷峻克制的情感，留白多于抒情，允许方言/口语颗粒感；"
+    "制作：木吉他/口琴/手风琴、70-90 BPM、贴近话筒的人声",
     "流行": "歌词特征：强记忆点的副歌 hook（一句重复金句），主歌铺垫情绪，"
-            "词汇现代年轻化，允许英文单词点缀，节奏与呼吸贴合旋律感；"
-            "制作：现代流行编曲（合成器+鼓机+贝斯）、90-120 BPM、副歌能量拉满",
+    "词汇现代年轻化，允许英文单词点缀，节奏与呼吸贴合旋律感；"
+    "制作：现代流行编曲（合成器+鼓机+贝斯）、90-120 BPM、副歌能量拉满",
     "R&B": "歌词特征：律动驱动，句子按节拍切分（像在说话中摇摆），暧昧氛围与细腻情绪，"
-           "副歌用旋律性强的假声感语句；制作：Trap/R&B 鼓点、慢速 60-80 BPM、滑音与和声堆叠",
+    "副歌用旋律性强的假声感语句；制作：Trap/R&B 鼓点、慢速 60-80 BPM、滑音与和声堆叠",
     "电子": "歌词特征：短句+重复性短语（适合循环），意象偏未来/霓虹/城市夜景/代码，"
-            "副歌有口号式的爆发句；制作：合成器琶音/808 低音/侧链压缩、110-130 BPM、Drop 落差",
+    "副歌有口号式的爆发句；制作：合成器琶音/808 低音/侧链压缩、110-130 BPM、Drop 落差",
     "摇滚": "歌词特征：直接有力，有反叛或呐喊的张力，允许粗粝口语，副歌是能量爆发点，"
-            "意象偏公路/工厂/城市/青春；制作：电吉他失真/鼓组密集、120-160 BPM、失真与破音",
+    "意象偏公路/工厂/城市/青春；制作：电吉他失真/鼓组密集、120-160 BPM、失真与破音",
     "爵士": "歌词特征：慵懒机敏，像即兴对话，押韵灵活（内韵/斜韵），场景感强（酒吧/雨夜/雪茄），"
-            "副歌是旋律性回旋句；制作：钢琴/贝斯/萨克斯/刷鼓、60-100 BPM、swing 律动",
+    "副歌是旋律性回旋句；制作：钢琴/贝斯/萨克斯/刷鼓、60-100 BPM、swing 律动",
     "嘻哈": "歌词特征：flow 优先，句尾双押/内韵，叙事带态度（街头/奋斗/生活观察），"
-            "副歌是一段可跟唱的 hook；制作：鼓机/采样/808、80-100 BPM、切分节奏",
+    "副歌是一段可跟唱的 hook；制作：鼓机/采样/808、80-100 BPM、切分节奏",
     "治愈系": "歌词特征：温柔抚慰的意象（光/窗/怀抱/雨停），像对朋友说话，短句+呼吸感，"
-              "副歌是一句温暖肯定的反复；制作：钢琴/弦乐/原声吉他、60-80 BPM、宽广混响",
+    "副歌是一句温暖肯定的反复；制作：钢琴/弦乐/原声吉他、60-80 BPM、宽广混响",
 }
 
 # 长行提示词模板：E501 通过 noqa 豁免（可读性优先于行宽）
@@ -250,8 +254,11 @@ async def compose_song(
     """AI 写歌（免费）：主题 → 原创歌词 + 风格描述 JSON。走平台文本 Provider（cpa）。"""
     style_profile = _STYLE_PROFILES.get(req.style, _STYLE_PROFILES["流行"])
     prompt = _COMPOSE_PROMPT.format(
-        theme=req.theme, style=req.style, mood=req.mood,
-        language=req.language, verse_count=req.verse_count,
+        theme=req.theme,
+        style=req.style,
+        mood=req.mood,
+        language=req.language,
+        verse_count=req.verse_count,
         style_profile=style_profile,
     )
     resolved = await resolve_text_provider(db, req.model)
@@ -399,9 +406,7 @@ def _speaker_prompt(
     extra: str = "",
 ) -> str:
     """构造发言者 prompt：主题 + 风格特征 + 前序发言记录 + 本轮任务。"""
-    history = "\n".join(
-        f"{r['speaker']}：{r['content']}" for r in rounds
-    ) or "（你是第一位发言者）"
+    history = "\n".join(f"{r['speaker']}：{r['content']}" for r in rounds) or "（你是第一位发言者）"
     return (
         f"【第一信条·人民性】你从人民中来，为人民而写：站在普通人一边，写普通人的真实生活、劳动、尊严与悲欢；不居高临下地歌颂，用人民的语言，禁止鸡汤与宣传腔。\n"
         f"创作主题：{theme}\n"
@@ -651,7 +656,7 @@ async def _extract_fix_list(db: AsyncSession, rounds: list[dict[str, str]]) -> s
     失败返回空串（定稿照常进行，模型从讨论自行提取）。
     """
     transcript = _transcript_block(rounds, limit=1800)
-    if not transcript or "批评" not in transcript and "毒舌" not in transcript:
+    if not transcript or ("批评" not in transcript and "毒舌" not in transcript):
         return ""
     resolved = await resolve_text_provider(db, "")
     try:
@@ -703,13 +708,13 @@ async def _produce_final(
         style=style or "（自由）",
         style_profile=_style_profile_block(style) + kb_block,
         transcript=transcript,
-        fix_list=fix_list or "（无结构化清单：从讨论记录自行提取评审点名批评过的元素与替代方案，定稿必须落实）",
+        fix_list=fix_list
+        or "（无结构化清单：从讨论记录自行提取评审点名批评过的元素与替代方案，定稿必须落实）",
     )
     if rewrite_warnings:
         final_prompt += (
             "\n\n【上一轮自检警告】（本次为修正轮：必须逐条修正下列问题后再输出定稿，"
-            "修正后的作品不得再出现同类问题）\n"
-            + "\n".join(f"- {w}" for w in rewrite_warnings)
+            "修正后的作品不得再出现同类问题）\n" + "\n".join(f"- {w}" for w in rewrite_warnings)
         )
     resolved = await resolve_text_provider(db, "")
     try:
@@ -728,8 +733,7 @@ async def _produce_final(
 def _severe_checks(checks: list[str]) -> bool:
     """自检中值得自动重写的严重问题（空洞赞颂/缺段落/押韵偷懒等）。"""
     return any(
-        ("空洞赞颂词" in c) or ("缺少" in c) or ("押韵偷懒" in c) or ("废稿" in c)
-        for c in checks
+        ("空洞赞颂词" in c) or ("缺少" in c) or ("押韵偷懒" in c) or ("废稿" in c) for c in checks
     )
 
 
@@ -830,10 +834,6 @@ _FINAL_PROMPT = """【第一信条·人民性】（最高原则，一切创作�
 {transcript}"""
 
 
-from app.services.text_utils import result_text as _provider_text
-from app.services.text_utils import sse_event as _sse_event
-
-
 @router.post("/roundtable/stream")
 async def roundtable_stream(
     req: MusicRoundtableRequest,
@@ -842,10 +842,13 @@ async def roundtable_stream(
 ) -> StreamingResponse:
     """多角色圆桌·真讨论版（SSE）：每位发言者实时生成（携带前序发言），最后定稿。"""
 
-    async def _gen():
+    async def _gen() -> AsyncIterator[str]:
         # 限流：每用户每分钟最多 3 场（成本保护）
         if not _rate_limit_roundtable(user.id):
-            err = {"type": "error", "error": "圆桌会议开得太频繁了，请等一分钟再开（每用户每分钟 3 场）"}
+            err = {
+                "type": "error",
+                "error": "圆桌会议开得太频繁了，请等一分钟再开（每用户每分钟 3 场）",
+            }
             yield _sse_event(err)
             yield "data: [DONE]\n\n"
             return
@@ -856,10 +859,13 @@ async def roundtable_stream(
         try:
             from app.services.knowledge_materials import retrieve_creation_materials
 
-            materials, material_titles, web_materials, web_titles = (
-                await retrieve_creation_materials(
-                    db, user.id, req.theme, limit=3, use_web=req.use_web
-                )
+            (
+                materials,
+                material_titles,
+                web_materials,
+                web_titles,
+            ) = await retrieve_creation_materials(
+                db, user.id, req.theme, limit=3, use_web=req.use_web
             )
             material_titles = material_titles + web_titles
         except Exception:
@@ -876,9 +882,7 @@ async def roundtable_stream(
                 kb_block += "\n\n" + profile_block
         except Exception:
             pass
-        yield _sse_event(
-            {"type": "materials", "titles": material_titles}
-        )
+        yield _sse_event({"type": "materials", "titles": material_titles})
         # 第 0 轮：AI 按主题定制会议阵容（4 位专业角色）
         cast: list[dict[str, Any]] = []
         yield _sse_event({"type": "cast_start"})
@@ -908,17 +912,52 @@ async def roundtable_stream(
                 ]
         except Exception:
             cast = [
-                {"name": "作词人", "field": "词作与意象", "persona": "重视意象与文学性", "icon": "✍️", "order": 1, "finalizer": False},
-                {"name": "作曲家", "field": "调式与和声", "persona": "乐理派", "icon": "🎼", "order": 2, "finalizer": False},
-                {"name": "制作人", "field": "编曲与听感", "persona": "务实派", "icon": "🎧", "order": 3, "finalizer": True},
-                {"name": "乐评人", "field": "挑剔听众", "persona": "毒舌挑剔", "icon": "👀", "order": 4, "finalizer": False},
+                {
+                    "name": "作词人",
+                    "field": "词作与意象",
+                    "persona": "重视意象与文学性",
+                    "icon": "✍️",
+                    "order": 1,
+                    "finalizer": False,
+                },
+                {
+                    "name": "作曲家",
+                    "field": "调式与和声",
+                    "persona": "乐理派",
+                    "icon": "🎼",
+                    "order": 2,
+                    "finalizer": False,
+                },
+                {
+                    "name": "制作人",
+                    "field": "编曲与听感",
+                    "persona": "务实派",
+                    "icon": "🎧",
+                    "order": 3,
+                    "finalizer": True,
+                },
+                {
+                    "name": "乐评人",
+                    "field": "挑剔听众",
+                    "persona": "毒舌挑剔",
+                    "icon": "👀",
+                    "order": 4,
+                    "finalizer": False,
+                },
             ]
             cast_data = {}
         if len(cast) < 4:  # 数量不足补位
             cast = (
                 cast
                 + [
-                    {"name": f"专家{n}", "field": "音乐创作", "persona": "", "icon": "🎙️", "order": n, "finalizer": False}
+                    {
+                        "name": f"专家{n}",
+                        "field": "音乐创作",
+                        "persona": "",
+                        "icon": "🎙️",
+                        "order": n,
+                        "finalizer": False,
+                    }
                     for n in range(len(cast) + 1, 5)
                 ]
             )[:4]
@@ -957,7 +996,9 @@ async def roundtable_stream(
             speaker = str(role.get("name") or f"专家{idx}")
             yield _sse_event({"type": "round_start", "speaker": speaker, "round_no": idx})
             persona = f"你是{role.get('name')}（{role.get('field')}）：{role.get('persona')}"
-            prompt = _speaker_prompt(req.theme, req.style, rounds, str(item["task"]), extra=kb_block)
+            prompt = _speaker_prompt(
+                req.theme, req.style, rounds, str(item["task"]), extra=kb_block
+            )
             resolved = await resolve_text_provider(db, req.model)
             try:
                 result = await resolved.provider.generate(  # type: ignore[attr-defined]
@@ -970,32 +1011,48 @@ async def roundtable_stream(
             yield _sse_event({"type": "round", "speaker": speaker, "content": text})
 
         # 定稿轮：主理人主编把关 + 自检 + 严重问题自动重写一轮 + 自动存入「我的作品」
-        finalizer = next((r for r in ordered if r.get("finalizer")), ordered[0] if ordered else None)
+        finalizer = next(
+            (r for r in ordered if r.get("finalizer")), ordered[0] if ordered else None
+        )
         yield _sse_event({"type": "final_start"})
         final, checks = await _produce_final(
-            db, theme=req.theme, style=req.style, finalizer=finalizer,
-            rounds=rounds, kb_block=kb_block,
+            db,
+            theme=req.theme,
+            style=req.style,
+            finalizer=finalizer,
+            rounds=rounds,
+            kb_block=kb_block,
         )
         rewrote = False
         if not final.get("error") and _severe_checks(checks):
             rewrote = True
             final, checks = await _produce_final(
-                db, theme=req.theme, style=req.style, finalizer=finalizer,
-                rounds=rounds, kb_block=kb_block, rewrite_warnings=checks,
+                db,
+                theme=req.theme,
+                style=req.style,
+                finalizer=finalizer,
+                rounds=rounds,
+                kb_block=kb_block,
+                rewrite_warnings=checks,
             )
         work_id = ""
         if not final.get("error"):
             try:
                 work_id = await _auto_save_work(
-                    db, user_id=user.id, theme=req.theme, style=req.style,
-                    final=final, rounds=rounds, source="roundtable",
+                    db,
+                    user_id=user.id,
+                    theme=req.theme,
+                    style=req.style,
+                    final=final,
+                    rounds=rounds,
+                    source="roundtable",
                 )
             except Exception:
                 work_id = ""
             # 好作品自动回填知识库（创作范例）：平台自己长素材——「继续学」自动化
             if work_id and not _severe_checks(checks):
-                try:
-                    asyncio.create_task(
+                with contextlib.suppress(Exception):
+                    backfill_task = asyncio.create_task(
                         _backfill_work_material(
                             user_id=user.id,
                             work_title=str(final.get("title") or "")[:60],
@@ -1005,8 +1062,7 @@ async def roundtable_stream(
                             arrangement=str(final.get("arrangement") or ""),
                         )
                     )
-                except Exception:
-                    pass
+                    backfill_task.add_done_callback(lambda _t: None)
         yield _sse_event(
             {
                 "type": "final",
@@ -1031,7 +1087,7 @@ async def roundtable_followup(
 ) -> StreamingResponse:
     """圆桌定稿后追问：全员基于讨论+定稿+问题各回应一句，产出新定稿（SSE）。"""
 
-    async def _gen():
+    async def _gen() -> AsyncIterator[str]:
         if not _rate_limit_roundtable(user.id):
             yield _sse_event(
                 {"type": "error", "error": "操作太频繁了，请等一分钟再试（每用户每分钟 3 场）"}
@@ -1055,10 +1111,38 @@ async def roundtable_followup(
         ordered = sorted(cast, key=lambda r: int(r.get("order") or 99))
         if not ordered:
             ordered = [
-                {"name": "作词人", "field": "词作与意象", "persona": "重视意象与文学性", "icon": "✍️", "order": 1, "finalizer": False},
-                {"name": "作曲家", "field": "调式与和声", "persona": "乐理派", "icon": "🎼", "order": 2, "finalizer": False},
-                {"name": "制作人", "field": "编曲与听感", "persona": "务实派", "icon": "🎧", "order": 3, "finalizer": True},
-                {"name": "乐评人", "field": "挑剔听众", "persona": "毒舌挑剔", "icon": "👀", "order": 4, "finalizer": False},
+                {
+                    "name": "作词人",
+                    "field": "词作与意象",
+                    "persona": "重视意象与文学性",
+                    "icon": "✍️",
+                    "order": 1,
+                    "finalizer": False,
+                },
+                {
+                    "name": "作曲家",
+                    "field": "调式与和声",
+                    "persona": "乐理派",
+                    "icon": "🎼",
+                    "order": 2,
+                    "finalizer": False,
+                },
+                {
+                    "name": "制作人",
+                    "field": "编曲与听感",
+                    "persona": "务实派",
+                    "icon": "🎧",
+                    "order": 3,
+                    "finalizer": True,
+                },
+                {
+                    "name": "乐评人",
+                    "field": "挑剔听众",
+                    "persona": "毒舌挑剔",
+                    "icon": "👀",
+                    "order": 4,
+                    "finalizer": False,
+                },
             ]
         prev_final = req.final or {}
         prev_lyrics = str(prev_final.get("lyrics") or "")
@@ -1095,7 +1179,9 @@ async def roundtable_followup(
             yield _sse_event({"type": "round", "speaker": speaker, "content": text})
 
         # 新定稿：基于原定稿 + 全员回应
-        finalizer = next((r for r in ordered if r.get("finalizer")), ordered[0] if ordered else None)
+        finalizer = next(
+            (r for r in ordered if r.get("finalizer")), ordered[0] if ordered else None
+        )
         yield _sse_event({"type": "final_start"})
         finalizer_name = str((finalizer or {}).get("name") or "主理人")
         transcript = _transcript_block(rounds, limit=2000)
@@ -1126,14 +1212,25 @@ async def roundtable_followup(
         if not final.get("error"):
             try:
                 work_id = await _auto_save_work(
-                    db, user_id=user.id, theme=req.theme, style=req.style,
-                    final=final, rounds=rounds, source="roundtable",
+                    db,
+                    user_id=user.id,
+                    theme=req.theme,
+                    style=req.style,
+                    final=final,
+                    rounds=rounds,
+                    source="roundtable",
                 )
             except Exception:
                 work_id = ""
         yield _sse_event(
-            {"type": "final", "final": final, "rounds": rounds, "cast": cast,
-             "checks": checks, "work_id": work_id}
+            {
+                "type": "final",
+                "final": final,
+                "rounds": rounds,
+                "cast": cast,
+                "checks": checks,
+                "work_id": work_id,
+            }
         )
         yield "data: [DONE]\n\n"
 
@@ -1230,9 +1327,7 @@ async def publish_work_to_chat(
     if work.arrangement:
         block.append("")
         block.append(f"🎧 编曲：{work.arrangement}")
-    await sessions.append_message(
-        db, chat, {"role": "assistant", "content": "\n".join(block)}
-    )
+    await sessions.append_message(db, chat, {"role": "assistant", "content": "\n".join(block)})
     await db.commit()
     return {"ok": True, "chat_id": chat.id, "title": work.title}
 

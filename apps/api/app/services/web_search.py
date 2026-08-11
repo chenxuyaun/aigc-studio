@@ -79,7 +79,7 @@ async def _search_wikipedia(query: str, limit: int) -> list[dict[str, str]]:
             [
                 {
                     "title": f"维基百科·{s.get('title', '')}",
-                    "url": f"https://{lang}.wikipedia.org/wiki/{s.get('title', '').replace(' ', '_')}",
+                    "url": f"https://{lang}.wikipedia.org/wiki/{s.get('title', '').replace(' ', '_')}",  # noqa: E501
                     "content": (s.get("snippet") or "").strip(),
                 }
                 for s in (data.get("query", {}).get("search") or [])[:limit]

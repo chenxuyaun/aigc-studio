@@ -14,6 +14,7 @@ from PIL import Image, PngImagePlugin
 @pytest.mark.anyio
 async def test_build_character_json_with_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     """cpa 失败 → 模板兜底；成功 → 字段齐全。"""
+
     async def fake_fail(prompt: str, max_tokens: int = 1500, key: str = "") -> dict | None:
         return None
 

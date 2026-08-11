@@ -20,6 +20,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.provider_resolver import resolve_text_provider
+from app.services.text_utils import result_text as _result_text
+from app.services.text_utils import sse_event as _sse_event
 
 # ===== 领域模板 =====
 
@@ -217,9 +219,6 @@ def _transcript_block(rounds: list[dict[str, str]], limit: int = 2500) -> str:
     return "\n".join(reversed(parts)) or "（无讨论记录）"
 
 
-from app.services.text_utils import result_text as _result_text
-
-
 def _extract_json(text: str) -> dict[str, Any]:
     cleaned = text.strip()
     cleaned = cleaned.removeprefix("```json").removeprefix("```")
@@ -235,9 +234,6 @@ def _extract_json(text: str) -> dict[str, Any]:
             except json.JSONDecodeError:
                 pass
     return {"error": "AI 输出解析失败", "raw": text[:500]}
-
-
-from app.services.text_utils import sse_event as _sse_event
 
 
 # 限流：每用户每分钟 4 场通用圆桌
@@ -263,10 +259,38 @@ async def _gen_cast(db: AsyncSession, domain: str, theme: str, extra: str) -> li
     prompt = tpl["cast"].format(theme=theme)
     resolved = await resolve_text_provider(db, "")
     fallback = [
-        {"name": "策划", "field": "创意方向", "persona": "重创意落地", "icon": "💡", "order": 1, "finalizer": False},
-        {"name": "执行", "field": "方案落地", "persona": "务实可执行", "icon": "🛠️", "order": 2, "finalizer": False},
-        {"name": "主理", "field": "统筹定稿", "persona": "综合把关", "icon": "🎯", "order": 3, "finalizer": True},
-        {"name": "评审", "field": "挑剔读者", "persona": "毒舌挑剔", "icon": "😈", "order": 4, "finalizer": False},
+        {
+            "name": "策划",
+            "field": "创意方向",
+            "persona": "重创意落地",
+            "icon": "💡",
+            "order": 1,
+            "finalizer": False,
+        },
+        {
+            "name": "执行",
+            "field": "方案落地",
+            "persona": "务实可执行",
+            "icon": "🛠️",
+            "order": 2,
+            "finalizer": False,
+        },
+        {
+            "name": "主理",
+            "field": "统筹定稿",
+            "persona": "综合把关",
+            "icon": "🎯",
+            "order": 3,
+            "finalizer": True,
+        },
+        {
+            "name": "评审",
+            "field": "挑剔读者",
+            "persona": "毒舌挑剔",
+            "icon": "😈",
+            "order": 4,
+            "finalizer": False,
+        },
     ]
     try:
         result = await resolved.provider.generate(  # type: ignore[attr-defined]
@@ -310,7 +334,7 @@ def _validate_final(domain: str, final: dict[str, Any]) -> list[str]:
     """通用圆桌定稿结构自检：缺字段/正文过短/AI 腔给出警告列表。"""
     warnings: list[str] = []
     if not isinstance(final, dict):
-        return ["定稿不是有效 JSON 对象"]
+        return ["定稿不是有效 JSON 对象"]  # type: ignore[unreachable]
     title = str(final.get("title") or "").strip()
     content = str(final.get("content") or "").strip()
     if not title:
@@ -359,7 +383,9 @@ async def stream_roundtable(
         yield "data: [DONE]\n\n"
         return
     if not rate_allowed(user_id):
-        yield _sse_event({"type": "error", "error": "圆桌开得太频繁了，请等一分钟再试（每用户每分钟 4 场）"})
+        yield _sse_event(
+            {"type": "error", "error": "圆桌开得太频繁了，请等一分钟再试（每用户每分钟 4 场）"}
+        )
         yield "data: [DONE]\n\n"
         return
     tpl = _DOMAINS[domain]
@@ -369,10 +395,8 @@ async def stream_roundtable(
     try:
         from app.services.knowledge_materials import retrieve_creation_materials
 
-        materials, material_titles, web_materials, web_titles = (
-            await retrieve_creation_materials(
-                db, user_id, theme, limit=3, use_web=use_web
-            )
+        materials, material_titles, web_materials, web_titles = await retrieve_creation_materials(
+            db, user_id, theme, limit=3, use_web=use_web
         )
         material_titles = material_titles + web_titles
     except Exception:
@@ -381,8 +405,7 @@ async def stream_roundtable(
 
     kb_block = format_material_block(materials, web_materials)
     yield _sse_event(
-        {"type": "domain", "domain": domain, "label": tpl["label"],
-         "materials": material_titles}
+        {"type": "domain", "domain": domain, "label": tpl["label"], "materials": material_titles}
     )
     yield _sse_event({"type": "cast_start"})
     cast = await _gen_cast(db, domain, theme, extra)
@@ -448,8 +471,7 @@ async def stream_roundtable(
             rewrote = True
             final_prompt += (
                 "\n\n【上一轮自检警告】（本次为修正轮：必须逐条修正下列问题后再输出定稿，"
-                "修正后的作品不得再出现同类问题）\n"
-                + "\n".join(f"- {w}" for w in checks)
+                "修正后的作品不得再出现同类问题）\n" + "\n".join(f"- {w}" for w in checks)
             )
             try:
                 result = await resolved.provider.generate(  # type: ignore[attr-defined]

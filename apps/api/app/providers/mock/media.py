@@ -81,19 +81,13 @@ def render_for(task_type: str, prompt: str, **params: object) -> tuple[bytes, st
     if task_type == "image":
         width = _to_int(params.get("width", 768), 768)
         height = _to_int(params.get("height", 768), 768)
-        ref = str(
-            params.get("reference_photo_id")
-            or params.get("reference_asset_id")
-            or ""
-        )
+        ref = str(params.get("reference_photo_id") or params.get("reference_asset_id") or "")
         label = "Mock Image + Ref" if ref else "Mock Image"
         # seed 固定时颜色稳定（可复现）；无 seed 时用提示词定色（默认行为）
         seed = params.get("seed")
         seed_str = str(seed) if seed is not None else prompt
         return (
-            render_image_svg(
-                prompt, width, height, label=label, reference_hint=ref, seed=seed_str
-            ),
+            render_image_svg(prompt, width, height, label=label, reference_hint=ref, seed=seed_str),
             "image/svg+xml",
             "svg",
         )

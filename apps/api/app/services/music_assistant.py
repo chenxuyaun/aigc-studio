@@ -22,6 +22,7 @@ from app.api.v1.generations.music import (
 from app.models.roleplay_chat import RoleplayChat
 from app.services import sessions
 from app.services.provider_resolver import resolve_text_provider
+from app.services.text_utils import result_text as _result_text
 
 MUSIC_CMD_PREFIXES = ("@AI 写歌", "@AI写歌", "@ai 写歌", "@ai写歌")
 MUSIC_TAG = "🎵【AI 音乐助手】"
@@ -60,9 +61,6 @@ def _parse_cmd(content: str) -> tuple[str, str, str]:
             words.remove(m)
             break
     return " ".join(words).strip(" ，,。·-"), style, mood
-
-
-from app.services.text_utils import result_text as _result_text
 
 
 async def _compose(db: AsyncSession, theme: str, style: str, mood: str) -> str:
@@ -112,20 +110,15 @@ async def music_chat_reply(
 
     messages 为本次请求的全部消息（最后一条为用户指令）。
     """
-    last_user = next(
-        (m for m in reversed(messages) if m.get("role") == "user"), None
-    )
+    last_user = next((m for m in reversed(messages) if m.get("role") == "user"), None)
     content = str(last_user.get("content") or "") if last_user else ""
     text, style, mood = _parse_cmd(content)
 
     stored = sessions.chat_messages(chat)
-    last_assistant = (
-        stored[-1] if stored and stored[-1].get("role") == "assistant" else None
-    )
+    last_assistant = stored[-1] if stored and stored[-1].get("role") == "assistant" else None
     # 群历史最近一条助手消息是音乐助手歌词 → 讨论轮（带上下文打磨）
     is_followup = bool(
-        last_assistant
-        and str(last_assistant.get("content") or "").startswith(MUSIC_TAG)
+        last_assistant and str(last_assistant.get("content") or "").startswith(MUSIC_TAG)
     )
     try:
         if is_followup:
@@ -141,15 +134,9 @@ async def music_chat_reply(
         return {"error": f"写歌失败：{str(exc)[:200]}"}
 
     # 落库：用户指令（若服务端尚未记录）+ 助手歌词
-    if last_user and (
-        not stored or stored[-1].get("content") != last_user.get("content")
-    ):
-        await sessions.append_message(
-            db, chat, {"role": "user", "content": content}
-        )
-    await sessions.append_message(
-        db, chat, {"role": "assistant", "content": MUSIC_TAG + reply}
-    )
+    if last_user and (not stored or stored[-1].get("content") != last_user.get("content")):
+        await sessions.append_message(db, chat, {"role": "user", "content": content})
+    await sessions.append_message(db, chat, {"role": "assistant", "content": MUSIC_TAG + reply})
 
     return {
         "reply": MUSIC_TAG + reply,

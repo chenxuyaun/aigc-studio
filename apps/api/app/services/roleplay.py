@@ -35,8 +35,11 @@ _memory_tasks: set[asyncio.Task[Any]] = set()
 
 
 def _record_memory_turn(
-    user_id: str, asset_id: str, chat_id: str,
-    user_msg: str, assistant_msg: str,
+    user_id: str,
+    asset_id: str,
+    chat_id: str,
+    user_msg: str,
+    assistant_msg: str,
 ) -> None:
     """L0 对话写入 MemoryCore gateway（fire-and-forget，失败静默不阻塞对话）。"""
     if not user_id or not asset_id or not chat_id:
@@ -45,7 +48,9 @@ def _record_memory_turn(
 
     async def _run() -> None:
         await memory_add_conversation(
-            user_id, asset_id, chat_id,
+            user_id,
+            asset_id,
+            chat_id,
             [
                 {"role": "user", "content": user_msg},
                 {"role": "assistant", "content": assistant_msg},
@@ -55,6 +60,7 @@ def _record_memory_turn(
     task = asyncio.create_task(_run())
     _memory_tasks.add(task)
     task.add_done_callback(_memory_tasks.discard)
+
 
 def _speaker_lines(reply: str, name: str) -> str:
     """从群聊 AI 回复中提取指定角色的台词行（形如「名字：台词」/「名字: 台词」）。
@@ -84,28 +90,32 @@ async def list_characters(db: AsyncSession, user_id: str) -> list[dict[str, Any]
     shared_ids = set(
         (
             await db.execute(
-                select(RoleplayCharacter.asset_id).where(
-                    RoleplayCharacter.is_shared.is_(True)
-                )
-            )
-        ).scalars().all()
-    )
-    rows = (
-        await db.execute(
-            select(Asset).where(
-                Asset.filename.like("character-%"),
-                Asset.mime_type == "image/png",
-                or_(
-                    Asset.user_id == user_id,
-                    Asset.id.in_(
-                        select(RoleplayCharacter.asset_id).where(
-                            RoleplayCharacter.is_shared.is_(True)
-                        )
-                    ),
-                ),
+                select(RoleplayCharacter.asset_id).where(RoleplayCharacter.is_shared.is_(True))
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
+    rows = (
+        (
+            await db.execute(
+                select(Asset).where(
+                    Asset.filename.like("character-%"),
+                    Asset.mime_type == "image/png",
+                    or_(
+                        Asset.user_id == user_id,
+                        Asset.id.in_(
+                            select(RoleplayCharacter.asset_id).where(
+                                RoleplayCharacter.is_shared.is_(True)
+                            )
+                        ),
+                    ),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     return [
         {
             "asset_id": a.id,
@@ -145,6 +155,7 @@ def _mood_delta(mood: str) -> int:
 
 
 # ==== 角色卡加载 ====
+
 
 def _card_to_json(card: dict[str, Any]) -> dict[str, Any]:
     """扁平卡字段 → roleplay_characters 行字段（JSON 列序列化）。"""
@@ -195,11 +206,11 @@ async def _load_cards(
     shared_ids = set(
         (
             await db.execute(
-                select(RoleplayCharacter.asset_id).where(
-                    RoleplayCharacter.is_shared.is_(True)
-                )
+                select(RoleplayCharacter.asset_id).where(RoleplayCharacter.is_shared.is_(True))
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     assets = {
         a.id: a
@@ -210,17 +221,19 @@ async def _load_cards(
                     or_(Asset.user_id == user_id, Asset.id.in_(list(shared_ids))),
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     }
     rows = {
         r.asset_id: r
         for r in (
             await db.execute(
-                select(RoleplayCharacter).where(
-                    RoleplayCharacter.asset_id.in_(list(assets.keys()))
-                )
+                select(RoleplayCharacter).where(RoleplayCharacter.asset_id.in_(list(assets.keys())))
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     }
 
     cards: list[tuple[str, dict[str, Any]]] = []
@@ -263,11 +276,12 @@ def _load_json(raw: str | None, default: Any) -> Any:
         return default
     try:
         return json.loads(raw)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return default
 
 
 # ==== 世界书（兼容层 + 新引擎入口） ====
+
 
 async def _load_lore_entries(
     db: AsyncSession,
@@ -294,17 +308,21 @@ async def _load_lore_entries(
         else RoleplayLoreEntry.project_id == project_id
     )
     rows = (
-        await db.execute(
-            select(RoleplayLoreEntry).where(
-                or_(
-                    RoleplayLoreEntry.user_id == user_id,
-                    RoleplayLoreEntry.is_shared.is_(True),
-                ),
-                name_cond,
-                project_cond,
+        (
+            await db.execute(
+                select(RoleplayLoreEntry).where(
+                    or_(
+                        RoleplayLoreEntry.user_id == user_id,
+                        RoleplayLoreEntry.is_shared.is_(True),
+                    ),
+                    name_cond,
+                    project_cond,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -319,34 +337,44 @@ async def _match_lore(
 
 # ==== 快捷回复自动触发 ====
 
+
 async def _load_auto_quick_replies(db: AsyncSession, user_id: str) -> list[Any]:
     from app.models.quick_reply import QuickReply
 
     rows = (
-        await db.execute(
-            select(QuickReply).where(
-                QuickReply.user_id == user_id,
-                QuickReply.auto.is_(True),
+        (
+            await db.execute(
+                select(QuickReply).where(
+                    QuickReply.user_id == user_id,
+                    QuickReply.auto.is_(True),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
 # ==== 正则脚本 ====
 
+
 async def _load_regex_scripts(db: AsyncSession, user_id: str) -> list[RegexScript]:
     rows = (
-        await db.execute(
-            select(RegexScript).where(
-                or_(
-                    RegexScript.user_id == user_id,
-                    RegexScript.is_shared.is_(True),
-                ),
-                RegexScript.enabled.is_(True)
+        (
+            await db.execute(
+                select(RegexScript).where(
+                    or_(
+                        RegexScript.user_id == user_id,
+                        RegexScript.is_shared.is_(True),
+                    ),
+                    RegexScript.enabled.is_(True),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -368,6 +396,7 @@ def _apply_regex(
 
 
 # ==== prompt 组装 ====
+
 
 def _macro_context(
     cards: list[tuple[str, dict[str, Any]]],
@@ -481,8 +510,11 @@ async def _build_prompt(
             from app.services.memory_inject import build_memory_injection
 
             user_query = next(
-                (str(m.get("content") or "") for m in reversed(messages)
-                 if m.get("role") == "user"),
+                (
+                    str(m.get("content") or "")
+                    for m in reversed(messages)
+                    if m.get("role") == "user"
+                ),
                 "",
             )
             memory_system_extra, memory_user_extra = await build_memory_injection(
@@ -512,9 +544,7 @@ async def _build_prompt(
             parts.append("你现在是一个多人角色扮演场景，其他角色在场但不发言：")
             others = [n for n in [c.get("name") or "?" for _, c in cards] if n != speaker]
             parts.append("（在场角色：" + "、".join(others) + "）")
-            card = next(
-                (c for _, c in cards if (c.get("name") or "?") == speaker), cards[0][1]
-            )
+            card = next((c for _, c in cards if (c.get("name") or "?") == speaker), cards[0][1])
             parts.append(f"本轮由你（【角色「{speaker}」】）发言：")
             parts.append(f"【角色外观与背景】\n{card.get('description', '')}")
             parts.append(f"【性格】\n{card.get('personality', '')}")
@@ -629,7 +659,9 @@ async def _build_prompt(
         else:
             user_parts.append("[Write the next reply only as the currently speaking character.]")
     if continue_mode:
-        user_parts.append("请从上一条回复的末尾继续写下去，直接接续内容，不要重复已写部分，也不要寒暄。")
+        user_parts.append(
+            "请从上一条回复的末尾继续写下去，直接接续内容，不要重复已写部分，也不要寒暄。"
+        )
     else:
         user_parts.append("请继续对话：")
     user_prompt = "\n\n".join(user_parts)
@@ -648,9 +680,7 @@ def _chat_memory_summary(chat: Any) -> str:
     return str(_s.get_settings(chat).get("summary") or "")
 
 
-async def _maybe_summarize(
-    db: AsyncSession, user_id: str, chat: Any, model: str = ""
-) -> None:
+async def _maybe_summarize(db: AsyncSession, user_id: str, chat: Any, model: str = "") -> None:
     """会话消息达到阈值时用当前模型生成摘要（失败静默，不阻塞主流程）。"""
     from app.services import sessions as _s
 
@@ -686,6 +716,7 @@ async def _maybe_summarize(
 
 
 # ==== 主流程 ====
+
 
 async def _get_persona(
     db: AsyncSession, user_id: str, persona_id: str | None
@@ -765,9 +796,7 @@ async def roleplay_chat(
                     anns += parse_annotations(str(m.get("content") or ""))
             if anns:
                 book, status_warnings = apply_book(book, anns)
-                mem_chat.settings = json.dumps(
-                    merge_settings(settings, book), ensure_ascii=False
-                )
+                mem_chat.settings = json.dumps(merge_settings(settings, book), ensure_ascii=False)
                 await db.commit()
                 # 剥离批注：落库与展示都不带批注（messages 一并回写，落库用剥离后的）
                 work_messages = [
@@ -858,8 +887,10 @@ async def roleplay_chat(
                 # （前端重试/完整历史回传时 messages[-1] 可能是 assistant）
                 last_req = messages[-1] if messages else None
                 stored = sessions.chat_messages(chat)
-                if last_req and last_req.get("role") == "user" and (
-                    not stored or stored[-1].get("content") != last_req.get("content")
+                if (
+                    last_req
+                    and last_req.get("role") == "user"
+                    and (not stored or stored[-1].get("content") != last_req.get("content"))
                 ):
                     await sessions.append_message(
                         db,
@@ -880,8 +911,7 @@ async def roleplay_chat(
     # 多层记忆：L0 写入 gateway（fire-and-forget，不阻塞对话）
     if chat_id:
         last_user = next(
-            (str(m.get("content") or "") for m in reversed(messages)
-             if m.get("role") == "user"),
+            (str(m.get("content") or "") for m in reversed(messages) if m.get("role") == "user"),
             "",
         )
         if not group or len(cards) <= 1:
@@ -968,9 +998,7 @@ async def roleplay_chat_stream(
                     anns += parse_annotations(str(m.get("content") or ""))
             if anns:
                 book, status_warnings = apply_book(book, anns)
-                mem_chat.settings = json.dumps(
-                    merge_settings(settings, book), ensure_ascii=False
-                )
+                mem_chat.settings = json.dumps(merge_settings(settings, book), ensure_ascii=False)
                 await db.commit()
                 work_messages = [
                     {
@@ -1086,6 +1114,7 @@ def cast_text_provider(provider: Any) -> TextProvider:
 
 
 # ==== 兼容层：_build_system_prompt（单角色，供旧测试/调用方） ====
+
 
 async def _build_system_prompt(
     db: AsyncSession, card: dict[str, Any], recent_messages: list[str]

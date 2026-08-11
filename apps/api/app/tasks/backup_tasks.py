@@ -36,9 +36,12 @@ def _sql_escape(value: object) -> str:
 def _dump_database() -> bytes:
     """全库逻辑备份 → 标准 SQL bytes（含建表 + 数据）。"""
     conn = pymysql.connect(
-        host="mysql", user=settings.MYSQL_USER,
-        password=settings.MYSQL_PASSWORD, database=settings.MYSQL_DATABASE,
-        charset="utf8mb4", connect_timeout=15,
+        host="mysql",
+        user=settings.MYSQL_USER,
+        password=settings.MYSQL_PASSWORD,
+        database=settings.MYSQL_DATABASE,
+        charset="utf8mb4",
+        connect_timeout=15,
     )
     buf = io.StringIO()
     try:
@@ -66,18 +69,20 @@ def _dump_database() -> bytes:
                     if not rows:
                         break
                     for row in rows:
-                            vals = ", ".join(_sql_escape(v) for v in row)
-                            batch.append(f"({vals})")
-                            if len(batch) >= 200:
-                                buf.write(
-                                    f"INSERT INTO `{t}` (`{'`,`'.join(cols)}`) VALUES\n"
-                                    + ",\n".join(batch) + ";\n"
-                                )
-                                batch = []
+                        vals = ", ".join(_sql_escape(v) for v in row)
+                        batch.append(f"({vals})")
+                        if len(batch) >= 200:
+                            buf.write(
+                                f"INSERT INTO `{t}` (`{'`,`'.join(cols)}`) VALUES\n"
+                                + ",\n".join(batch)
+                                + ";\n"
+                            )
+                            batch = []
                 if batch:
                     buf.write(
                         f"INSERT INTO `{t}` (`{'`,`'.join(cols)}`) VALUES\n"
-                        + ",\n".join(batch) + ";\n"
+                        + ",\n".join(batch)
+                        + ";\n"
                     )
         buf.write("SET FOREIGN_KEY_CHECKS=1;\n")
     finally:
@@ -106,7 +111,8 @@ def _backup_now() -> dict[str, object]:
     if storage.is_dir():
         subprocess.run(
             ["tar", "-czf", str(dest / "storage.tar.gz"), "-C", "/app", "storage"],
-            capture_output=True, timeout=600,
+            capture_output=True,
+            timeout=600,
         )
 
     # 3) 清理过期
@@ -123,8 +129,12 @@ def _backup_now() -> dict[str, object]:
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
-    name="daily_backup", max_retries=2,
-    autoretry_for=_RETRYABLE, retry_backoff=True, retry_backoff_max=120, retry_jitter=True,
+    name="daily_backup",
+    max_retries=2,
+    autoretry_for=_RETRYABLE,
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
 )
 def daily_backup() -> dict[str, object]:
     """每日备份（beat 02:00）：逻辑 SQL + storage，保留 14 天。"""

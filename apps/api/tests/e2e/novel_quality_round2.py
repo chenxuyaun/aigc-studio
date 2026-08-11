@@ -6,6 +6,7 @@
 2. 凶器使用方式：手术钢刀应为开颅手法，与前文医学鉴定统一
 3. 白鷉身份：磁带标签人物 → 第9章实体登场缺铺垫
 """
+
 import sys
 import time
 from pathlib import Path
@@ -84,7 +85,8 @@ def main() -> None:
             continue
         r = c.post(
             f"/story/chapters/{ch['id']}/revise",
-            headers=h, params={"instruction": inst, "model": MODEL},
+            headers=h,
+            params={"instruction": inst, "model": MODEL},
         )
         if r.status_code == 200:
             check(f"第{no}章修订", True, f"{r.json().get('word_count')} 字")
@@ -112,14 +114,22 @@ def main() -> None:
         f"\n\n========== 第{c['chapter_no']}章《{c['title']}》 ==========\n{c.get('content') or ''}"
         for c in sorted(picked, key=lambda x: x["chapter_no"])
     )
-    r = c.post(CHAT, headers=h, json={
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": "你是阅读过两千部推理小说的资深读者。上轮终评你给了 7.9 分并指出三个问题：①死因冲突（脑出血+颅骨切口 vs 刀背割喉）②凶器使用方式 ③白鷉身份模糊。作者已按你的意见修订第 1/8/9 章。请复核：三个问题是否修复？总分（10 分制）？一句话总评？是否还有新的硬伤？"},
-            {"role": "user", "content": f"修订后的核心章节（第1/4/6/8/9章）：\n{book}"},
-        ],
-        "max_tokens": 1200, "temperature": 0.6,
-    })
+    r = c.post(
+        CHAT,
+        headers=h,
+        json={
+            "model": MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "你是阅读过两千部推理小说的资深读者。上轮终评你给了 7.9 分并指出三个问题：①死因冲突（脑出血+颅骨切口 vs 刀背割喉）②凶器使用方式 ③白鷉身份模糊。作者已按你的意见修订第 1/8/9 章。请复核：三个问题是否修复？总分（10 分制）？一句话总评？是否还有新的硬伤？",
+                },
+                {"role": "user", "content": f"修订后的核心章节（第1/4/6/8/9章）：\n{book}"},
+            ],
+            "max_tokens": 1200,
+            "temperature": 0.6,
+        },
+    )
     final = r.json()["choices"][0]["message"]["content"]
     check("读者终评", bool(final), final[:100])
     print("--- 读者终评（第二轮） ---")

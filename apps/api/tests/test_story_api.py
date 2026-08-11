@@ -12,7 +12,8 @@ import pytest
 async def _create_project(client, token: str, **kw) -> dict:
     body = {"title": "晨星山物语", "genre": "奇幻", "synopsis": "少女与黑猫的冒险", **kw}
     r = await client.post(
-        "/api/v1/story/projects", json=body,
+        "/api/v1/story/projects",
+        json=body,
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
@@ -20,6 +21,7 @@ async def _create_project(client, token: str, **kw) -> dict:
 
 
 # ==== 项目 CRUD ====
+
 
 @pytest.mark.anyio
 async def test_project_crud_api(client, admin_token: str) -> None:
@@ -32,7 +34,8 @@ async def test_project_crud_api(client, admin_token: str) -> None:
     assert len(r.json()["items"]) >= 1
 
     r = await client.put(
-        f"/api/v1/story/projects/{pid}", json={"status": "ongoing"},
+        f"/api/v1/story/projects/{pid}",
+        json={"status": "ongoing"},
         headers=h,
     )
     assert r.json()["project"]["status"] == "ongoing"
@@ -77,6 +80,7 @@ async def _user_token(client) -> str:
 
 # ==== 章节 + 角色实例 ====
 
+
 @pytest.mark.anyio
 async def test_chapters_and_characters_api(client, admin_token: str) -> None:
     h = {"Authorization": f"Bearer {admin_token}"}
@@ -95,9 +99,7 @@ async def test_chapters_and_characters_api(client, admin_token: str) -> None:
     )
     assert r.json()["chapter"]["chapter_no"] == 2
 
-    r = await client.put(
-        f"/api/v1/story/chapters/{cid}", json={"content": "正文片段"}, headers=h
-    )
+    r = await client.put(f"/api/v1/story/chapters/{cid}", json={"content": "正文片段"}, headers=h)
     assert r.json()["chapter"]["status"] == "done"
     assert r.json()["chapter"]["word_count"] == 4
 
@@ -133,6 +135,7 @@ async def test_chapters_and_characters_api(client, admin_token: str) -> None:
 
 # ==== 生成（mock provider 路径：无角色卡 → 400 友好错误） ====
 
+
 @pytest.mark.anyio
 async def test_generate_chapter_without_cards(client, admin_token: str) -> None:
     h = {"Authorization": f"Bearer {admin_token}"}
@@ -159,6 +162,7 @@ async def test_generate_chapter_without_cards(client, admin_token: str) -> None:
 
 # ==== 大纲 ====
 
+
 @pytest.mark.anyio
 async def test_outline_api(client, admin_token: str) -> None:
     h = {"Authorization": f"Bearer {admin_token}"}
@@ -175,6 +179,7 @@ async def test_outline_api(client, admin_token: str) -> None:
 
 
 # ==== 创作团队 ====
+
 
 @pytest.mark.anyio
 async def test_crew_director_api(client, admin_token: str) -> None:
@@ -199,6 +204,7 @@ async def test_crew_director_api(client, admin_token: str) -> None:
 
 
 # ==== 任务化 ====
+
 
 @pytest.mark.anyio
 async def test_generate_chapter_task_api(client, admin_token: str) -> None:
@@ -234,6 +240,7 @@ async def test_generate_chapter_task_api(client, admin_token: str) -> None:
 
 # ==== 连载调度 ====
 
+
 @pytest.mark.anyio
 async def test_schedules_api(client, admin_token: str) -> None:
     h = {"Authorization": f"Bearer {admin_token}"}
@@ -259,6 +266,7 @@ async def test_schedules_api(client, admin_token: str) -> None:
 
 
 # ==== 导出 ====
+
 
 @pytest.mark.anyio
 async def test_export_api(client, admin_token: str) -> None:
@@ -292,6 +300,7 @@ async def test_export_api(client, admin_token: str) -> None:
 
 
 # ==== 世界书项目作用域 ====
+
 
 @pytest.mark.anyio
 async def test_lore_project_scope(client, admin_token: str) -> None:
@@ -354,39 +363,49 @@ async def test_writing_style_extract_and_update(client, user_token) -> None:
 
     from app.models.story_chapter import StoryChapter
     from app.models.story_project import StoryProject
+
     from tests.conftest import TestingSessionLocal
 
     headers = {"Authorization": f"Bearer {user_token}"}
     async with TestingSessionLocal() as session:
-        from sqlalchemy import select
-
         from app.models.user import User
+        from sqlalchemy import select
 
         uid = (await session.execute(select(User.id).where(User.username == "user1"))).scalar_one()
         proj = StoryProject(id="ws-proj-1", user_id=uid, title="写法测试", genre="悬疑")
         session.add(proj)
-        session.add(StoryChapter(
-            id="ws-ch-1", project_id="ws-proj-1", user_id=uid,
-            chapter_no=1, title="第一章", status="done",
-            content=(
-                "他愣了愣。雨落在铁皮屋顶上，啪嗒啪嗒。没说话。灯灭了。\n"
-                "雨又大了一些。他摸黑找到那盏煤油灯，擦了三下才点着。火光一跳，照出桌上没吃完的半碗面。\n"
-                "面已经坨了。筷子搁在碗沿，像两条没有力气说话的腿。\n"
-                "他把灯芯拨亮了一点，又拨亮一点。窗外传来狗叫，叫了两声就停了。\n"
-                "他坐下来，把面碗往自己跟前挪了挪。吃。\n"
-                "雨还在下。铁皮屋顶上的声音，从啪嗒啪嗒变成了哗啦哗啦。\n"
-                "吃到一半，他停下来，看着碗里剩下的那几根面条。面条泡得发胀，白得像冬天窗台上的霜。\n"
-                "他想起很久以前，也有人这样给他煮过一碗面。那时候的雨，好像也是这么大。\n"
-                "屋檐下的水帘子拉得密密匝匝，把院子里的枣树洗得发亮。枣树还没发芽。\n"
-                "他把碗放下，又把灯吹灭。黑暗里，雨声变得格外清楚，像是有人在屋顶上一下一下地敲。\n"
-                "他裹紧被子躺下，听着雨，慢慢睡着了。"
-            ),
-        ))
+        session.add(
+            StoryChapter(
+                id="ws-ch-1",
+                project_id="ws-proj-1",
+                user_id=uid,
+                chapter_no=1,
+                title="第一章",
+                status="done",
+                content=(
+                    "他愣了愣。雨落在铁皮屋顶上，啪嗒啪嗒。没说话。灯灭了。\n"
+                    "雨又大了一些。他摸黑找到那盏煤油灯，擦了三下才点着。火光一跳，照出桌上没吃完的半碗面。\n"
+                    "面已经坨了。筷子搁在碗沿，像两条没有力气说话的腿。\n"
+                    "他把灯芯拨亮了一点，又拨亮一点。窗外传来狗叫，叫了两声就停了。\n"
+                    "他坐下来，把面碗往自己跟前挪了挪。吃。\n"
+                    "雨还在下。铁皮屋顶上的声音，从啪嗒啪嗒变成了哗啦哗啦。\n"
+                    "吃到一半，他停下来，看着碗里剩下的那几根面条。面条泡得发胀，白得像冬天窗台上的霜。\n"
+                    "他想起很久以前，也有人这样给他煮过一碗面。那时候的雨，好像也是这么大。\n"
+                    "屋檐下的水帘子拉得密密匝匝，把院子里的枣树洗得发亮。枣树还没发芽。\n"
+                    "他把碗放下，又把灯吹灭。黑暗里，雨声变得格外清楚，像是有人在屋顶上一下一下地敲。\n"
+                    "他裹紧被子躺下，听着雨，慢慢睡着了。"
+                ),
+            )
+        )
         await session.commit()
 
     fake_resolver = AsyncMock()
     fake_resolver.provider.generate.return_value = type(
-        "R", (), {"content": '{"features": [{"name": "白描短句", "desc": "三五字动作短句不解释", "enabled": true}]}'}
+        "R",
+        (),
+        {
+            "content": '{"features": [{"name": "白描短句", "desc": "三五字动作短句不解释", "enabled": true}]}'  # noqa: E501
+        },
     )()
     fake_resolver.model = "mock"
     with patch("app.services.story_forge.resolve_text_provider", return_value=fake_resolver):

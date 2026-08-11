@@ -115,7 +115,9 @@ async def test_scrapers_report_without_crash(monkeypatch) -> None:
     """尽力采集器失败不抛异常，返回状态记录。"""
 
     async def _boom(
-        client: object, url: str, headers: object | None = None,
+        client: object,
+        url: str,
+        headers: object | None = None,
         follow_redirects: bool = True,
     ) -> object:
         raise TimeoutError("blocked")

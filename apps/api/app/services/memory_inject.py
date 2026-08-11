@@ -40,9 +40,7 @@ def _load_json(raw: str | None, default: Any) -> Any:
         return default
 
 
-async def memory_config(
-    db: AsyncSession, user_id: str, asset_id: str
-) -> dict[str, Any]:
+async def memory_config(db: AsyncSession, user_id: str, asset_id: str) -> dict[str, Any]:
     """角色卡 settings.memory 注入配置（默认开启，预算 2500）。"""
     row = await db.get(RoleplayCharacter, asset_id)
     if row is None or row.user_id != user_id:
@@ -78,10 +76,7 @@ async def _search_book_chunks(
     if not chunks:
         return []
     hits = retrieve(
-        [
-            (str(c.get("idx")), str(c.get("title") or ""), str(c.get("text") or ""))
-            for c in chunks
-        ],
+        [(str(c.get("idx")), str(c.get("title") or ""), str(c.get("text") or "")) for c in chunks],
         query,
         top_k=top_k,
         min_score=1,
@@ -100,9 +95,7 @@ def _format_atom(a: dict[str, Any]) -> str:
 def _scenario_nav(scenarios: list[dict[str, Any]], max_items: int = 5) -> str:
     """场景导航：按 heat 降序取前 N 个（name + summary）。"""
     items = []
-    for s in sorted(
-        scenarios, key=lambda x: -int(x.get("heat") or 0)
-    )[:max_items]:
+    for s in sorted(scenarios, key=lambda x: -int(x.get("heat") or 0))[:max_items]:
         name = s.get("name") or s.get("path") or "场景"
         summary = str(s.get("summary") or "")[:80]
         items.append(f"- {name}：{summary}" if summary else f"- {name}")
@@ -156,9 +149,7 @@ async def build_memory_injection(
 
     # FTS 中文单字切分可能漏召回（词典外词）：检索空时兜底拉最近原子记忆
     if not atoms:
-        atoms = await _safe(
-            memory_client.memory_query_atomic(user_id, asset_id, limit=3)
-        ) or []
+        atoms = await _safe(memory_client.memory_query_atomic(user_id, asset_id, limit=3)) or []
 
     # ── system 部分（稳定注入：情商与大方向）──
     system_parts: list[str] = []
@@ -166,11 +157,11 @@ async def build_memory_injection(
         core = _profile_core(profile)
         if core:
             title = profile.book_title or "原著"
-            system_parts.append(
-                f"【原著档案】（你来自《{title}》，以下是你核心设定）\n{core}"
-            )
+            system_parts.append(f"【原著档案】（你来自《{title}》，以下是你核心设定）\n{core}")
     if persona:
-        system_parts.append(f"【交互画像】（你对他/她的了解，随时间积累）\n{str(persona)[:_PERSONA_MAX]}")
+        system_parts.append(
+            f"【交互画像】（你对他/她的了解，随时间积累）\n{str(persona)[:_PERSONA_MAX]}"
+        )
     if scenarios:
         nav = _scenario_nav(scenarios)
         if nav:

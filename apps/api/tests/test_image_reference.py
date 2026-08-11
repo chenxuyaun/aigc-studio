@@ -62,9 +62,7 @@ async def test_image_with_reference_photo(client, admin_token):
     result = json.loads(body["result"])
     assert result.get("reference_photo_id") == photo_id
 
-    content = await client.get(
-        f"/api/v1/assets/{result['asset_id']}/content", headers=headers
-    )
+    content = await client.get(f"/api/v1/assets/{result['asset_id']}/content", headers=headers)
     assert content.status_code == 200
     assert photo_id[:8].encode() in content.content or b"ref:" in content.content
 

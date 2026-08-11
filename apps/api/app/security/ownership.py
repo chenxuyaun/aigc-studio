@@ -88,5 +88,3 @@ def secret_fingerprint(sealed_or_plain: str) -> str:
     if not plain:
         return ""
     return hashlib.sha256(plain.encode("utf-8")).hexdigest()[:8]
-
-

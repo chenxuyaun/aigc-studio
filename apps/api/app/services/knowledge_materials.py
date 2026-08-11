@@ -7,13 +7,12 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.text_document import TextDocument
 from app.services.knowledge_retrieval import chunk_text, retrieve
+from app.services.text_utils import result_text as _result_text
 
 # 精华解读模板（入库时由 LLM 生成，附在文档末尾）
 _SUMMARIZE_PROMPT = """你是资深的文学/文化编辑，负责把素材"读透"后写成创作可直接用的精华解读。
@@ -33,9 +32,6 @@ _SUMMARIZE_PROMPT = """你是资深的文学/文化编辑，负责把素材"读�
 {content}"""
 
 
-from app.services.text_utils import result_text as _result_text
-
-
 async def summarize_for_creation(
     db: AsyncSession,
     title: str,
@@ -49,9 +45,7 @@ async def summarize_for_creation(
         return ""
     from app.services.provider_resolver import resolve_text_provider
 
-    prompt = _SUMMARIZE_PROMPT.format(
-        title=title[:100], content=content[:4000]
-    )
+    prompt = _SUMMARIZE_PROMPT.format(title=title[:100], content=content[:4000])
     try:
         resolved = await resolve_text_provider(db, "")
         result = await resolved.provider.generate(  # type: ignore[attr-defined]
@@ -101,7 +95,8 @@ async def retrieve_material_titles(
 
 
 # 联网搜索结果「读懂」提示词：与知识库入库同理——先提炼成创作可用的要点，而非原文堆砌
-_WEB_DIGEST_PROMPT = """你是资深编辑。以下是按主题「{theme}」联网检索到的网页资料（可能有噪音、广告、无关内容）。
+_WEB_DIGEST_PROMPT = """你是资深编辑。以下是按主题「{theme}」联网检索到的网页资料（可能有
+噪音、广告、无关内容）。  。
 提炼出其中真正与主题相关、有创作价值的内容，输出 JSON（不要任何多余文字）：
 {{
   "notes": "提炼后的素材要点（3-5 条，每条一句话：真实细节/事实/意象/说法，末尾括注来源名）"
@@ -120,9 +115,7 @@ async def _digest_web_results(db: AsyncSession, theme: str, items: list[dict[str
     """搜索结果先经 AI 提炼要点（读懂后注入），失败则原样截断拼接兜底（不阻塞）。"""
     if not items:
         return ""
-    blocks = "\n".join(
-        f"[{i['title']}]({i['url']}): {i['content'][:300]}" for i in items
-    )
+    blocks = "\n".join(f"[{i['title']}]({i['url']}): {i['content'][:300]}" for i in items)
     from app.services.provider_resolver import resolve_text_provider
 
     prompt = _WEB_DIGEST_PROMPT.format(theme=theme[:80], items=blocks[:5000])
@@ -163,9 +156,7 @@ async def retrieve_kb_chunks(
         q = q.where(TextDocument.id.in_(doc_ids))
     result = await db.execute(q.order_by(TextDocument.updated_at.desc()).limit(limit))
     docs = list(result.scalars().all())
-    return [
-        (doc.id, doc.title, text) for doc in docs for text in chunk_text(doc.content)
-    ]
+    return [(doc.id, doc.title, text) for doc in docs for text in chunk_text(doc.content)]
 
 
 async def _retrieve_kb_hits(
@@ -197,8 +188,7 @@ async def _theme_search_query(db: AsyncSession, theme: str) -> str:
     prompt = (
         "把下面这个创作主题压缩成 1 个检索词（20 字内），用于搜索引擎查询相关资料。\n"
         "规则：提取核心名词短语；保持主题的开放性，不得添加主题没有的具体人物/对象；"
-        "输出 JSON（不要任何多余文字）：{\"query\": \"检索词\"}\n\n主题："
-        + theme[:200]
+        '输出 JSON（不要任何多余文字）：{"query": "检索词"}\n\n主题：' + theme[:200]
     )
     try:
         resolved = await resolve_text_provider(db, "")

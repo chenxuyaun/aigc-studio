@@ -14,20 +14,21 @@ async def test_text_generate(client, admin_token):
 
 async def test_retry_failed_task(client, user_token) -> None:
     """失败任务原地重试：状态重置为 queued 并重新入队；非失败任务拒绝。"""
-    from sqlalchemy import select
-
     from app.models.generation_task import GenerationTask
     from app.models.user import User
+    from sqlalchemy import select
+
     from tests.conftest import TestingSessionLocal
 
     headers = {"Authorization": f"Bearer {user_token}"}
     async with TestingSessionLocal() as session:
-        uid = (
-            await session.execute(select(User.id).where(User.username == "user1"))
-        ).scalar_one()
+        uid = (await session.execute(select(User.id).where(User.username == "user1"))).scalar_one()
         task = GenerationTask(
-            task_type="text", status="failed", user_id=uid,
-            params='{"prompt": "测试"}', error_message="上游 500",
+            task_type="text",
+            status="failed",
+            user_id=uid,
+            params='{"prompt": "测试"}',
+            error_message="上游 500",
         )
         session.add(task)
         await session.commit()

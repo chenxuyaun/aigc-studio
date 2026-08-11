@@ -11,7 +11,12 @@ dist/
 build/
 *.db
 .DS_Store
-storage/
+# 仅根级本地存储数据目录（app/storage 是代码，必须提交）
+/storage/
+# API 数据目录（用户媒体/上传，绝不能提交）
+apps/api/storage/
+# CLI 调试残留
+agent_final.json
 .ace-tool/
 
 # 日志与运行产物
@@ -76,3 +81,7 @@ backups/
 .zcode/
 examples/
 apps/web/e2e/.auth/
+
+# 调试产物
+scripts/searx_*.txt
+scripts/searx_*.html

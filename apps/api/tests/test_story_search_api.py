@@ -92,10 +92,9 @@ async def test_project_search_isolated(client, admin_token, user_token) -> None:
 
 # ==== 知识库注入生成 ====
 
+
 @pytest.mark.asyncio
-async def test_knowledge_refs_injected_into_chapter_prompt(
-    db_session, monkeypatch
-) -> None:
+async def test_knowledge_refs_injected_into_chapter_prompt(db_session, monkeypatch) -> None:
     """配置 knowledge_doc_ids 后，_build_chapter_prompt 注入【参考资料】。"""
     from app.models.story_chapter import StoryChapter
     from app.models.story_project import StoryProject
@@ -104,31 +103,42 @@ async def test_knowledge_refs_injected_into_chapter_prompt(
     from tests.conftest import TestingSessionLocal
 
     async with TestingSessionLocal() as db:
-        db.add(StoryProject(
-            id="p-know1", user_id="u1", title="密室小说",
-            synopsis="别墅密室案", settings='{"knowledge_doc_ids": ["doc-honkaku"]}',
-            status="drafting",
-        ))
-        db.add(StoryChapter(
-            id="c-know1", project_id="p-know1", user_id="u1",
-            chapter_no=1, title="第一章", outline="发现尸体", status="outline",
-        ))
-        db.add(TextDocument(
-            id="doc-honkaku", user_id="u1",
-            title="本格推理指南",
-            content="发现尸体是本格推理的起点：本格推理的核心是公平性，读者与侦探拥有相同线索，逻辑必须严密。",
-        ))
+        db.add(
+            StoryProject(
+                id="p-know1",
+                user_id="u1",
+                title="密室小说",
+                synopsis="别墅密室案",
+                settings='{"knowledge_doc_ids": ["doc-honkaku"]}',
+                status="drafting",
+            )
+        )
+        db.add(
+            StoryChapter(
+                id="c-know1",
+                project_id="p-know1",
+                user_id="u1",
+                chapter_no=1,
+                title="第一章",
+                outline="发现尸体",
+                status="outline",
+            )
+        )
+        db.add(
+            TextDocument(
+                id="doc-honkaku",
+                user_id="u1",
+                title="本格推理指南",
+                content="发现尸体是本格推理的起点：本格推理的核心是公平性，读者与侦探拥有相同线索，逻辑必须严密。",
+            )
+        )
         await db.commit()
 
         project = (
-            await db.execute(
-                select(StoryProject).where(StoryProject.id == "p-know1")
-            )
+            await db.execute(select(StoryProject).where(StoryProject.id == "p-know1"))
         ).scalar_one()
         chapter = (
-            await db.execute(
-                select(StoryChapter).where(StoryChapter.id == "c-know1")
-            )
+            await db.execute(select(StoryChapter).where(StoryChapter.id == "c-know1"))
         ).scalar_one()
         _system_prompt, user_prompt, _wb = await story_forge._build_chapter_prompt(
             db, "u1", project, chapter, []
@@ -154,23 +164,29 @@ async def test_outline_prompt_includes_knowledge_refs(db_session, monkeypatch) -
     from tests.conftest import TestingSessionLocal
 
     async with TestingSessionLocal() as db:
-        db.add(StoryProject(
-            id="p-know2", user_id="u1", title="本格小说",
-            synopsis="封闭环境下的交换杀人", settings='{"knowledge_doc_ids": ["doc-guide"]}',
-            status="drafting",
-        ))
-        db.add(TextDocument(
-            id="doc-guide", user_id="u1",
-            title="推理小说创作方法论",
-            content="交换杀人的重点是「交换是否真实存在」，线索比例遵循 40-40-20。",
-        ))
+        db.add(
+            StoryProject(
+                id="p-know2",
+                user_id="u1",
+                title="本格小说",
+                synopsis="封闭环境下的交换杀人",
+                settings='{"knowledge_doc_ids": ["doc-guide"]}',
+                status="drafting",
+            )
+        )
+        db.add(
+            TextDocument(
+                id="doc-guide",
+                user_id="u1",
+                title="推理小说创作方法论",
+                content="交换杀人的重点是「交换是否真实存在」，线索比例遵循 40-40-20。",
+            )
+        )
         await db.commit()
 
         # 直接验证 _knowledge_refs 的产出
         project = (
-            await db.execute(
-                select(StoryProject).where(StoryProject.id == "p-know2")
-            )
+            await db.execute(select(StoryProject).where(StoryProject.id == "p-know2"))
         ).scalar_one()
         refs = await story_forge._knowledge_refs(db, "u1", project, "交换杀人")
         assert "交换杀人" in refs

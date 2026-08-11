@@ -42,11 +42,12 @@ def _load_json(raw: str | None, default: Any) -> Any:
         return default
     try:
         return json.loads(raw)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return default
 
 
 # ==== 项目 CRUD ====
+
 
 def _project_dict(p: StoryProject) -> dict[str, Any]:
     return {
@@ -64,12 +65,16 @@ def _project_dict(p: StoryProject) -> dict[str, Any]:
 
 async def list_projects(db: AsyncSession, user_id: str) -> list[dict[str, Any]]:
     rows = (
-        await db.execute(
-            select(StoryProject)
-            .where(StoryProject.user_id == user_id)
-            .order_by(StoryProject.updated_at.desc())
+        (
+            await db.execute(
+                select(StoryProject)
+                .where(StoryProject.user_id == user_id)
+                .order_by(StoryProject.updated_at.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     items = [_project_dict(p) for p in rows]
     if not items:
         return items
@@ -104,8 +109,14 @@ async def get_project(db: AsyncSession, user_id: str, project_id: str) -> StoryP
 
 
 async def create_project(
-    db: AsyncSession, user_id: str, *, title: str, synopsis: str = "", genre: str = "",
-    character_asset_ids: list[str] | None = None, settings: dict[str, Any] | None = None,
+    db: AsyncSession,
+    user_id: str,
+    *,
+    title: str,
+    synopsis: str = "",
+    genre: str = "",
+    character_asset_ids: list[str] | None = None,
+    settings: dict[str, Any] | None = None,
 ) -> StoryProject:
     p = StoryProject(
         id=str(uuid.uuid4()),
@@ -137,9 +148,7 @@ async def create_project(
     return p
 
 
-async def _card_by_asset(
-    db: AsyncSession, user_id: str, asset_id: str
-) -> dict[str, Any] | None:
+async def _card_by_asset(db: AsyncSession, user_id: str, asset_id: str) -> dict[str, Any] | None:
     """读取角色卡结构化行（无则从 PNG 懒同步，复用 roleplay._load_cards）。"""
     from app.models.roleplay_character import RoleplayCharacter
 
@@ -176,20 +185,24 @@ async def delete_project(db: AsyncSession, user_id: str, project_id: str) -> boo
         return False
     for tbl in (StoryChapter, StoryCharacter):
         for row in (
-            await db.execute(select(tbl).where(tbl.project_id == project_id))
-        ).scalars().all():
+            (await db.execute(select(tbl).where(tbl.project_id == project_id))).scalars().all()
+        ):
             await db.delete(row)
     # 级联删除项目级世界书条目（避免孤儿数据）
     from app.models.roleplay_lore import RoleplayLoreEntry
 
     for lore in (
-        await db.execute(
-            select(RoleplayLoreEntry).where(
-                RoleplayLoreEntry.project_id == project_id,
-                RoleplayLoreEntry.user_id == user_id,
+        (
+            await db.execute(
+                select(RoleplayLoreEntry).where(
+                    RoleplayLoreEntry.project_id == project_id,
+                    RoleplayLoreEntry.user_id == user_id,
+                )
             )
         )
-    ).scalars().all():
+        .scalars()
+        .all()
+    ):
         await db.delete(lore)
     await db.delete(p)
     await db.commit()
@@ -197,6 +210,7 @@ async def delete_project(db: AsyncSession, user_id: str, project_id: str) -> boo
 
 
 # ==== 章节 CRUD ====
+
 
 def _chapter_dict(c: StoryChapter) -> dict[str, Any]:
     return {
@@ -220,12 +234,16 @@ async def list_chapters(
 ) -> list[dict[str, Any]]:
     """章节列表。summary=True：content 只返回前 200 字摘要（bible 聚合用，避免全量 payload）。"""
     rows = (
-        await db.execute(
-            select(StoryChapter)
-            .where(StoryChapter.project_id == project_id, StoryChapter.user_id == user_id)
-            .order_by(StoryChapter.chapter_no.asc())
+        (
+            await db.execute(
+                select(StoryChapter)
+                .where(StoryChapter.project_id == project_id, StoryChapter.user_id == user_id)
+                .order_by(StoryChapter.chapter_no.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     items = [_chapter_dict(c) for c in rows]
     if summary:
         for it in items:
@@ -235,9 +253,7 @@ async def list_chapters(
     return items
 
 
-async def get_chapter(
-    db: AsyncSession, user_id: str, chapter_id: str
-) -> StoryChapter | None:
+async def get_chapter(db: AsyncSession, user_id: str, chapter_id: str) -> StoryChapter | None:
     return (
         await db.execute(
             select(StoryChapter).where(
@@ -248,18 +264,28 @@ async def get_chapter(
 
 
 async def create_chapter(
-    db: AsyncSession, user_id: str, project_id: str, *,
-    chapter_no: int | None = None, title: str = "", outline: str = "",
+    db: AsyncSession,
+    user_id: str,
+    project_id: str,
+    *,
+    chapter_no: int | None = None,
+    title: str = "",
+    outline: str = "",
 ) -> StoryChapter:
     if chapter_no is None:
-        chapter_no = int(
-            (await db.execute(
-                select(func.max(StoryChapter.chapter_no)).where(
-                    StoryChapter.project_id == project_id
-                )
-            )).scalar()
-            or 0
-        ) + 1
+        chapter_no = (
+            int(
+                (
+                    await db.execute(
+                        select(func.max(StoryChapter.chapter_no)).where(
+                            StoryChapter.project_id == project_id
+                        )
+                    )
+                ).scalar()
+                or 0
+            )
+            + 1
+        )
     c = StoryChapter(
         id=str(uuid.uuid4()),
         project_id=project_id,
@@ -302,6 +328,7 @@ async def delete_chapter(db: AsyncSession, user_id: str, chapter_id: str) -> boo
 
 
 # ==== 故事角色实例 CRUD ====
+
 
 async def _placeholder_cards(
     db: AsyncSession, user_id: str, project: StoryProject
@@ -364,19 +391,31 @@ async def list_story_characters(
     db: AsyncSession, user_id: str, project_id: str
 ) -> list[dict[str, Any]]:
     rows = (
-        await db.execute(
-            select(StoryCharacter).where(
-                StoryCharacter.project_id == project_id, StoryCharacter.user_id == user_id
+        (
+            await db.execute(
+                select(StoryCharacter).where(
+                    StoryCharacter.project_id == project_id, StoryCharacter.user_id == user_id
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [_story_char_dict(s) for s in rows]
 
 
 async def create_story_character(
-    db: AsyncSession, user_id: str, project_id: str, *, name: str,
-    character_asset_id: str | None = None, role: str = "supporting",
-    description: str = "", goals: str = "", arc: str = "", current_state: str = "",
+    db: AsyncSession,
+    user_id: str,
+    project_id: str,
+    *,
+    name: str,
+    character_asset_id: str | None = None,
+    role: str = "supporting",
+    description: str = "",
+    goals: str = "",
+    arc: str = "",
+    current_state: str = "",
     skill_ids: list[str] | None = None,
 ) -> StoryCharacter:
     s = StoryCharacter(
@@ -411,8 +450,15 @@ async def update_story_character(
     if s is None:
         return None
     for k, v in fields.items():
-        if k in {"name", "role", "description", "goals", "arc", "current_state",
-                 "character_asset_id"}:
+        if k in {
+            "name",
+            "role",
+            "description",
+            "goals",
+            "arc",
+            "current_state",
+            "character_asset_id",
+        }:
             setattr(s, k, v)
         elif k == "skill_ids":
             s.skill_ids = json.dumps(v or [], ensure_ascii=False)
@@ -421,9 +467,7 @@ async def update_story_character(
     return s
 
 
-async def delete_story_character(
-    db: AsyncSession, user_id: str, character_id: str
-) -> bool:
+async def delete_story_character(db: AsyncSession, user_id: str, character_id: str) -> bool:
     s = (
         await db.execute(
             select(StoryCharacter).where(
@@ -440,8 +484,11 @@ async def delete_story_character(
 
 # ==== bible 上下文组装 ====
 
+
 async def _bible_text(
-    db: AsyncSession, user_id: str, project: StoryProject,
+    db: AsyncSession,
+    user_id: str,
+    project: StoryProject,
     cards: list[tuple[str, dict[str, Any]]],
 ) -> str:
     """角色设定 + 故事实例定位/目标/弧线/当前状态 + 技能说明 → 注入文本。"""
@@ -453,9 +500,7 @@ async def _bible_text(
         skill_ids.update(s["skill_ids"])
     skills: dict[str, Skill] = {}
     if skill_ids:
-        for row in (
-            await db.execute(select(Skill).where(Skill.id.in_(skill_ids)))
-        ).scalars().all():
+        for row in (await db.execute(select(Skill).where(Skill.id.in_(skill_ids)))).scalars().all():
             skills[row.id] = row
     for aid, card in cards:
         name = str(card.get("name") or "角色")
@@ -492,16 +537,20 @@ async def _story_history(
 ) -> tuple[list[dict[str, Any]], str]:
     """已完成章节 → 世界书扫描消息 + 上下文预算内的正文文本。"""
     rows = (
-        await db.execute(
-            select(StoryChapter)
-            .where(
-                StoryChapter.project_id == project.id,
-                StoryChapter.user_id == user_id,
-                StoryChapter.status == "done",
+        (
+            await db.execute(
+                select(StoryChapter)
+                .where(
+                    StoryChapter.project_id == project.id,
+                    StoryChapter.user_id == user_id,
+                    StoryChapter.status == "done",
+                )
+                .order_by(StoryChapter.chapter_no.asc())
             )
-            .order_by(StoryChapter.chapter_no.asc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     messages: list[dict[str, Any]] = []
     bodies: list[str] = []
     budget = _HISTORY_BUDGET
@@ -537,19 +586,19 @@ async def _knowledge_refs(
     if not doc_ids:
         return ""
     docs = (
-        await db.execute(
-            select(TextDocument).where(
-                TextDocument.user_id == user_id, TextDocument.id.in_(doc_ids)
+        (
+            await db.execute(
+                select(TextDocument).where(
+                    TextDocument.user_id == user_id, TextDocument.id.in_(doc_ids)
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not docs:
         return ""
-    chunks = [
-        (doc.id, doc.title, t)
-        for doc in docs
-        for t in chunk_text(doc.content or "")
-    ]
+    chunks = [(doc.id, doc.title, t) for doc in docs for t in chunk_text(doc.content or "")]
     hits = retrieve(chunks, query, top_k=4)
     if not hits:
         return ""
@@ -568,8 +617,11 @@ async def _knowledge_refs(
 
 
 async def _build_chapter_prompt(
-    db: AsyncSession, user_id: str, project: StoryProject,
-    chapter: StoryChapter, cards: list[tuple[str, dict[str, Any]]],
+    db: AsyncSession,
+    user_id: str,
+    project: StoryProject,
+    chapter: StoryChapter,
+    cards: list[tuple[str, dict[str, Any]]],
     instruction: str = "",
 ) -> tuple[str, str, Any]:
     """叙事模式 prompt 组装：返回 (system, user_prompt, worldbook_result)。
@@ -635,24 +687,31 @@ async def _build_chapter_prompt(
         user_parts.append(f"【本次写作指令】\n{instruction}")
     # 项目配置的知识库文档：检索相关片段注入（本格推理规范/方法论等）
     knowledge_refs = await _knowledge_refs(
-        db, user_id, project,
+        db,
+        user_id,
+        project,
         chapter.outline or project.synopsis or chapter.title,
     )
     if knowledge_refs:
         user_parts.append(knowledge_refs)
-    user_parts.append(
-        f"请撰写第 {chapter.chapter_no} 章《{chapter.title}》的正文："
-    )
+    user_parts.append(f"请撰写第 {chapter.chapter_no} 章《{chapter.title}》的正文：")
     user_prompt = "\n\n".join(user_parts)
     return system_prompt, user_prompt, wb
 
 
 # ==== 叙事模式生成 ====
 
+
 async def _chapter_tool_loop(
-    db: AsyncSession, user_id: str, system_prompt: str, user_prompt: str,
-    provider: Any, model: str, *,
-    max_tokens: int | None = None, temperature: float | None = None,
+    db: AsyncSession,
+    user_id: str,
+    system_prompt: str,
+    user_prompt: str,
+    provider: Any,
+    model: str,
+    *,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
     max_rounds: int = 3,
 ) -> tuple[str, list[dict[str, Any]]]:
     """章节生成工具循环：模型可调用 MCP 创作/查询工具，结果回填后继续写作。
@@ -697,8 +756,12 @@ async def _chapter_tool_loop(
             for m in messages
         )
         result = await provider.generate(
-            prompt, model, system=system_prompt, tools=_openai_tools(),
-            temperature=temperature, max_tokens=max_tokens,
+            prompt,
+            model,
+            system=system_prompt,
+            tools=_openai_tools(),
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
         calls = result.tool_calls or []
         if not calls:
@@ -708,7 +771,7 @@ async def _chapter_tool_loop(
             try:
                 args = tc.get("arguments") or {}
                 args = json.loads(args) if isinstance(args, str) else (args or {})
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 args = {}
             out = await _run_tool(name, args if isinstance(args, dict) else {})
             tool_log.append({"name": name, "summary": str(out)[:200]})
@@ -732,9 +795,16 @@ async def _chapter_tool_loop(
 
 
 async def generate_chapter(
-    db: AsyncSession, user_id: str, project_id: str, chapter_id: str, *,
-    model: str = "", max_tokens: int | None = None, temperature: float | None = None,
-    instruction: str = "", tool_loop: bool = False,
+    db: AsyncSession,
+    user_id: str,
+    project_id: str,
+    chapter_id: str,
+    *,
+    model: str = "",
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+    instruction: str = "",
+    tool_loop: bool = False,
 ) -> dict[str, Any]:
     """叙事模式：以角色扮演设定驱动作者视角，生成第 N 章小说正文。
 
@@ -744,9 +814,7 @@ async def generate_chapter(
     chapter = await get_chapter(db, user_id, chapter_id)
     if project is None or chapter is None:
         return {"error": "项目或章节不存在"}
-    cards = await roleplay._load_cards(
-        db, user_id, _load_json(project.character_asset_ids, [])
-    )
+    cards = await roleplay._load_cards(db, user_id, _load_json(project.character_asset_ids, []))
     if not cards:
         # 酒馆角色卡缺失时回退占位角色卡（story_characters 文本即虚拟卡）
         cards = await _placeholder_cards(db, user_id, project)
@@ -764,13 +832,22 @@ async def generate_chapter(
     try:
         if tool_loop:
             content, tool_log = await _chapter_tool_loop(
-                db, user_id, system_prompt, user_prompt, provider, resolved.model,
-                max_tokens=max_tokens, temperature=temperature,
+                db,
+                user_id,
+                system_prompt,
+                user_prompt,
+                provider,
+                resolved.model,
+                max_tokens=max_tokens,
+                temperature=temperature,
             )
         else:
             result = await provider.generate(
-                user_prompt, resolved.model, system=system_prompt,
-                temperature=temperature, max_tokens=max_tokens,
+                user_prompt,
+                resolved.model,
+                system=system_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             content = (result.content or "").strip()
     except Exception as exc:
@@ -809,18 +886,23 @@ async def generate_chapter(
 
 # ==== 剧本模式生成（群聊引擎） ====
 
+
 async def generate_chapter_script(
-    db: AsyncSession, user_id: str, project_id: str, chapter_id: str, *,
-    rounds: int = 6, model: str = "", max_tokens: int | None = None,
+    db: AsyncSession,
+    user_id: str,
+    project_id: str,
+    chapter_id: str,
+    *,
+    rounds: int = 6,
+    model: str = "",
+    max_tokens: int | None = None,
 ) -> dict[str, Any]:
     """剧本模式：复用群聊引擎让角色轮流发言，拼装成对话流章节。"""
     project = await get_project(db, user_id, project_id)
     chapter = await get_chapter(db, user_id, chapter_id)
     if project is None or chapter is None:
         return {"error": "项目或章节不存在"}
-    cards = await roleplay._load_cards(
-        db, user_id, _load_json(project.character_asset_ids, [])
-    )
+    cards = await roleplay._load_cards(db, user_id, _load_json(project.character_asset_ids, []))
     if not cards:
         # 酒馆角色卡缺失时回退占位角色卡（story_characters 文本即虚拟卡）
         cards = await _placeholder_cards(db, user_id, project)
@@ -838,14 +920,22 @@ async def generate_chapter_script(
     turns: list[str] = []
     for i in range(rounds):
         system_prompt, user_prompt, _wb, speaker = await roleplay._build_prompt(
-            db, user_id, cards, messages,
-            group=True, group_strategy="list", group_mode="swap",
+            db,
+            user_id,
+            cards,
+            messages,
+            group=True,
+            group_strategy="list",
+            group_mode="swap",
             memory_summary=_project_summary(project),
         )
         try:
             result = await provider.generate(
-                user_prompt, resolved.model, system=system_prompt,
-                temperature=0.9 if i % 2 else 0.7, max_tokens=max_tokens or 400,
+                user_prompt,
+                resolved.model,
+                system=system_prompt,
+                temperature=0.9 if i % 2 else 0.7,
+                max_tokens=max_tokens or 400,
             )
         except Exception as exc:
             if i == 0:
@@ -857,27 +947,20 @@ async def generate_chapter_script(
             continue
         # 去掉模型自带的角色名前缀（我们已用 speaker 标注）
         if not speaker:
-            speaker = next(
-                (c.get("name") or "角色") for _, c in cards
-            )
+            speaker = next((c.get("name") or "角色") for _, c in cards)
         # 去掉模型自带的角色名前缀（含「角色（头衔）」形式），避免重复标注
-        reply = re.sub(
-            rf"^{re.escape(speaker)}(（[^）]*）)?[：:]\s*", "", reply
-        ).strip()
+        reply = re.sub(rf"^{re.escape(speaker)}(（[^）]*）)?[：:]\s*", "", reply).strip()
         turns.append(f"{speaker}：{reply}")
         messages.append({"role": "assistant", "content": f"{speaker}：{reply}"})
         # 场景提示后需要角色回应：追加轻提示轮
         if i < rounds - 1:
-            messages.append(
-                {"role": "user", "content": "（继续这场戏，轮到下一个角色发言。）"}
-            )
+            messages.append({"role": "user", "content": "（继续这场戏，轮到下一个角色发言。）"})
     if not turns:
         return {"error": "模型未返回任何台词"}
 
     content = (
         f"# 第 {chapter.chapter_no} 章《{chapter.title}》（剧本）\n\n"
-        f"场景：{scene}\n\n"
-        + "\n\n".join(turns)
+        f"场景：{scene}\n\n" + "\n\n".join(turns)
     )
     await _snapshot_chapter(db, chapter, note="重新生成（剧本）")
     chapter.content = content
@@ -898,17 +981,20 @@ async def generate_chapter_script(
 
 # ==== 大纲生成 ====
 
+
 async def generate_outline(
-    db: AsyncSession, user_id: str, project_id: str, *,
-    chapters: int = _OUTLINE_CHAPTERS, model: str = "",
+    db: AsyncSession,
+    user_id: str,
+    project_id: str,
+    *,
+    chapters: int = _OUTLINE_CHAPTERS,
+    model: str = "",
 ) -> dict[str, Any]:
     """根据梗概 + 角色设定生成全章大纲，批量创建章节行（status=outline）。"""
     project = await get_project(db, user_id, project_id)
     if project is None:
         return {"error": "项目不存在"}
-    cards = await roleplay._load_cards(
-        db, user_id, _load_json(project.character_asset_ids, [])
-    )
+    cards = await roleplay._load_cards(db, user_id, _load_json(project.character_asset_ids, []))
     names = [c.get("name") or "角色" for _, c in cards]
     lore_entries = await roleplay._load_lore_entries(db, user_id, names, project.id)
     wb = match_worldbook(lore_entries, [project.synopsis], max_depth=6)
@@ -927,8 +1013,8 @@ async def generate_outline(
     if knowledge_refs:
         system_prompt += knowledge_refs + "\n"
     system_prompt += (
-        "【输出格式】只输出 JSON 数组，每项 {\"title\": \"章节标题\", \"outline\": "
-        "\"本章剧情要点（2-3 句）\"}，"
+        '【输出格式】只输出 JSON 数组，每项 {"title": "章节标题", "outline": '
+        '"本章剧情要点（2-3 句）"}，'
         "不要输出其他文字。"
     )
     resolved = await resolve_text_provider(db, model)
@@ -944,7 +1030,10 @@ async def generate_outline(
     created: list[dict[str, Any]] = []
     for i, item in enumerate(parsed, start=1):
         c = await create_chapter(
-            db, user_id, project_id, chapter_no=i,
+            db,
+            user_id,
+            project_id,
+            chapter_no=i,
             title=str(item.get("title") or f"第 {i} 章"),
             outline=str(item.get("outline") or ""),
         )
@@ -960,7 +1049,7 @@ def _parse_outline_json(raw: str, chapters: int) -> list[dict[str, Any]]:
         return []
     try:
         data = json.loads(m.group(0))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return []
     if not isinstance(data, list):
         return []
@@ -979,9 +1068,7 @@ def _parse_outline_json(raw: str, chapters: int) -> list[dict[str, Any]]:
 # ==== 修订 ====
 
 
-async def _snapshot_chapter(
-    db: AsyncSession, chapter: Any, note: str = ""
-) -> None:
+async def _snapshot_chapter(db: AsyncSession, chapter: Any, note: str = "") -> None:
     """修订/重新生成覆盖前保存旧内容快照（仅当已有正文）。"""
     if not (chapter.content or "").strip():
         return
@@ -1058,7 +1145,11 @@ async def restore_chapter_version(
 
 
 async def revise_chapter(
-    db: AsyncSession, user_id: str, chapter_id: str, instruction: str, *,
+    db: AsyncSession,
+    user_id: str,
+    chapter_id: str,
+    instruction: str,
+    *,
     model: str = "",
 ) -> dict[str, Any]:
     """按指令修订章节正文。"""
@@ -1077,8 +1168,10 @@ async def revise_chapter(
         focus = str(compass_cfg.get("focus") or "").strip()
         if intent or focus:
             compass = "\n".join(
-                [f"【全书承诺】（不可违反）\n{intent}" if intent else "",
-                 f"【当前阶段目标】\n{focus}" if focus else ""]
+                [
+                    f"【全书承诺】（不可违反）\n{intent}" if intent else "",
+                    f"【当前阶段目标】\n{focus}" if focus else "",
+                ]
             ).strip()
     system_prompt = (
         f"你是小说《{project.title if project else ''}》的执笔作者。按指令修订指定章节正文。\n"
@@ -1086,12 +1179,10 @@ async def revise_chapter(
     )
     if compass:
         system_prompt += f"\n\n{compass}"
-    style_block = writing_style_block(project)
+    style_block = writing_style_block(project)  # type: ignore[arg-type]
     if style_block:
         system_prompt += f"\n\n{style_block}"
-    user_prompt = (
-        f"【修订指令】\n{instruction}\n\n【原文】\n{original}\n\n请输出修订后的正文："
-    )
+    user_prompt = f"【修订指令】\n{instruction}\n\n【原文】\n{original}\n\n请输出修订后的正文："
     resolved = await resolve_text_provider(db, model)
     provider = roleplay.cast_text_provider(resolved.provider)
     try:
@@ -1112,6 +1203,7 @@ async def revise_chapter(
 
 # ==== 导出 ====
 
+
 async def export_project(
     db: AsyncSession, user_id: str, project_id: str, fmt: str = "markdown"
 ) -> dict[str, Any]:
@@ -1127,14 +1219,31 @@ async def export_project(
             "binary": True,
         }
     if fmt == "jsonl":
-        lines = [json.dumps({"type": "story", "title": project.title,
-                             "genre": project.genre, "synopsis": project.synopsis},
-                            ensure_ascii=False)]
+        lines = [
+            json.dumps(
+                {
+                    "type": "story",
+                    "title": project.title,
+                    "genre": project.genre,
+                    "synopsis": project.synopsis,
+                },
+                ensure_ascii=False,
+            )
+        ]
         for c in chapters:
-            lines.append(json.dumps({"type": "chapter", "chapter_no": c["chapter_no"],
-                                     "title": c["title"], "outline": c["outline"],
-                                     "content": c["content"], "status": c["status"]},
-                                    ensure_ascii=False))
+            lines.append(
+                json.dumps(
+                    {
+                        "type": "chapter",
+                        "chapter_no": c["chapter_no"],
+                        "title": c["title"],
+                        "outline": c["outline"],
+                        "content": c["content"],
+                        "status": c["status"],
+                    },
+                    ensure_ascii=False,
+                )
+            )
         return {"filename": f"{project.title}.jsonl", "content": "\n".join(lines)}
     parts = [f"# {project.title}", ""]
     if project.genre:
@@ -1153,12 +1262,7 @@ def _build_epub(project: StoryProject, chapters: list[dict[str, Any]]) -> bytes:
     import zipfile
 
     def esc(text: str) -> str:
-        return (
-            str(text)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
+        return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     title = project.title or "未命名作品"
     buf = io.BytesIO()
@@ -1192,19 +1296,19 @@ def _build_epub(project: StoryProject, chapters: list[dict[str, Any]]) -> bytes:
             '<package xmlns="http://www.idpf.org/2007/opf" '
             'version="2.0" unique-identifier="bookid">'
             '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
-            f'<dc:title>{esc(title)}</dc:title>'
-            f'<dc:language>zh-CN</dc:language>'
-            f'<dc:creator>AIGC Studio</dc:creator>'
-            f'<dc:description>{esc(project.synopsis)}</dc:description>'
+            f"<dc:title>{esc(title)}</dc:title>"
+            f"<dc:language>zh-CN</dc:language>"
+            f"<dc:creator>AIGC Studio</dc:creator>"
+            f"<dc:description>{esc(project.synopsis)}</dc:description>"
             "</metadata>"
-            f'<manifest>{"".join(manifest)}</manifest>'
+            f"<manifest>{''.join(manifest)}</manifest>"
             f'<spine toc="ncx">{"".join(spine)}</spine>'
             "</package>",
         )
         # toc.ncx（章节导航）
         navpoints = "".join(
             f'<navPoint id="np{c["chapter_no"]}" playOrder="{c["chapter_no"]}">'
-            f'<navLabel><text>{esc(c["title"])}</text></navLabel>'
+            f"<navLabel><text>{esc(c['title'])}</text></navLabel>"
             f'<content src="ch{c["chapter_no"]}.xhtml"/></navPoint>'
             for c in chapters
         )
@@ -1212,7 +1316,7 @@ def _build_epub(project: StoryProject, chapters: list[dict[str, Any]]) -> bytes:
             "OEBPS/toc.ncx",
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">'
-            f"<head><meta name=\"dtb:uid\" content=\"aigc-{project.id}\"/></head>"
+            f'<head><meta name="dtb:uid" content="aigc-{project.id}"/></head>'
             f"<docTitle><text>{esc(title)}</text></docTitle>"
             f"<navMap>{navpoints}</navMap></ncx>",
         )
@@ -1246,7 +1350,16 @@ _WRITING_STYLE_PROMPT = """你是资深文学编辑。从以下章节正文中�
 - 提取 3-5 条，每条 = 特征名（4-8 字）+ 一句话说明（怎么写的，含一个原文示例片段，10 字内）
 - 只提炼「写法层面」：句式节奏 / 白描或修辞习惯 / 对话写法 / 视角与留白 / 用词偏好
 - 不要提炼剧情内容（剧情是内容不是写法）
-输出 JSON（不要任何多余文字）：{{"features": [{{"name": "白描短句", "desc": "三五个字的动作短句，不解释情绪，如『他愣了愣』", "enabled": true}}]}}
+输出 JSON（不要任何多余文字）：{{"features": [{{"name": "白描短句", "desc": "三五个字的动
+作短句，不解释情绪，如『他愣了愣』", "en
+
+a
+b
+l
+e
+d
+"
+: true}}]}}
 
 章节正文：
 {content}"""
@@ -1303,7 +1416,5 @@ def writing_style_block(project: StoryProject) -> str:
     enabled = [f for f in cfg if isinstance(f, dict) and f.get("enabled")]
     if not enabled:
         return ""
-    lines = [
-        f"- {f.get('name', '特征')}：{f.get('desc', '')}" for f in enabled[:5]
-    ]
+    lines = [f"- {f.get('name', '特征')}：{f.get('desc', '')}" for f in enabled[:5]]
     return "【写作特征池】（本项目已确认的写法特征，本章必须延续这些写法）\n" + "\n".join(lines)

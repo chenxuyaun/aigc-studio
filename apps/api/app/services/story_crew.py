@@ -34,7 +34,7 @@ _STAGE_PROMPTS: dict[str, str] = {
     "stagehand": (
         "你是这部小说的剧务。阅读最新章节正文，推断每位在场角色的当前状态"
         "（处境、心情、关系变化、目标进展）。"
-        "只输出 JSON 对象 {\"角色名\": \"状态描述\"}，不要输出其他文字。"
+        '只输出 JSON 对象 {"角色名": "状态描述"}，不要输出其他文字。'
     ),
     "consistency": (
         "你是这部小说的全书一致性审查员。阅读全书已完成章节与角色设定，"
@@ -98,9 +98,7 @@ async def run_crew(
         if "error" in content:
             return content
         settings["direction"] = content["text"]
-        updated = await story_forge.update_project(
-            db, user_id, project_id, {"settings": settings}
-        )
+        updated = await story_forge.update_project(db, user_id, project_id, {"settings": settings})
         return {"stage": "director", "direction": content["text"], "ok": updated is not None}
 
     # ---- editor：审校报告 ----
@@ -153,8 +151,7 @@ async def run_crew(
             return {"error": "还没有已完成的章节，请先生成章节"}
         # 全书正文（截断保护：最多 6 万字）
         body = "\n\n".join(
-            f"===== 第{c['chapter_no']}章《{c['title']}》 =====\n{c['content']}"
-            for c in done
+            f"===== 第{c['chapter_no']}章《{c['title']}》 =====\n{c['content']}" for c in done
         )[:60000]
         system_prompt = (
             _STAGE_PROMPTS["consistency"]
@@ -195,7 +192,7 @@ def _parse_states(raw: str) -> dict[str, str]:
         return {}
     try:
         data = json.loads(m.group(0))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return {}
     if not isinstance(data, dict):
         return {}

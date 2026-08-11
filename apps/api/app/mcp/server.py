@@ -79,9 +79,7 @@ async def _request_role(ctx: Any | None) -> str:
     if not uid:
         return ""
     async with AsyncSessionLocal() as db:
-        row = (
-            await db.execute(select(User).where(User.id == uid))
-        ).scalar_one_or_none()
+        row = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
         return str(row.role) if row else ""
 
 
@@ -160,10 +158,14 @@ async def list_assets(limit: int = 20, ctx: Any | None = None) -> list[dict[str,
     async with AsyncSessionLocal() as db:
         uid = await _request_user_id(ctx)
         rows = (
-            await db.execute(
-                select(Asset).where(Asset.user_id == uid).order_by(Asset.id.desc()).limit(limit)
+            (
+                await db.execute(
+                    select(Asset).where(Asset.user_id == uid).order_by(Asset.id.desc()).limit(limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [
             {
                 "asset_id": a.id,
@@ -182,9 +184,7 @@ async def get_asset(asset_id: str, ctx: Any | None = None) -> dict[str, Any]:
     """查询素材详情（返回 content 下载路径；仅本人素材）。"""
     async with AsyncSessionLocal() as db:
         uid = await _request_user_id(ctx)
-        a = (
-            await db.execute(select(Asset).where(Asset.id == asset_id))
-        ).scalar_one_or_none()
+        a = (await db.execute(select(Asset).where(Asset.id == asset_id))).scalar_one_or_none()
         if a is None:
             return {"error": f"素材不存在: {asset_id}"}
         if a.user_id != uid:
@@ -201,22 +201,28 @@ async def get_asset(asset_id: str, ctx: Any | None = None) -> dict[str, Any]:
 
 @mcp.tool()
 async def search_prompts(
-    query: str, limit: int = 10, ctx: Any | None = None,
+    query: str,
+    limit: int = 10,
+    ctx: Any | None = None,
 ) -> list[dict[str, Any]]:
     """检索 prompt 库（标题/内容模糊匹配；仅公开或本人）。"""
     async with AsyncSessionLocal() as db:
         uid = await _request_user_id(ctx)
         like = f"%{query}%"
         rows = (
-            await db.execute(
-                select(Prompt)
-                .where(
-                    or_(Prompt.is_public.is_(True), Prompt.author_id == uid),
-                    Prompt.title.like(like) | Prompt.content.like(like),
+            (
+                await db.execute(
+                    select(Prompt)
+                    .where(
+                        or_(Prompt.is_public.is_(True), Prompt.author_id == uid),
+                        Prompt.title.like(like) | Prompt.content.like(like),
+                    )
+                    .limit(limit)
                 )
-                .limit(limit)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [
             {"id": p.id, "title": p.title, "content": p.content[:500], "type": p.prompt_type}
             for p in rows
@@ -242,12 +248,16 @@ async def list_workflows(ctx: Any | None = None) -> list[dict[str, Any]]:
     async with AsyncSessionLocal() as db:
         uid = await _request_user_id(ctx)
         rows = (
-            await db.execute(
-                select(Workflow)
-                .where(or_(Workflow.is_public.is_(True), Workflow.author_id == uid))
-                .limit(50)
+            (
+                await db.execute(
+                    select(Workflow)
+                    .where(or_(Workflow.is_public.is_(True), Workflow.author_id == uid))
+                    .limit(50)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [
             {
                 "id": w.id,
@@ -424,9 +434,7 @@ async def generate_text(prompt: str, model: str = "") -> dict[str, Any]:
 
     try:
         async with AsyncSessionLocal() as db:
-            resolved = await resolve_text_provider(
-                db, model or settings.DEFAULT_TEXT_PROVIDER
-            )
+            resolved = await resolve_text_provider(db, model or settings.DEFAULT_TEXT_PROVIDER)
             provider = cast("TextProvider", resolved.provider)
             result = await provider.generate(prompt, resolved.model)
         return {
@@ -460,6 +468,7 @@ async def trigger_register_batch(count: int = 10, ctx: Any | None = None) -> dic
 
 
 # ==== Story Forge 创作工具（供 agent/角色技能工具循环调用） ====
+
 
 @mcp.tool()
 async def read_bible(project_id: str, ctx: Any | None = None) -> dict[str, Any]:
@@ -495,7 +504,10 @@ async def read_bible(project_id: str, ctx: Any | None = None) -> dict[str, Any]:
 
 @mcp.tool()
 async def write_chapter(
-    project_id: str, chapter_no: int, content: str, title: str = "",
+    project_id: str,
+    chapter_no: int,
+    content: str,
+    title: str = "",
     ctx: Any | None = None,
 ) -> dict[str, Any]:
     """把正文写入指定章节（创作工具：agent/角色提交自己的章节内容）。"""
@@ -564,9 +576,7 @@ async def check_story_consistency(
 
     async with AsyncSessionLocal() as db:
         uid = await _request_user_id(ctx)
-        return await story_crew.run_crew(
-            db, uid, project_id, "consistency", model=model
-        )
+        return await story_crew.run_crew(db, uid, project_id, "consistency", model=model)
 
 
 def _openai_tools() -> list[dict[str, Any]]:

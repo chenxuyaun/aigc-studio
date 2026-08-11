@@ -134,9 +134,7 @@ class Settings(BaseSettings):
         }
         for env_value, env_name in defaults.values():
             if self.model_dump().get(env_name) == env_value:
-                raise ValueError(
-                    f"生产环境禁止使用默认 {env_name}，请在 .env 配置强随机值"
-                )
+                raise ValueError(f"生产环境禁止使用默认 {env_name}，请在 .env 配置强随机值")
         if "change-me" in (self.JWT_SECRET_KEY + self.APP_SECRET_KEY):
             raise ValueError("生产环境 JWT/APP secret 不能包含占位符 change-me")
         return self

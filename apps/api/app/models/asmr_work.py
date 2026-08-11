@@ -16,9 +16,7 @@ class AsmrWork(Base):
     """ASMR 作品元数据条目（幂等 upsert：source + source_work_id 唯一）。"""
 
     __tablename__ = "asmr_works"
-    __table_args__ = (
-        UniqueConstraint("source", "source_work_id", name="uq_asmr_source_work"),
-    )
+    __table_args__ = (UniqueConstraint("source", "source_work_id", name="uq_asmr_source_work"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     source: Mapped[str] = mapped_column(String(30), nullable=False, index=True)

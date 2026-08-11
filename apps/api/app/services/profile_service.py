@@ -37,26 +37,26 @@ async def aggregate_preferences(db: AsyncSession, user_id: str) -> dict[str, Any
     agent_ids: Counter[str] = Counter()
 
     works = (
-        await db.execute(
-            select(MusicWork).where(MusicWork.user_id == user_id).limit(100)
-        )
-    ).scalars().all()
+        (await db.execute(select(MusicWork).where(MusicWork.user_id == user_id).limit(100)))
+        .scalars()
+        .all()
+    )
     for w in works:
         if w.style:
             styles[str(w.style)] += 1
-        for t in (str(w.tags or "").split(",")):
+        for t in str(w.tags or "").split(","):
             t = t.strip()
             if t and t != w.style:
                 themes[t] += 1
         if w.theme:
-            for word in str(w.theme)[:60]:
+            for _word in str(w.theme)[:60]:
                 pass  # 主题词频依赖分词，跳过细粒度（用 tags 足够）
 
     runs = (
-        await db.execute(
-            select(MissionRun).where(MissionRun.user_id == user_id).limit(50)
-        )
-    ).scalars().all()
+        (await db.execute(select(MissionRun).where(MissionRun.user_id == user_id).limit(50)))
+        .scalars()
+        .all()
+    )
     for r in runs:
         try:
             plan = json.loads(r.plan or "[]")
@@ -66,19 +66,17 @@ async def aggregate_preferences(db: AsyncSession, user_id: str) -> dict[str, Any
             pass
 
     agent_runs = (
-        await db.execute(
-            select(AgentRun).where(AgentRun.user_id == user_id).limit(50)
-        )
-    ).scalars().all()
+        (await db.execute(select(AgentRun).where(AgentRun.user_id == user_id).limit(50)))
+        .scalars()
+        .all()
+    )
     for a in agent_runs:
         agent_ids[str(a.agent_id)] += 1
 
     agent_names: dict[str, str] = {}
     if agent_ids:
         rows = (
-            await db.execute(
-                select(Agent.id, Agent.name).where(Agent.id.in_(list(agent_ids)))
-            )
+            await db.execute(select(Agent.id, Agent.name).where(Agent.id.in_(list(agent_ids))))
         ).all()
         agent_names = {str(i): str(n) for i, n in rows}
 
@@ -102,9 +100,7 @@ async def build_profile_text(db: AsyncSession, user_id: str) -> str:
     if prefs["themes"]:
         lines.append("主题偏好：" + "、".join(prefs["themes"]))
     if prefs["agents"]:
-        lines.append(
-            "常用 Agent：" + "、".join(a["name"] for a in prefs["agents"])
-        )
+        lines.append("常用 Agent：" + "、".join(a["name"] for a in prefs["agents"]))
     if prefs["steps"]:
         lines.append("常用任务类型：" + "、".join(prefs["steps"]))
     if not lines:

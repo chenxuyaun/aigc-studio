@@ -17,9 +17,7 @@ class PromptSource(Base):
     source_author: Mapped[str] = mapped_column(String(200), default="")
     source_license: Mapped[str] = mapped_column(String(100), default="")
     attribution: Mapped[str] = mapped_column(String(500), default="")
-    imported_at: Mapped[datetime] = mapped_column(
-        TZDateTime(), server_default=func.now()
-    )
+    imported_at: Mapped[datetime] = mapped_column(TZDateTime(), server_default=func.now())
     content_hash: Mapped[str] = mapped_column(String(64), default="")
     prompt_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("prompts.id"), nullable=True

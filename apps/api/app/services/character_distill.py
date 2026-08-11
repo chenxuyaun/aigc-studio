@@ -33,8 +33,7 @@ _SUMMARY_BATCH = 8
 # 档案生成输入预算（摘要拼接后）
 _DISTILL_INPUT_LIMIT = 32000
 
-_PROFILE_SYSTEM = (
-    """你是资深角色塑造专家。从给定的小说/故事文本中蒸馏出指定角色的完整档案，用于后续 AI 扮演该角色陪伴读者。
+_PROFILE_SYSTEM = """你是资深角色塑造专家。从给定的小说/故事文本中蒸馏出指定角色的完整档案，用于后续 AI 扮演该角色陪伴读者。
 
 输出严格 JSON（不要 markdown 代码块）：
 {
@@ -50,7 +49,6 @@ _PROFILE_SYSTEM = (
 【目标角色匹配（强制）】必须精确蒸馏【目标角色】字段中指定的角色——以该角色的全名/称呼为准，优先匹配文本中明确出现该名字的角色。若文本中找不到与目标角色名对应的角色，则输出：
 {"identity": "未找到角色", "personality": "", "speech_style": "", "knowledge_bounds": "", "relationships": [], "core_memories": []}
 禁止擅自选择其他角色代替目标角色。"""  # noqa: E501
-)
 
 
 def _extract_json(text: str) -> dict[str, Any] | None:
@@ -78,7 +76,10 @@ def _extract_json(text: str) -> dict[str, Any] | None:
 
 
 async def _generate(
-    db: AsyncSession, system: str, user: str, max_tokens: int = 4000,
+    db: AsyncSession,
+    system: str,
+    user: str,
+    max_tokens: int = 4000,
 ) -> str:
     """调默认文本 provider 生成（失败抛异常由任务层记录）。"""
     from app.services.roleplay import cast_text_provider
@@ -86,32 +87,36 @@ async def _generate(
     resolved = await resolve_text_provider(db, "")
     provider = cast_text_provider(resolved.provider)
     result = await provider.generate(
-        user, resolved.model, system=system, max_tokens=max_tokens, temperature=0.4,
+        user,
+        resolved.model,
+        system=system,
+        max_tokens=max_tokens,
+        temperature=0.4,
     )
     return result.content
 
 
 async def _summarize_long_text(db: AsyncSession, text: str) -> str:
     """长文分块摘要：一次调用批量输出每块 ≤300 字摘要。"""
-    blocks = [
-        text[i : i + _SUMMARY_CHUNK]
-        for i in range(0, len(text), _SUMMARY_CHUNK)
-    ]
+    blocks = [text[i : i + _SUMMARY_CHUNK] for i in range(0, len(text), _SUMMARY_CHUNK)]
     summaries: list[str] = []
     for start in range(0, len(blocks), _SUMMARY_BATCH):
         batch = blocks[start : start + _SUMMARY_BATCH]
         user = (
             "以下是小说文本片段（每段以 【片段N】 开头）。请为每段输出 ≤300 字的中文摘要，"
             "保留与角色相关的情节、对话、人物关系细节。输出 JSON 数组，"
-            "格式：[{\"idx\": 0, \"summary\": \"...\"}, ...]\n\n"
+            '格式：[{"idx": 0, "summary": "..."}, ...]\n\n'
             + "\n\n".join(f"【片段{i}】\n{seg}" for i, seg in enumerate(batch))
         )
         raw = await _generate(
-            db, "你是小说内容摘要助手，只输出 JSON 数组。", user, max_tokens=3000,
+            db,
+            "你是小说内容摘要助手，只输出 JSON 数组。",
+            user,
+            max_tokens=3000,
         )
         try:
             data = json.loads(raw)
-            for item in (data if isinstance(data, list) else []):
+            for item in data if isinstance(data, list) else []:
                 if isinstance(item, dict) and item.get("summary"):
                     summaries.append(str(item["summary"]))
         except Exception:
@@ -121,8 +126,11 @@ async def _summarize_long_text(db: AsyncSession, text: str) -> str:
 
 
 async def distill_profile(
-    db: AsyncSession, user_id: str, asset_id: str,
-    doc_id: str | None = None, text: str | None = None,
+    db: AsyncSession,
+    user_id: str,
+    asset_id: str,
+    doc_id: str | None = None,
+    text: str | None = None,
     book_title: str | None = None,
 ) -> CharacterProfile:
     """执行蒸馏（任务内调用）：生成档案 + 分块事实库，写回 profile 记录。"""
@@ -168,8 +176,10 @@ async def distill_profile(
     ).scalar_one_or_none()
     if profile is None:
         profile = CharacterProfile(
-            asset_id=asset_id, user_id=user_id,
-            source_doc_id=doc_id, book_title=book_title,
+            asset_id=asset_id,
+            user_id=user_id,
+            source_doc_id=doc_id,
+            book_title=book_title,
         )
         db.add(profile)
     else:
@@ -204,12 +214,12 @@ async def distill_profile(
         profile.personality = str(data.get("personality") or "")[:2000]
         profile.speech_style = str(data.get("speech_style") or "")[:1500]
         profile.knowledge_bounds = str(data.get("knowledge_bounds") or "")[:1000]
-        profile.relationships = json.dumps(
-            data.get("relationships") or [], ensure_ascii=False
-        )[:20000]
-        profile.core_memories = json.dumps(
-            data.get("core_memories") or [], ensure_ascii=False
-        )[:20000]
+        profile.relationships = json.dumps(data.get("relationships") or [], ensure_ascii=False)[
+            :20000
+        ]
+        profile.core_memories = json.dumps(data.get("core_memories") or [], ensure_ascii=False)[
+            :20000
+        ]
 
         # 原文分块事实库（召回检索用）
         chunks = chunk_text(source)

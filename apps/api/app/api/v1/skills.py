@@ -32,7 +32,7 @@ def _with_dict(s: Skill) -> dict[str, object]:
     data: dict[str, object] = {c.name: getattr(s, c.name) for c in s.__table__.columns}
     try:
         data["inputs_schema"] = json.loads(str(data.get("inputs_schema") or "{}"))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         data["inputs_schema"] = {}
     return data
 

@@ -68,9 +68,7 @@ def book_to_text(book: dict[str, dict[str, str]]) -> str:
     lines = []
     for ch, cats in book.items():
         if cats:
-            lines.append(
-                f"- {ch}：" + "；".join(f"{k}={v}" for k, v in cats.items())
-            )
+            lines.append(f"- {ch}：" + "；".join(f"{k}={v}" for k, v in cats.items()))
     return "\n".join(lines) if lines else ""
 
 

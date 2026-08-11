@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.services.knowledge_materials import (
     _digest_web_results,
     retrieve_creation_materials,
@@ -27,18 +26,25 @@ async def test_search_web_uses_searxng_zh_first():
         patch("app.services.web_search._search_wikipedia") as m_wiki,
     ):
         out = await search_web("矿工", limit=3)
-    assert out and out[0]["title"] == "a"
+    assert out
+    assert out[0]["title"] == "a"
     assert m_wiki.await_count == 0
 
 
 @pytest.mark.asyncio
 async def test_search_web_zh_empty_then_en_locale():
     """SearXNG zh-CN 空 → 自动试 en locale。"""
-    zh_hits, en_hits = [], [{"title": "Miner", "url": "https://en.example", "content": "coal miner"}]
-    with patch(
-        "app.services.web_search._search_searxng",
-        new=AsyncMock(side_effect=lambda q, lim, lang: en_hits if lang == "en" else zh_hits),
-    ) as m_sx, patch("app.services.web_search._search_wikipedia") as m_wiki:
+    zh_hits, en_hits = (
+        [],
+        [{"title": "Miner", "url": "https://en.example", "content": "coal miner"}],
+    )
+    with (
+        patch(
+            "app.services.web_search._search_searxng",
+            new=AsyncMock(side_effect=lambda q, lim, lang: en_hits if lang == "en" else zh_hits),
+        ) as m_sx,
+        patch("app.services.web_search._search_wikipedia") as m_wiki,
+    ):
         out = await search_web("矿工", limit=3)
     assert out == en_hits
     langs = [c.args[2] for c in m_sx.await_args_list]
@@ -84,12 +90,19 @@ async def test_digest_web_results_llm_ok(client):
     ]
     fake_resolver = AsyncMock()
     fake_resolver.provider.generate.return_value = type(
-        "R", (), {"content": json.dumps({"notes": ["- 井下靠气体检测保命（矿井安全）", "- 山西煤史百年（煤矿历史）"]})}
+        "R",
+        (),
+        {
+            "content": json.dumps(
+                {"notes": ["- 井下靠气体检测保命（矿井安全）", "- 山西煤史百年（煤矿历史）"]}
+            )
+        },
     )()
     fake_resolver.model = "mock"
     with patch("app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver):
         out = await _digest_web_results(None, "矿工", items)
-    assert "气体检测" in out and "煤史" in out
+    assert "气体检测" in out
+    assert "煤史" in out
 
 
 @pytest.mark.asyncio
@@ -114,17 +127,25 @@ async def test_retrieve_creation_materials_web_even_with_kb_hits(client):
         ("d2", "茅屋为秋风所破歌（民生关怀）", "布衾多年冷似铁。", 4),
         ("d3", "石壕吏（叙事白描）", "老妪力虽衰，请从吏夜归。", 4),
     ]
-    web_items = [{"title": "海上风电", "url": "https://example.com/sea", "content": "百米塔筒检修规程…"}]
+    web_items = [
+        {"title": "海上风电", "url": "https://example.com/sea", "content": "百米塔筒检修规程…"}
+    ]
     with (
-        patch("app.services.knowledge_materials._retrieve_kb_hits", new=AsyncMock(return_value=strong)),
-        patch("app.services.web_search.search_web", new=AsyncMock(return_value=web_items)) as m_search,
+        patch(
+            "app.services.knowledge_materials._retrieve_kb_hits", new=AsyncMock(return_value=strong)
+        ),
+        patch(
+            "app.services.web_search.search_web", new=AsyncMock(return_value=web_items)
+        ) as m_search,
     ):
-        kb_text, kb_titles, web_text, web_titles = await retrieve_creation_materials(
+        kb_text, kb_titles, _web_text, web_titles = await retrieve_creation_materials(
             None, "admin", "海上风电运维工", limit=3, use_web=True
         )
     assert m_search.await_count == 1
-    assert kb_text and len(kb_titles) == 3
-    assert web_titles and web_titles[0].startswith("🌐 ")
+    assert kb_text
+    assert len(kb_titles) == 3
+    assert web_titles
+    assert web_titles[0].startswith("🌐 ")
 
 
 async def test_retrieve_creation_materials_no_web_when_disabled(client):
@@ -133,11 +154,13 @@ async def test_retrieve_creation_materials_no_web_when_disabled(client):
         patch("app.services.knowledge_materials._retrieve_kb_hits", new=AsyncMock(return_value=[])),
         patch("app.services.web_search.search_web") as m_search,
     ):
-        kb_text, kb_titles, web_text, web_titles = await retrieve_creation_materials(
+        kb_text, _kb_titles, web_text, web_titles = await retrieve_creation_materials(
             None, "admin", "深海采矿装备", limit=3, use_web=False
         )
     m_search.assert_not_awaited()
-    assert kb_text == "" and web_text == "" and web_titles == []
+    assert kb_text == ""
+    assert web_text == ""
+    assert web_titles == []
 
 
 @pytest.mark.asyncio
@@ -148,20 +171,28 @@ async def test_retrieve_creation_materials_web_when_enabled(client):
         patch("app.services.web_search.search_web") as m_search,
     ):
         m_search.return_value = [
-            {"title": "深海采矿", "url": "https://example.com/sea", "content": "深海采矿装备与环保争议…"}
+            {
+                "title": "深海采矿",
+                "url": "https://example.com/sea",
+                "content": "深海采矿装备与环保争议…",
+            }
         ]
         fake_resolver = AsyncMock()
         fake_resolver.provider.generate.return_value = type(
             "R", (), {"content": json.dumps({"notes": ["- 深海采矿有环保争议（深海采矿）"]})}
         )()
         fake_resolver.model = "mock"
-        with patch("app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver):
-            kb_text, kb_titles, web_text, web_titles = await retrieve_creation_materials(
+        with patch(
+            "app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver
+        ):
+            _kb_text, _kb_titles, web_text, web_titles = await retrieve_creation_materials(
                 None, "admin", "深海采矿装备", limit=3, use_web=True
             )
     m_search.assert_awaited_once()
-    assert web_text and "环保争议" in web_text
-    assert web_titles and web_titles[0].startswith("🌐 ")
+    assert web_text
+    assert "环保争议" in web_text
+    assert web_titles
+    assert web_titles[0].startswith("🌐 ")
 
 
 @pytest.mark.asyncio
@@ -171,10 +202,11 @@ async def test_retrieve_creation_materials_web_error_silent(client):
         patch("app.services.knowledge_materials._retrieve_kb_hits", new=AsyncMock(return_value=[])),
         patch("app.services.web_search.search_web", side_effect=RuntimeError("searxng down")),
     ):
-        kb_text, kb_titles, web_text, web_titles = await retrieve_creation_materials(
+        _kb_text, _kb_titles, web_text, web_titles = await retrieve_creation_materials(
             None, "admin", "深海采矿装备", limit=3, use_web=True
         )
-    assert web_text == "" and web_titles == []
+    assert web_text == ""
+    assert web_titles == []
 
 
 # ---------- 搜索前检索词提取 ----------

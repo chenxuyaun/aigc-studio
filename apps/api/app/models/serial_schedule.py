@@ -19,9 +19,7 @@ from app.models.types import TZDateTime
 class SerialSchedule(Base):
     __tablename__ = "serial_schedules"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), index=True)
     user_id: Mapped[str] = mapped_column(String(36), index=True)
     # 两次生成间隔（分钟）
@@ -43,9 +41,7 @@ class SerialSchedule(Base):
     error_message: Mapped[str] = mapped_column(Text, nullable=False, default="")
     # 连续失败计数（>=3 自动暂停，防死循环刷失败任务）
     fail_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    created_at: Mapped[datetime] = mapped_column(
-        TZDateTime(), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         TZDateTime(), server_default=func.now(), onupdate=func.now()
     )

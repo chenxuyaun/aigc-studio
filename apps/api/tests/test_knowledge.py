@@ -232,20 +232,24 @@ async def test_pending_doc_excluded_from_retrieval_and_confirm(client, admin_tok
     """pending 文档不参与问答检索；确认接口后生效。"""
     headers = {"Authorization": f"Bearer {admin_token}"}
     # 直接插一条 pending 文档（用 admin 真实 user id）
-    from sqlalchemy import select
-
     from app.models.text_document import TextDocument
     from app.models.user import User
+    from sqlalchemy import select
+
     from tests.conftest import TestingSessionLocal
 
     async with TestingSessionLocal() as session:
         admin_id = (
             await session.execute(select(User.id).where(User.username == "admin"))
         ).scalar_one()
-        session.add(TextDocument(
-            title="AI回填示例", user_id=admin_id,
-            content="码头工人的一天：凌晨三点扛包，盐雾混进老茧。", status="pending",
-        ))
+        session.add(
+            TextDocument(
+                title="AI回填示例",
+                user_id=admin_id,
+                content="码头工人的一天：凌晨三点扛包，盐雾混进老茧。",
+                status="pending",
+            )
+        )
         await session.commit()
 
     # 问答检索不应命中 pending
@@ -260,12 +264,11 @@ async def test_pending_doc_excluded_from_retrieval_and_confirm(client, admin_tok
     # 列表能看到（status 字段）
     resp = await client.get("/api/v1/knowledge/documents", headers=headers)
     item = next((d for d in resp.json() if d["title"] == "AI回填示例"), None)
-    assert item and item["status"] == "pending"
+    assert item
+    assert item["status"] == "pending"
 
     # 确认后参与检索
-    resp = await client.put(
-        f"/api/v1/knowledge/documents/{item['id']}/confirm", headers=headers
-    )
+    resp = await client.put(f"/api/v1/knowledge/documents/{item['id']}/confirm", headers=headers)
     assert resp.json()["success"] is True
     resp = await client.post(
         "/api/v1/knowledge/ask",

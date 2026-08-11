@@ -31,16 +31,20 @@ async def _collect() -> dict[str, object]:
         report["sections"]["data"] = {
             "agent_projects": (
                 await db.execute(select(func.count()).select_from(AgentProject))
-            ).scalar() or 0,
+            ).scalar()
+            or 0,
             "agent_articles": (
                 await db.execute(select(func.count()).select_from(AgentArticle))
-            ).scalar() or 0,
+            ).scalar()
+            or 0,
             "agent_comparisons": (
                 await db.execute(select(func.count()).select_from(AgentComparison))
-            ).scalar() or 0,
+            ).scalar()
+            or 0,
             "tasks_total": (
                 await db.execute(select(func.count()).select_from(GenerationTask))
-            ).scalar() or 0,
+            ).scalar()
+            or 0,
         }
         # 近 24h 任务状态分布
         from datetime import UTC, datetime, timedelta
@@ -60,10 +64,10 @@ async def _collect() -> dict[str, object]:
         from app.models.serial_schedule import SerialSchedule
 
         serial_rows = (
-            await db.execute(
-                select(SerialSchedule).where(SerialSchedule.fail_count > 0)
-            )
-        ).scalars().all()
+            (await db.execute(select(SerialSchedule).where(SerialSchedule.fail_count > 0)))
+            .scalars()
+            .all()
+        )
         report["sections"]["serial_alerts"] = [
             {
                 "id": str(r.id)[:8],
@@ -83,10 +87,10 @@ async def _collect() -> dict[str, object]:
         stall_days = int(os.environ.get("SERIAL_STALL_DAYS", "7"))
         cutoff_stall = datetime.now(UTC) - timedelta(days=stall_days)
         ongoing = (
-            await db.execute(
-                select(StoryProject).where(StoryProject.status == "ongoing")
-            )
-        ).scalars().all()
+            (await db.execute(select(StoryProject).where(StoryProject.status == "ongoing")))
+            .scalars()
+            .all()
+        )
         stall_alerts: list[dict[str, object]] = []
         for p in ongoing:
             last_ch = (
@@ -98,30 +102,22 @@ async def _collect() -> dict[str, object]:
                 )
             ).scalar()
             if last_ch is None:
-                stall_alerts.append(
-                    {"title": p.title, "note": "连载中但尚无章节"}
-                )
+                stall_alerts.append({"title": p.title, "note": "连载中但尚无章节"})
             elif last_ch < cutoff_stall:
                 days = (datetime.now(UTC) - last_ch).days
-                stall_alerts.append(
-                    {"title": p.title, "days_since_update": days}
-                )
+                stall_alerts.append({"title": p.title, "days_since_update": days})
         report["sections"]["serial_project_alerts"] = stall_alerts
 
         # ASMR 聚合库同步状态：总量 + 上次同步时间 + 24h 增量（异常可告警）
         from app.models.asmr_work import AsmrWork
 
-        asmr_total = (
-            await db.execute(select(func.count()).select_from(AsmrWork))
-        ).scalar() or 0
+        asmr_total = (await db.execute(select(func.count()).select_from(AsmrWork))).scalar() or 0
         asmr_last = (
             await db.execute(select(func.max(AsmrWork.updated_at)).select_from(AsmrWork))
         ).scalar()
         asmr_24h = (
             await db.execute(
-                select(func.count())
-                .select_from(AsmrWork)
-                .where(AsmrWork.updated_at >= since)
+                select(func.count()).select_from(AsmrWork).where(AsmrWork.updated_at >= since)
             )
         ).scalar() or 0
         report["sections"]["asmr"] = {
@@ -196,9 +192,7 @@ def daily_inspection() -> dict[str, object]:
             from sqlalchemy import delete
 
             cutoff = datetime.now(UTC) - timedelta(days=30)
-            await db.execute(
-                delete(InspectionReport).where(InspectionReport.created_at < cutoff)
-            )
+            await db.execute(delete(InspectionReport).where(InspectionReport.created_at < cutoff))
             await db.commit()
         return {"ok": True}
 

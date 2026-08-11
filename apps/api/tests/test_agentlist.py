@@ -77,6 +77,7 @@ Body text here with a ### not-an-entry subsection that must not be split.
 
 # ==== 解析器 ====
 
+
 def test_parse_full_text_counts() -> None:
     parsed = parse_full_text(MINI_DUMP)
     assert len(parsed["comparisons"]) == 1
@@ -119,6 +120,7 @@ def test_parse_ignores_non_entries() -> None:
 
 # ==== sync 幂等 ====
 
+
 @pytest.mark.asyncio
 async def test_sync_idempotent(
     client: AsyncClient, admin_token: str, monkeypatch: pytest.MonkeyPatch
@@ -141,6 +143,7 @@ async def test_sync_idempotent(
 
 
 # ==== API ====
+
 
 @pytest.mark.asyncio
 async def test_api_requires_auth(client: AsyncClient) -> None:
@@ -209,9 +212,7 @@ async def test_api_stats_and_articles(
 
 
 @pytest.mark.asyncio
-async def test_api_sync_requires_admin(
-    client: AsyncClient, user_token: str
-) -> None:
+async def test_api_sync_requires_admin(client: AsyncClient, user_token: str) -> None:
     r = await client.post(
         "/api/v1/agentlist/sync", headers={"Authorization": f"Bearer {user_token}"}
     )

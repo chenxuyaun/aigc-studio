@@ -13,13 +13,14 @@ from tests.conftest import TestingSessionLocal
 
 async def _seed_character() -> None:
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         db.add(
             RoleplayCharacter(
-                asset_id="char-1", user_id=u.id,
-                name="测试角色", description="desc", personality="p",
+                asset_id="char-1",
+                user_id=u.id,
+                name="测试角色",
+                description="desc",
+                personality="p",
             )
         )
         await db.commit()
@@ -57,9 +58,7 @@ async def test_distill_trigger_and_status(client, user_token, monkeypatch) -> No
     """触发蒸馏 → profile pending；状态查询返回。"""
     await _seed_character()
     # 测试环境不派发真实任务（避免 LLM 调用）
-    monkeypatch.setattr(
-        "app.api.v1.memory._dispatch_distill", lambda *a, **k: None
-    )
+    monkeypatch.setattr("app.api.v1.memory._dispatch_distill", lambda *a, **k: None)
     r = await client.post(
         "/api/v1/memory/distill",
         headers=_client_headers(user_token),
@@ -68,9 +67,7 @@ async def test_distill_trigger_and_status(client, user_token, monkeypatch) -> No
     assert r.status_code == 200
     assert r.json()["status"] == "pending"
 
-    r = await client.get(
-        "/api/v1/memory/distill/char-1", headers=_client_headers(user_token)
-    )
+    r = await client.get("/api/v1/memory/distill/char-1", headers=_client_headers(user_token))
     assert r.status_code == 200
     assert r.json()["status"] == "pending"
     assert r.json()["asset_id"] == "char-1"
@@ -81,23 +78,24 @@ async def test_memory_overview_gateway_absent(client, user_token, monkeypatch) -
     """gateway 不可用时总览降级：档案有值，交互记忆为空，不报错。"""
     await _seed_character()
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         db.add(
             CharacterProfile(
-                asset_id="char-1", user_id=u.id, book_title="测试之书",
-                identity="测试身份", status="done",
-                relationships="[]", core_memories="[]", book_chunks="[]",
+                asset_id="char-1",
+                user_id=u.id,
+                book_title="测试之书",
+                identity="测试身份",
+                status="done",
+                relationships="[]",
+                core_memories="[]",
+                book_chunks="[]",
             )
         )
         await db.commit()
     # 禁用 gateway（等价于未配置 endpoint）
     monkeypatch.setattr("app.services.memory_client.settings.TDAI_MEMORY_ENDPOINT", "")
 
-    r = await client.get(
-        "/api/v1/memory/char-1", headers=_client_headers(user_token)
-    )
+    r = await client.get("/api/v1/memory/char-1", headers=_client_headers(user_token))
     assert r.status_code == 200
     body = r.json()
     assert body["profile"] is not None
@@ -122,9 +120,7 @@ async def test_memory_config_toggle(client, user_token) -> None:
     assert r.json()["config"]["inject"] is False
     assert r.json()["config"]["budget"] == 1500
 
-    r = await client.get(
-        "/api/v1/memory/char-1/config", headers=_client_headers(user_token)
-    )
+    r = await client.get("/api/v1/memory/char-1/config", headers=_client_headers(user_token))
     assert r.json()["config"]["inject"] is False
 
     # 恢复
@@ -140,8 +136,6 @@ async def test_memory_clear_ok(client, user_token, monkeypatch) -> None:
     """清空交互记忆（gateway 缺失时仍返回 ok）。"""
     await _seed_character()
     monkeypatch.setattr("app.services.memory_client.settings.TDAI_MEMORY_ENDPOINT", "")
-    r = await client.post(
-        "/api/v1/memory/char-1/clear", headers=_client_headers(user_token)
-    )
+    r = await client.post("/api/v1/memory/char-1/clear", headers=_client_headers(user_token))
     assert r.status_code == 200
     assert r.json()["ok"] is True

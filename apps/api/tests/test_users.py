@@ -28,9 +28,7 @@ async def test_admin_creates_user_and_login(client, admin_token):
     assert any(u["username"] == "newbie" for u in resp.json())
 
     # 停用后登录被拒
-    resp = await client.put(
-        f"/api/v1/users/{user_id}", json={"is_active": False}, headers=headers
-    )
+    resp = await client.put(f"/api/v1/users/{user_id}", json={"is_active": False}, headers=headers)
     assert resp.status_code == 200
     resp = await client.post(
         "/api/v1/auth/login", json={"username": "newbie", "password": "pass1234"}

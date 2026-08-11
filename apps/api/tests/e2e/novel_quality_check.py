@@ -9,6 +9,7 @@
 5. 读者视角终评（复评打分）
 用法: python novel_quality_check.py [project_title]
 """
+
 import json
 import sys
 import time
@@ -55,9 +56,15 @@ def main() -> None:
     print(f"项目: {title} ({pid[:8]})")
 
     # 1. 一致性检查
-    r = c.post(f"/story/projects/{pid}/crew", headers=h, json={
-        "project_id": pid, "stage": "consistency", "model": MODEL,
-    })
+    r = c.post(
+        f"/story/projects/{pid}/crew",
+        headers=h,
+        json={
+            "project_id": pid,
+            "stage": "consistency",
+            "model": MODEL,
+        },
+    )
     if r.status_code != 200 or "error" in r.json():
         check("一致性检查", False, r.text[:150])
         sys.exit(1)
@@ -69,14 +76,22 @@ def main() -> None:
     # 2. 让模型把报告拆成每章修订指令（带一次重试）
     plan = ""
     for attempt in range(2):
-        r = c.post("http://localhost:8002/v1/chat/completions", headers=h, json={
-            "model": MODEL,
-            "messages": [
-                {"role": "system", "content": "你是推理小说修订编排器。把一致性审查报告转换为「每章修订指令」列表。只输出 JSON：{\"chapters\": [{\"chapter_no\": 1, \"instruction\": \"...\"}]}。没有问题的章节不要列出。"},
-                {"role": "user", "content": f"报告：\n{report}"},
-            ],
-            "max_tokens": 1200, "temperature": 0.3,
-        })
+        r = c.post(
+            "http://localhost:8002/v1/chat/completions",
+            headers=h,
+            json={
+                "model": MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": '你是推理小说修订编排器。把一致性审查报告转换为「每章修订指令」列表。只输出 JSON：{"chapters": [{"chapter_no": 1, "instruction": "..."}]}。没有问题的章节不要列出。',
+                    },
+                    {"role": "user", "content": f"报告：\n{report}"},
+                ],
+                "max_tokens": 1200,
+                "temperature": 0.3,
+            },
+        )
         body = r.json()
         if r.status_code == 200 and "choices" in body:
             plan = body["choices"][0]["message"]["content"]
@@ -86,7 +101,7 @@ def main() -> None:
     if not plan:
         check("修订计划生成", False, "模型未返回")
         sys.exit(1)
-    plan_json = plan[plan.find("{"): plan.rfind("}") + 1]
+    plan_json = plan[plan.find("{") : plan.rfind("}") + 1]
     try:
         plan_data = json.loads(plan_json)
         rev_plan = plan_data.get("chapters") or []
@@ -133,14 +148,22 @@ def main() -> None:
         f"\n\n========== 第{c['chapter_no']}章《{c['title']}》 ==========\n{c.get('content') or ''}"
         for c in sorted(picked, key=lambda x: x["chapter_no"])
     )
-    r = c.post("http://localhost:8002/v1/chat/completions", headers=h, json={
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": "你是阅读过两千部推理小说的资深读者。你之前给《双城交换杀人》初稿打过 2.5 分，修订后打过 8.3 分。现在作者又做了全书一致性修订。请复核并给出终评：总分（10 分制）+ 一句话总评 + 是否仍存在未修复的一致性矛盾（有则列出）。"},
-            {"role": "user", "content": f"修订后的核心章节（第1/4/6/8/9章）：\n{book}"},
-        ],
-        "max_tokens": 1200, "temperature": 0.6,
-    })
+    r = c.post(
+        "http://localhost:8002/v1/chat/completions",
+        headers=h,
+        json={
+            "model": MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "你是阅读过两千部推理小说的资深读者。你之前给《双城交换杀人》初稿打过 2.5 分，修订后打过 8.3 分。现在作者又做了全书一致性修订。请复核并给出终评：总分（10 分制）+ 一句话总评 + 是否仍存在未修复的一致性矛盾（有则列出）。",
+                },
+                {"role": "user", "content": f"修订后的核心章节（第1/4/6/8/9章）：\n{book}"},
+            ],
+            "max_tokens": 1200,
+            "temperature": 0.6,
+        },
+    )
     final = r.json()["choices"][0]["message"]["content"]
     check("读者终评", bool(final), final[:100])
     print("--- 读者终评 ---")

@@ -33,6 +33,4 @@ class RegexScript(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     scope: Mapped[str] = mapped_column(String(20), nullable=False, server_default="global")
     character_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        TZDateTime(), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), server_default=func.now())

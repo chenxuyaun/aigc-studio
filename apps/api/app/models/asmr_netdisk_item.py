@@ -14,9 +14,7 @@ class AsmrNetdiskItem(Base):
     """网盘资源条目（目录/作品文件夹）。"""
 
     __tablename__ = "asmr_netdisk_items"
-    __table_args__ = (
-        UniqueConstraint("source", "path", name="uq_asmr_disk_source_path"),
-    )
+    __table_args__ = (UniqueConstraint("source", "path", name="uq_asmr_disk_source_path"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     source: Mapped[str] = mapped_column(String(30), nullable=False, index=True)

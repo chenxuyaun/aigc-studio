@@ -36,7 +36,8 @@ def extract_json(raw: str) -> dict[str, Any]:
     start, end = cleaned.find("{"), cleaned.rfind("}")
     if start < 0 or end <= start:
         raise ValueError("输出中未找到 JSON 对象")
-    return json.loads(cleaned[start : end + 1])
+    data = json.loads(cleaned[start : end + 1])
+    return data if isinstance(data, dict) else {"_raw": data}
 
 
 def load_json(raw: str | None, default: Any = None) -> Any:

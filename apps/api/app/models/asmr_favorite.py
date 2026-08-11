@@ -12,9 +12,7 @@ from app.models.types import TZDateTime
 
 class AsmrFavorite(Base):
     __tablename__ = "asmr_favorites"
-    __table_args__ = (
-        UniqueConstraint("user_id", "work_id", name="uq_asmr_fav_user_work"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "work_id", name="uq_asmr_fav_user_work"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(

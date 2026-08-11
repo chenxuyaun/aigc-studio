@@ -15,44 +15,70 @@ async def _seed_works() -> None:
 
     async with TestingSessionLocal() as db:
         base = datetime(2026, 6, 1, tzinfo=UTC)
-        db.add_all([
-            AsmrWork(
-                id="w1", source="asmr_one", source_work_id="RJ100001",
-                title="掏耳治愈系 ASMR", circle_name="CANDY VOICE",
-                price=1100, release_date=base + timedelta(days=1),
-                duration_seconds=7200, rate_average=4.8, dl_count=5000,
-                nsfw=False, age_category="general",
-                vas=json.dumps(["东山奈央"], ensure_ascii=False),
-                tags=json.dumps(
-                    [{"name": "掏耳", "zh": "掏耳"}, {"name": "ASMR", "zh": "ASMR"}],
-                    ensure_ascii=False,
+        db.add_all(
+            [
+                AsmrWork(
+                    id="w1",
+                    source="asmr_one",
+                    source_work_id="RJ100001",
+                    title="掏耳治愈系 ASMR",
+                    circle_name="CANDY VOICE",
+                    price=1100,
+                    release_date=base + timedelta(days=1),
+                    duration_seconds=7200,
+                    rate_average=4.8,
+                    dl_count=5000,
+                    nsfw=False,
+                    age_category="general",
+                    vas=json.dumps(["东山奈央"], ensure_ascii=False),
+                    tags=json.dumps(
+                        [{"name": "掏耳", "zh": "掏耳"}, {"name": "ASMR", "zh": "ASMR"}],
+                        ensure_ascii=False,
+                    ),
+                    langs='["JPN"]',
+                    has_chinese=False,
+                    cover_url="https://img.example/1.jpg",
                 ),
-                langs='["JPN"]', has_chinese=False,
-                cover_url="https://img.example/1.jpg",
-            ),
-            AsmrWork(
-                id="w2", source="asmr_one", source_work_id="RJ100002",
-                title="舔耳娇喘合集", circle_name="ルルイエエリジウム",
-                price=1500, release_date=base + timedelta(days=2),
-                duration_seconds=5400, rate_average=4.5, dl_count=9000,
-                nsfw=True, age_category="adult",
-                vas=json.dumps(["伊倉える"], ensure_ascii=False),
-                tags=json.dumps([{"name": "舔耳", "zh": "舔耳"}], ensure_ascii=False),
-                langs='["JPN", "CHI_HANS"]', has_chinese=True,
-                cover_url="https://img.example/2.jpg",
-            ),
-            AsmrWork(
-                id="w3", source="asmr_one", source_work_id="RJ100003",
-                title="雨声助眠白噪音", circle_name="Studio 雨音",
-                price=880, release_date=base + timedelta(days=3),
-                duration_seconds=10800, rate_average=4.9, dl_count=12000,
-                nsfw=False, age_category="general",
-                vas=json.dumps([]),
-                tags=json.dumps([{"name": "助眠", "zh": "助眠"}], ensure_ascii=False),
-                langs='["ENG"]', has_chinese=False,
-                cover_url="https://img.example/3.jpg",
-            ),
-        ])
+                AsmrWork(
+                    id="w2",
+                    source="asmr_one",
+                    source_work_id="RJ100002",
+                    title="舔耳娇喘合集",
+                    circle_name="ルルイエエリジウム",
+                    price=1500,
+                    release_date=base + timedelta(days=2),
+                    duration_seconds=5400,
+                    rate_average=4.5,
+                    dl_count=9000,
+                    nsfw=True,
+                    age_category="adult",
+                    vas=json.dumps(["伊倉える"], ensure_ascii=False),
+                    tags=json.dumps([{"name": "舔耳", "zh": "舔耳"}], ensure_ascii=False),
+                    langs='["JPN", "CHI_HANS"]',
+                    has_chinese=True,
+                    cover_url="https://img.example/2.jpg",
+                ),
+                AsmrWork(
+                    id="w3",
+                    source="asmr_one",
+                    source_work_id="RJ100003",
+                    title="雨声助眠白噪音",
+                    circle_name="Studio 雨音",
+                    price=880,
+                    release_date=base + timedelta(days=3),
+                    duration_seconds=10800,
+                    rate_average=4.9,
+                    dl_count=12000,
+                    nsfw=False,
+                    age_category="general",
+                    vas=json.dumps([]),
+                    tags=json.dumps([{"name": "助眠", "zh": "助眠"}], ensure_ascii=False),
+                    langs='["ENG"]',
+                    has_chinese=False,
+                    cover_url="https://img.example/3.jpg",
+                ),
+            ]
+        )
         await db.commit()
 
 
@@ -205,13 +231,17 @@ async def test_global_search_includes_asmr(client, admin_token) -> None:
 async def test_edit_asmr_work_metadata(client, user_token) -> None:
     """手动编辑元数据：修正标题/社团/分级并返回更新。"""
     from app.models.asmr_work import AsmrWork
+
     from tests.conftest import TestingSessionLocal
 
     headers = {"Authorization": f"Bearer {user_token}"}
     async with TestingSessionLocal() as session:
         w = AsmrWork(
-            source="manual", source_work_id="TEST-001", title="原标题",
-            circle_name="原社团", nsfw=True,
+            source="manual",
+            source_work_id="TEST-001",
+            title="原标题",
+            circle_name="原社团",
+            nsfw=True,
         )
         session.add(w)
         await session.commit()

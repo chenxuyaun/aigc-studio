@@ -156,17 +156,14 @@ async def upload_asset(
     if quota > 0:
         used = (
             await db.execute(
-                select(func.coalesce(func.sum(Asset.size_bytes), 0)).where(
-                    Asset.user_id == user.id
-                )
+                select(func.coalesce(func.sum(Asset.size_bytes), 0)).where(Asset.user_id == user.id)
             )
         ).scalar() or 0
         if used + len(data) > quota:
             raise HTTPException(
                 status_code=413,
                 detail=(
-                    f"存储配额不足（已用 {used // 1024 // 1024}MB，"
-                    f"上限 {quota // 1024 // 1024}MB）"
+                    f"存储配额不足（已用 {used // 1024 // 1024}MB，上限 {quota // 1024 // 1024}MB）"
                 ),
             )
 
@@ -248,9 +245,7 @@ async def get_asset_content(
         # 无 JWT 时校验 HMAC 签名与过期时间；有 JWT 走原有归属校验。
         asset = await db.get(Asset, asset_id)
         if asset is None or not (
-            exp is not None
-            and sig is not None
-            and verify_content_signature(asset_id, exp, sig)
+            exp is not None and sig is not None and verify_content_signature(asset_id, exp, sig)
         ):
             raise HTTPException(status_code=401, detail="无效或过期的访问签名")
     else:

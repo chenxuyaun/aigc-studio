@@ -26,6 +26,4 @@ class QuickReply(Base):
     # auto=True：用户发送消息后自动触发（后端随响应返回建议）
     auto: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    created_at: Mapped[datetime] = mapped_column(
-        TZDateTime(), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), server_default=func.now())

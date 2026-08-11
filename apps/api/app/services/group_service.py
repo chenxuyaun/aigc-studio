@@ -63,9 +63,7 @@ async def join_by_code(
 ) -> tuple[RoleplayGroup | None, str]:
     """邀请码加入：返回 (group, error)。"""
     group = (
-        await db.execute(
-            select(RoleplayGroup).where(RoleplayGroup.invite_code == invite_code)
-        )
+        await db.execute(select(RoleplayGroup).where(RoleplayGroup.invite_code == invite_code))
     ).scalar_one_or_none()
     if group is None:
         return None, "邀请码无效"

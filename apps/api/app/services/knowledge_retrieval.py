@@ -61,8 +61,7 @@ def retrieve(
     if not q_tokens:
         return []
     scored = [
-        (doc_id, title, text, score_overlap(q_tokens, text))
-        for doc_id, title, text in chunks
+        (doc_id, title, text, score_overlap(q_tokens, text)) for doc_id, title, text in chunks
     ]
     hits = sorted((s for s in scored if s[3] >= min_score), key=lambda s: -s[3])
     return hits[:top_k]

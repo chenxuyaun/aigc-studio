@@ -41,11 +41,13 @@ class _FakeProvider:
         if "场记" in system:
             return TextResult(
                 content="【第一场·深夜食堂】小雅在灶台前……\n小雅：欢迎光临。",
-                model=model, provider="fake",
+                model=model,
+                provider="fake",
             )
         return TextResult(
             content="【第一场演出指令】场景：深夜食堂·店内·雨夜\n出场：小雅（主导）\n本场目标：引入第一位客人\n节拍：……\n台词提示：小雅先招呼客人。",
-            model=model, provider="fake",
+            model=model,
+            provider="fake",
         )
 
 
@@ -73,29 +75,36 @@ def test_is_summary_cmd() -> None:
 async def _seed_room() -> str:
     """建群（is_room）+ 角色卡（asset + 角色行）。"""
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         db.add(
             Asset(
-                id="char-dir-1", user_id=u.id,
-                filename="char-dir-1.png", storage_key="",
-                storage_backend="local", mime_type="image/png", size_bytes=0,
+                id="char-dir-1",
+                user_id=u.id,
+                filename="char-dir-1.png",
+                storage_key="",
+                storage_backend="local",
+                mime_type="image/png",
+                size_bytes=0,
             )
         )
         db.add(
             RoleplayCharacter(
-                asset_id="char-dir-1", user_id=u.id,
-                name="小雅", description="深夜食堂女店主", personality="温柔体贴",
+                asset_id="char-dir-1",
+                user_id=u.id,
+                name="小雅",
+                description="深夜食堂女店主",
+                personality="温柔体贴",
             )
         )
         chat = await sessions.create_chat(
-            db, u.id, title="夜食缘", character_asset_ids=["char-dir-1"],
-            group=True, is_room=True,
+            db,
+            u.id,
+            title="夜食缘",
+            character_asset_ids=["char-dir-1"],
+            group=True,
+            is_room=True,
         )
-        await create_group(
-            db, owner_id=u.id, chat_id=chat.id, name="夜食缘", description=""
-        )
+        await create_group(db, owner_id=u.id, chat_id=chat.id, name="夜食缘", description="")
         await db.commit()
         return chat.id
 
@@ -104,9 +113,7 @@ def _patch_provider(monkeypatch: pytest.MonkeyPatch, fake: _FakeProvider) -> Non
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
         return ResolvedTextProvider(fake, "cpa", False, provider_config_id=None, source="fake")
 
-    monkeypatch.setattr(
-        "app.services.director_assistant.resolve_text_provider", fake_resolver
-    )
+    monkeypatch.setattr("app.services.director_assistant.resolve_text_provider", fake_resolver)
 
 
 @pytest.mark.asyncio
@@ -180,12 +187,14 @@ async def test_director_private_chat_ignored(client, user_token, monkeypatch) ->
     """普通私聊发 @AI 导演 → 走角色扮演，不触发导演。"""
     await _seed_room()  # 建角色卡
     async with TestingSessionLocal() as db:
-        u = (
-            await db.execute(select(User).where(User.username == "user1"))
-        ).scalar_one()
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
         chat = await sessions.create_chat(
-            db, u.id, title="私聊", character_asset_ids=["char-dir-1"],
-            group=False, is_room=False,
+            db,
+            u.id,
+            title="私聊",
+            character_asset_ids=["char-dir-1"],
+            group=False,
+            is_room=False,
         )
         await db.commit()
         chat_id = chat.id

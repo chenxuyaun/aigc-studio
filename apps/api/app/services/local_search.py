@@ -104,8 +104,13 @@ def _distinct_hits(query_tokens: Counter[str], text: str) -> int:
 
 
 def _mk(
-    scope: str, id_: str, title: str, text: str,
-    query: str, q: Counter[str], meta: dict[str, Any] | None = None,
+    scope: str,
+    id_: str,
+    title: str,
+    text: str,
+    query: str,
+    q: Counter[str],
+    meta: dict[str, Any] | None = None,
 ) -> SearchResult | None:
     token_score = _score(q, text, title)
     if token_score < 1:
@@ -146,17 +151,25 @@ async def search_all(
     # ── knowledge：本人文档 ──
     if "knowledge" in scope_set:
         doc_rows = (
-            await db.execute(
-                select(TextDocument)
-                .where(TextDocument.user_id == user_id)
-                .order_by(TextDocument.updated_at.desc())
-                .limit(500)
+            (
+                await db.execute(
+                    select(TextDocument)
+                    .where(TextDocument.user_id == user_id)
+                    .order_by(TextDocument.updated_at.desc())
+                    .limit(500)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for doc in doc_rows:
             res = _mk(
-                "knowledge", doc.id, doc.title,
-                f"{doc.title}\n{doc.content or ''}", q, q_tokens,
+                "knowledge",
+                doc.id,
+                doc.title,
+                f"{doc.title}\n{doc.content or ''}",
+                q,
+                q_tokens,
             )
             if res:
                 results.append(res)
@@ -164,13 +177,17 @@ async def search_all(
     # ── story：本人章节（含项目梗概）──
     if "story" in scope_set:
         chapter_rows = (
-            await db.execute(
-                select(StoryChapter)
-                .where(StoryChapter.user_id == user_id)
-                .order_by(StoryChapter.updated_at.desc())
-                .limit(500)
+            (
+                await db.execute(
+                    select(StoryChapter)
+                    .where(StoryChapter.user_id == user_id)
+                    .order_by(StoryChapter.updated_at.desc())
+                    .limit(500)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         projects = {
             p.id: p
             for p in (
@@ -179,7 +196,9 @@ async def search_all(
                         StoryProject.id.in_({c.project_id for c in chapter_rows})
                     )
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         }
         for ch in chapter_rows:
             proj = projects.get(ch.project_id)
@@ -205,18 +224,25 @@ async def search_all(
     # ── prompts：public 或本人 ──
     if "prompts" in scope_set:
         prompt_rows = (
-            await db.execute(
-                select(Prompt).where(
-                    or_(Prompt.is_public.is_(True), Prompt.author_id == user_id)
+            (
+                await db.execute(
+                    select(Prompt)
+                    .where(or_(Prompt.is_public.is_(True), Prompt.author_id == user_id))
+                    .order_by(Prompt.updated_at.desc())
+                    .limit(500)
                 )
-                .order_by(Prompt.updated_at.desc())
-                .limit(500)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for pr in prompt_rows:
             res = _mk(
-                "prompts", pr.id, pr.title,
-                f"{pr.title}\n{pr.content or ''}", q, q_tokens,
+                "prompts",
+                pr.id,
+                pr.title,
+                f"{pr.title}\n{pr.content or ''}",
+                q,
+                q_tokens,
             )
             if res:
                 results.append(res)
@@ -224,14 +250,17 @@ async def search_all(
     # ── agents：public 或本人 ──
     if "agents" in scope_set:
         agent_rows = (
-            await db.execute(
-                select(Agent).where(
-                    or_(Agent.is_public.is_(True), Agent.author_id == user_id)
+            (
+                await db.execute(
+                    select(Agent)
+                    .where(or_(Agent.is_public.is_(True), Agent.author_id == user_id))
+                    .order_by(Agent.updated_at.desc())
+                    .limit(500)
                 )
-                .order_by(Agent.updated_at.desc())
-                .limit(500)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for ag in agent_rows:
             text = f"{ag.name}\n{ag.description or ''}\n{ag.system_prompt or ''}"
             res = _mk("agents", ag.id, ag.name, text, q, q_tokens)
@@ -241,17 +270,25 @@ async def search_all(
     # ── assets：本人素材 ──
     if "assets" in scope_set:
         asset_rows = (
-            await db.execute(
-                select(Asset)
-                .where(Asset.user_id == user_id)
-                .order_by(Asset.created_at.desc())
-                .limit(500)
+            (
+                await db.execute(
+                    select(Asset)
+                    .where(Asset.user_id == user_id)
+                    .order_by(Asset.created_at.desc())
+                    .limit(500)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for asst in asset_rows:
             res = _mk(
-                "assets", asst.id, asst.filename or "",
-                asst.filename or "", q, q_tokens,
+                "assets",
+                asst.id,
+                asst.filename or "",
+                asst.filename or "",
+                q,
+                q_tokens,
             )
             if res:
                 results.append(res)
@@ -270,14 +307,16 @@ async def search_all(
             like_clauses.append(AsmrWork.tags.like(like))
         if like_clauses:
             asmr_stmt = asmr_stmt.where(or_(*like_clauses))
-        asmr_rows = (
-            await db.execute(asmr_stmt.limit(300))
-        ).scalars().all()
+        asmr_rows = (await db.execute(asmr_stmt.limit(300))).scalars().all()
         for aw in asmr_rows:
             text = f"{aw.title}\n{aw.circle_name}\n{aw.vas}\n{aw.tags}"
             res = _mk(
-                "asmr", aw.id, aw.title,
-                text, q, q_tokens,
+                "asmr",
+                aw.id,
+                aw.title,
+                text,
+                q,
+                q_tokens,
                 {
                     "source_work_id": aw.source_work_id,
                     "rate_average": aw.rate_average,
@@ -320,19 +359,28 @@ async def search_project(
         return []
     if proj.synopsis:
         r = _mk(
-            "story", proj.id, proj.title, proj.synopsis, q, q_tokens,
+            "story",
+            proj.id,
+            proj.title,
+            proj.synopsis,
+            q,
+            q_tokens,
             {"project_id": proj.id, "chapter_no": 0, "project_title": proj.title},
         )
         if r:
             results.append(r)
 
     chapters = (
-        await db.execute(
-            select(StoryChapter)
-            .where(StoryChapter.project_id == project_id, StoryChapter.user_id == user_id)
-            .order_by(StoryChapter.chapter_no.asc())
+        (
+            await db.execute(
+                select(StoryChapter)
+                .where(StoryChapter.project_id == project_id, StoryChapter.user_id == user_id)
+                .order_by(StoryChapter.chapter_no.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for c in chapters:
         text = f"{c.title}\n{c.outline or ''}\n{c.content or ''}"
         r = _mk(
@@ -353,13 +401,17 @@ async def search_project(
             results.append(r)
 
     docs = (
-        await db.execute(
-            select(TextDocument)
-            .where(TextDocument.user_id == user_id)
-            .order_by(TextDocument.updated_at.desc())
-            .limit(200)
+        (
+            await db.execute(
+                select(TextDocument)
+                .where(TextDocument.user_id == user_id)
+                .order_by(TextDocument.updated_at.desc())
+                .limit(200)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for d in docs:
         r = _mk("knowledge", d.id, d.title, f"{d.title}\n{d.content or ''}", q, q_tokens)
         if r:

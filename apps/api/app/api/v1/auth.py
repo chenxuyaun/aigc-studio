@@ -27,11 +27,7 @@ router = APIRouter()
 async def _cleanup_expired_tokens(db: AsyncSession) -> None:
     """清理已过期/已撤销的刷新令牌行（每次登录/刷新顺带执行，避免表无限增长）。"""
     with contextlib.suppress(Exception):
-        await db.execute(
-            delete(RefreshToken).where(
-                RefreshToken.expires_at < datetime.now(UTC)
-            )
-        )
+        await db.execute(delete(RefreshToken).where(RefreshToken.expires_at < datetime.now(UTC)))
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -86,9 +82,7 @@ async def refresh(req: RefreshRequest, db: AsyncSession = Depends(get_db)) -> To
         if expires < datetime.now(UTC):
             raise HTTPException(status_code=401, detail="刷新令牌已过期")
     # refresh JWT 本身不含 role；从用户表取当前角色，避免 admin 刷新后降级为 user。
-    user = (
-        await db.execute(select(User).where(User.id == payload["sub"]))
-    ).scalar_one_or_none()
+    user = (await db.execute(select(User).where(User.id == payload["sub"]))).scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="用户不存在或已禁用")
     access_token = create_access_token({"sub": user.id, "role": user.role})

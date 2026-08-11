@@ -72,13 +72,17 @@ async def _recover_stale_tasks(max_age_seconds: int = 1800) -> None:
     cutoff = datetime.now(_UTC) - timedelta(seconds=max_age_seconds)
     async with AsyncSessionLocal() as db:
         rows = (
-            await db.execute(
-                select(GenerationTask).where(
-                    GenerationTask.status.in_(["queued", "processing", "submitting"]),
-                    GenerationTask.updated_at < cutoff,
+            (
+                await db.execute(
+                    select(GenerationTask).where(
+                        GenerationTask.status.in_(["queued", "processing", "submitting"]),
+                        GenerationTask.updated_at < cutoff,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for row in rows:
             row.status = "failed"
             row.error_message = "服务重启导致任务中断，请重新生成"
@@ -90,9 +94,7 @@ async def _recover_stale_tasks(max_age_seconds: int = 1800) -> None:
 
 
 # 前端/配置里的 Provider 别名，不能当作上游模型 id 原样提交。
-_PROVIDER_ALIASES = frozenset(
-    {"mock", "huggingface", "openai_compatible", "grok", "grok2api"}
-)
+_PROVIDER_ALIASES = frozenset({"mock", "huggingface", "openai_compatible", "grok", "grok2api"})
 
 
 def _upstream_model_id(model: str) -> str:
@@ -103,9 +105,7 @@ def _upstream_model_id(model: str) -> str:
     return raw
 
 
-async def _provider_settings(
-    db: AsyncSession, model: str
-) -> tuple[str, str, str] | None:
+async def _provider_settings(db: AsyncSession, model: str) -> tuple[str, str, str] | None:
     """按 model（id / name 别名 / default_model）解析 DB ProviderConfig。
 
     返回 (base_url, api_key, default_model)；未配置返回 None（走 env 兜底）。
@@ -249,9 +249,7 @@ def _rewrite_media_url(url: str, upstream_base: str) -> str:
         p = urlparse(upstream_base)
         if not p.hostname:
             return url
-        return urlunparse(
-            (p.scheme or u.scheme, p.netloc, u.path, u.params, u.query, u.fragment)
-        )
+        return urlunparse((p.scheme or u.scheme, p.netloc, u.path, u.params, u.query, u.fragment))
     except ValueError:
         return url
 
@@ -359,9 +357,7 @@ async def _try_real_media(
         return None, reason
 
 
-async def _generate_cover_image(
-    key: str, title: str, style: str, characters: str
-) -> bytes | None:
+async def _generate_cover_image(key: str, title: str, style: str, characters: str) -> bytes | None:
     """封面海报图（文生图）；失败返回 None。"""
     from app.services import comic_service
 
@@ -440,11 +436,7 @@ async def _comic_real_media(
                 if img is not None:
                     cover_img = img
                     break
-        cover_page = (
-            compose_cover_page(cover_img, title, prompt)
-            if cover_img is not None
-            else None
-        )
+        cover_page = compose_cover_page(cover_img, title, prompt) if cover_img is not None else None
         return {
             "page": (page_data, "image/jpeg", "jpg"),
             "cover": (cover_page, "image/jpeg", "jpg") if cover_page is not None else None,
@@ -466,8 +458,9 @@ _media_exec_lock: asyncio.Lock | None = None
 
 
 def _media_lock() -> asyncio.Lock:
+    """同 loop 惰性创建（测试/生产均为单事件循环）。"""
     global _media_exec_lock
-    if _media_exec_lock is None or _media_exec_lock._loop is not asyncio.get_event_loop():
+    if _media_exec_lock is None:
         _media_exec_lock = asyncio.Lock()
     return _media_exec_lock
 
@@ -609,9 +602,7 @@ async def _run_media_task_locked(task_id: str) -> None:
             panel_assets: list[dict[str, object]] = []
             comic_panels: list[dict[str, object]] = []
             if task.task_type == "comic" and isinstance(comic_result, dict):
-                comic_panels_raw = cast(
-                    list[dict[str, object]], comic_result.get("panels") or []
-                )
+                comic_panels_raw = cast(list[dict[str, object]], comic_result.get("panels") or [])
                 for p in comic_panels_raw:
                     pdata = p.get("data")
                     pindex = int(str(p.get("index") or 0))

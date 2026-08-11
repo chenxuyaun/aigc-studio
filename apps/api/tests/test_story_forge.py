@@ -1,4 +1,4 @@
-# ruff: noqa: E501 PT018
+# ruff: noqa: PT018
 
 """Story Forge 创作引擎服务测试：项目/章节/角色实例 CRUD + 叙事/剧本/大纲/修订/导出。
 
@@ -94,18 +94,25 @@ def _install_fakes(
 
 # ==== 项目 CRUD ====
 
+
 @pytest.mark.anyio
 async def test_project_crud(db_session: object, monkeypatch: pytest.MonkeyPatch) -> None:
     db = db_session  # type: ignore[assignment]
     p = await story_forge.create_project(
-        db, "u1", title="晨星山物语", synopsis="少女与黑猫的冒险",
-        genre="奇幻", character_asset_ids=["asset-0"],
+        db,
+        "u1",
+        title="晨星山物语",
+        synopsis="少女与黑猫的冒险",
+        genre="奇幻",
+        character_asset_ids=["asset-0"],
     )
     assert p.id and p.status == "drafting"
     items = await story_forge.list_projects(db, "u1")
     assert len(items) == 1 and items[0]["title"] == "晨星山物语"
     # 更新
-    p2 = await story_forge.update_project(db, "u1", p.id, {"status": "ongoing", "genre": "奇幻冒险"})
+    p2 = await story_forge.update_project(
+        db, "u1", p.id, {"status": "ongoing", "genre": "奇幻冒险"}
+    )
     assert p2 is not None and p2.status == "ongoing"
     # 用户隔离
     assert await story_forge.get_project(db, "other", p.id) is None
@@ -118,6 +125,7 @@ async def test_project_crud(db_session: object, monkeypatch: pytest.MonkeyPatch)
 
 
 # ==== 章节 CRUD ====
+
 
 @pytest.mark.anyio
 async def test_chapter_crud(db_session: object) -> None:
@@ -137,13 +145,19 @@ async def test_chapter_crud(db_session: object) -> None:
 
 # ==== 角色实例 CRUD ====
 
+
 @pytest.mark.anyio
 async def test_story_character_crud(db_session: object) -> None:
     db = db_session  # type: ignore[assignment]
     p = await story_forge.create_project(db, "u1", title="T")
     s = await story_forge.create_story_character(
-        db, "u1", p.id, name="露娜", role="protagonist",
-        goals="登上晨星山", skill_ids=["sk1"],
+        db,
+        "u1",
+        p.id,
+        name="露娜",
+        role="protagonist",
+        goals="登上晨星山",
+        skill_ids=["sk1"],
     )
     assert s.skill_ids and json.loads(s.skill_ids) == ["sk1"]
     s2 = await story_forge.update_story_character(
@@ -154,6 +168,7 @@ async def test_story_character_crud(db_session: object) -> None:
 
 
 # ==== bible 组装（技能注入） ====
+
 
 @pytest.mark.anyio
 async def test_bible_text_injects_skills(
@@ -166,8 +181,13 @@ async def test_bible_text_injects_skills(
     await db.commit()
     p = await story_forge.create_project(db, "u1", title="T")
     await story_forge.create_story_character(
-        db, "u1", p.id, name="露娜", character_asset_id="asset-0",
-        role="protagonist", skill_ids=["sk1"],
+        db,
+        "u1",
+        p.id,
+        name="露娜",
+        character_asset_id="asset-0",
+        role="protagonist",
+        skill_ids=["sk1"],
     )
     text = await story_forge._bible_text(db, "u1", p, _fake_cards("露娜"))
     assert "观星" in text and "星辰魔法" in text
@@ -175,6 +195,7 @@ async def test_bible_text_injects_skills(
 
 
 # ==== 叙事模式生成 ====
+
 
 @pytest.mark.anyio
 async def test_generate_chapter_narrative(
@@ -215,17 +236,14 @@ async def test_generate_chapter_no_cards(
 
 # ==== 剧本模式生成 ====
 
+
 @pytest.mark.anyio
-async def test_generate_chapter_script(
-    db_session: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_generate_chapter_script(db_session: object, monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch, reply="我们出发吧。 [情绪:开心]")
     db = db_session  # type: ignore[assignment]
     p = await story_forge.create_project(db, "u1", title="晨星山物语")
     c = await story_forge.create_chapter(db, "u1", p.id, title="山顶夜话", outline="山巅对峙")
-    result = await story_forge.generate_chapter_script(
-        db, "u1", p.id, c.id, rounds=3
-    )
+    result = await story_forge.generate_chapter_script(db, "u1", p.id, c.id, rounds=3)
     assert "error" not in result, result
     assert result["turns"] >= 1
     assert "露娜：" in result["content"] and "洛根：" in result["content"]
@@ -255,10 +273,9 @@ async def test_generate_chapter_script_single_card(
 
 # ==== 大纲生成 ====
 
+
 @pytest.mark.anyio
-async def test_generate_outline(
-    db_session: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_generate_outline(db_session: object, monkeypatch: pytest.MonkeyPatch) -> None:
     payload = (
         '[{"title": "启程", "outline": "露娜出发前往晨星山"},'
         '{"title": "山腰", "outline": "遭遇黑猫洛根"}]'
@@ -276,9 +293,7 @@ async def test_generate_outline(
 
 
 def test_parse_outline_json() -> None:
-    ok = story_forge._parse_outline_json(
-        '```json\n[{"title": "A", "outline": "x"}]\n```', 5
-    )
+    ok = story_forge._parse_outline_json('```json\n[{"title": "A", "outline": "x"}]\n```', 5)
     assert ok[0]["title"] == "A"
     assert story_forge._parse_outline_json("纯文本没有数组", 5) == []
     assert story_forge._parse_outline_json("[]", 5) == []
@@ -290,10 +305,9 @@ def test_parse_outline_json() -> None:
 
 # ==== 修订 ====
 
+
 @pytest.mark.anyio
-async def test_revise_chapter(
-    db_session: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_revise_chapter(db_session: object, monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch, reply="修订后的正文。")
     db = db_session  # type: ignore[assignment]
     p = await story_forge.create_project(db, "u1", title="T")
@@ -310,10 +324,13 @@ async def test_revise_chapter(
 
 # ==== 导出 ====
 
+
 @pytest.mark.anyio
 async def test_export_markdown_and_jsonl(db_session: object) -> None:
     db = db_session  # type: ignore[assignment]
-    p = await story_forge.create_project(db, "u1", title="晨星山物语", genre="奇幻", synopsis="冒险")
+    p = await story_forge.create_project(
+        db, "u1", title="晨星山物语", genre="奇幻", synopsis="冒险"
+    )
     c = await story_forge.create_chapter(db, "u1", p.id, title="启程")
     await story_forge.update_chapter(db, "u1", c.id, {"content": "正文第一段"})
     md = await story_forge.export_project(db, "u1", p.id, "markdown")
@@ -327,6 +344,7 @@ async def test_export_markdown_and_jsonl(db_session: object) -> None:
 
 
 # ==== 连载调度 ====
+
 
 @pytest.mark.anyio
 async def test_serial_tick_creates_task(
@@ -344,9 +362,12 @@ async def test_serial_tick_creates_task(
     db = db_session  # type: ignore[assignment]
     p = await story_forge.create_project(db, "u1", title="连载书")
     s = SerialSchedule(
-        project_id=p.id, user_id="u1", interval_minutes=10,
+        project_id=p.id,
+        user_id="u1",
+        interval_minutes=10,
         next_run_at=datetime.now(UTC) - timedelta(minutes=1),
-        status="active", mode="narrative",
+        status="active",
+        mode="narrative",
     )
     db.add(s)
     await db.commit()
@@ -354,9 +375,7 @@ async def test_serial_tick_creates_task(
     assert out["created"] >= 1
     task_count = (
         await db.execute(
-            select(func.count(GenerationTask.id)).where(
-                GenerationTask.task_type == "chapter"
-            )
+            select(func.count(GenerationTask.id)).where(GenerationTask.task_type == "chapter")
         )
     ).scalar()
     assert task_count and task_count >= 1
@@ -381,9 +400,12 @@ async def test_serial_tick_skips_unfinished(
     p = await story_forge.create_project(db, "u1", title="连载书")
     await story_forge.create_chapter(db, "u1", p.id, title="未完成章")  # status=outline
     s = SerialSchedule(
-        project_id=p.id, user_id="u1", interval_minutes=10,
+        project_id=p.id,
+        user_id="u1",
+        interval_minutes=10,
         next_run_at=datetime.now(UTC) - timedelta(minutes=1),
-        status="active", mode="narrative",
+        status="active",
+        mode="narrative",
     )
     db.add(s)
     await db.commit()
@@ -392,6 +414,7 @@ async def test_serial_tick_skips_unfinished(
 
 
 # ==== 技能工具循环 ====
+
 
 class _ToolCallProvider:
     """第一轮返回工具调用，第二轮返回正文（模拟真实模型工具循环）。"""
@@ -415,9 +438,7 @@ class _ToolCallProvider:
 
 
 @pytest.mark.anyio
-async def test_chapter_tool_loop(
-    db_session: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_chapter_tool_loop(db_session: object, monkeypatch: pytest.MonkeyPatch) -> None:
     """tool_loop=True：模型调用工具 → 结果回填 → 续写正文 → 日志落 notes。"""
     import app.mcp.server as mcp_server
     import app.services.roleplay as rp_mod
@@ -482,6 +503,7 @@ async def test_chapter_tool_loop_plain_model(
 
 # ==== 连载失败计数 ====
 
+
 @pytest.mark.anyio
 async def test_serial_tick_fail_count_pauses(
     db_session: object, monkeypatch: pytest.MonkeyPatch
@@ -500,9 +522,13 @@ async def test_serial_tick_fail_count_pauses(
 
     monkeypatch.setattr(story_forge, "create_chapter", _boom)
     s = SerialSchedule(
-        project_id=p.id, user_id="u1", interval_minutes=5,
+        project_id=p.id,
+        user_id="u1",
+        interval_minutes=5,
         next_run_at=datetime.now(UTC) - timedelta(minutes=1),
-        status="active", mode="narrative", fail_count=2,
+        status="active",
+        mode="narrative",
+        fail_count=2,
     )
     db.add(s)
     await db.commit()
@@ -514,6 +540,7 @@ async def test_serial_tick_fail_count_pauses(
 
 
 # ==== 项目统计 ====
+
 
 @pytest.mark.anyio
 async def test_list_projects_stats(db_session: object) -> None:

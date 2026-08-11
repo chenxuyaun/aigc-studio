@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -17,9 +16,7 @@ class MissionLesson(Base):
 
     __tablename__ = "mission_lessons"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), index=True)
     goal: Mapped[str] = mapped_column(Text, nullable=False, default="")
     lesson: Mapped[str] = mapped_column(Text, nullable=False, default="")

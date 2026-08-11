@@ -92,16 +92,12 @@ async def test_search_isolates_users(client, admin_token, user_token) -> None:
         json={"title": "绝密设定", "content": "只有管理员知道的秘密设定"},
         headers=admin_h,
     )
-    r = await client.get(
-        "/api/v1/search", params={"q": "绝密设定"}, headers=user_h
-    )
+    r = await client.get("/api/v1/search", params={"q": "绝密设定"}, headers=user_h)
     assert r.status_code == 200
     assert r.json()["total"] == 0
 
     # admin 自己能搜到
-    r = await client.get(
-        "/api/v1/search", params={"q": "绝密设定"}, headers=admin_h
-    )
+    r = await client.get("/api/v1/search", params={"q": "绝密设定"}, headers=admin_h)
     assert r.json()["total"] >= 1
 
 
@@ -112,7 +108,5 @@ async def test_search_empty_and_unknown_scope(client, admin_token) -> None:
     r = await client.get("/api/v1/search", params={"q": ""}, headers=headers)
     assert r.status_code == 422  # min_length=1
 
-    r = await client.get(
-        "/api/v1/search", params={"q": "x", "scope": "nope"}, headers=headers
-    )
+    r = await client.get("/api/v1/search", params={"q": "x", "scope": "nope"}, headers=headers)
     assert r.status_code == 400

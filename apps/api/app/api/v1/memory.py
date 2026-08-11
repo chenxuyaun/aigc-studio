@@ -69,9 +69,7 @@ def _set_memory_config(row: RoleplayCharacter, cfg: dict[str, Any]) -> None:
     row.settings = json.dumps(settings, ensure_ascii=False)
 
 
-async def _get_character(
-    db: AsyncSession, user_id: str, asset_id: str
-) -> RoleplayCharacter:
+async def _get_character(db: AsyncSession, user_id: str, asset_id: str) -> RoleplayCharacter:
     row = await db.get(RoleplayCharacter, asset_id)
     if row is None or row.user_id != user_id:
         raise HTTPException(status_code=404, detail="角色卡不存在")

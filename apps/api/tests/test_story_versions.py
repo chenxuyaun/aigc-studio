@@ -5,23 +5,38 @@ from httpx import AsyncClient
 
 
 async def _create_project_with_chapter(
-    client: AsyncClient, admin_token: str,
+    client: AsyncClient,
+    admin_token: str,
 ) -> tuple[str, str]:
     h = {"Authorization": f"Bearer {admin_token}"}
-    r = await client.post("/api/v1/story/projects", json={
-        "title": "版本测试书", "genre": "测试", "synopsis": "用于版本历史测试",
-    }, headers=h)
+    r = await client.post(
+        "/api/v1/story/projects",
+        json={
+            "title": "版本测试书",
+            "genre": "测试",
+            "synopsis": "用于版本历史测试",
+        },
+        headers=h,
+    )
     pid = r.json()["project"]["id"]
-    r = await client.post(f"/api/v1/story/projects/{pid}/chapters", json={
-        "chapter_no": 1, "title": "第一章", "outline": "测试大纲",
-    }, headers=h)
+    r = await client.post(
+        f"/api/v1/story/projects/{pid}/chapters",
+        json={
+            "chapter_no": 1,
+            "title": "第一章",
+            "outline": "测试大纲",
+        },
+        headers=h,
+    )
     cid = r.json()["chapter"]["id"]
     return pid, cid
 
 
 @pytest.mark.asyncio
 async def test_revise_creates_snapshot_and_restore(
-    client: AsyncClient, admin_token: str, monkeypatch: pytest.MonkeyPatch,
+    client: AsyncClient,
+    admin_token: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """修订自动快照旧版 → 列表可见 → 还原后内容回到旧版，且还原前也有快照。"""
     # mock provider：按 prompt 中的关键字返回不同正文
@@ -48,10 +63,18 @@ async def test_revise_creates_snapshot_and_restore(
     h = {"Authorization": f"Bearer {admin_token}"}
 
     # 项目需要一个角色（占位卡回退），否则 generate 拒绝
-    await client.post(f"/api/v1/story/projects/{pid}/characters", json={
-        "name": "测试侦探", "role": "protagonist",
-        "description": "测试角色", "goals": "破案", "arc": "成长", "current_state": "开始调查",
-    }, headers=h)
+    await client.post(
+        f"/api/v1/story/projects/{pid}/characters",
+        json={
+            "name": "测试侦探",
+            "role": "protagonist",
+            "description": "测试角色",
+            "goals": "破案",
+            "arc": "成长",
+            "current_state": "开始调查",
+        },
+        headers=h,
+    )
 
     # 首次生成（第一版）
     r = await client.post(

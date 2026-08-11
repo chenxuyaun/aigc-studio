@@ -105,9 +105,7 @@ class OpenAICompatibleTextProvider(TextProvider):
             payload["max_tokens"] = max_tokens
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await self._post_retry(
-                    client, f"{self.base_url}/chat/completions", payload
-                )
+                resp = await self._post_retry(client, f"{self.base_url}/chat/completions", payload)
                 if resp.status_code != 200:
                     raise ProviderError(f"上游返回 {resp.status_code}: {resp.text[:200]}")
                 data = resp.json()
@@ -230,9 +228,7 @@ def _rewrite_media_url(url: str, upstream_base: str) -> str:
         p = urlparse(upstream_base)
         if not p.hostname:
             return url
-        return urlunparse(
-            (p.scheme or u.scheme, p.netloc, u.path, u.params, u.query, u.fragment)
-        )
+        return urlunparse((p.scheme or u.scheme, p.netloc, u.path, u.params, u.query, u.fragment))
     except ValueError:
         return url
 
@@ -282,9 +278,7 @@ class OpenAICompatibleImageProvider(ImageProvider):
             "Content-Type": "application/json",
         }
 
-    async def submit(
-        self, prompt: str, model: str = "", **kwargs: object
-    ) -> dict[str, object]:
+    async def submit(self, prompt: str, model: str = "", **kwargs: object) -> dict[str, object]:
         if not self.base_url:
             raise ProviderError("未配置 base_url")
         target = (model or "").strip() or self.default_model
@@ -444,9 +438,7 @@ class OpenAICompatibleVideoProvider(VideoProvider):
             "Content-Type": "application/json",
         }
 
-    async def submit(
-        self, prompt: str, model: str = "", **kwargs: object
-    ) -> dict[str, object]:
+    async def submit(self, prompt: str, model: str = "", **kwargs: object) -> dict[str, object]:
         if not self.base_url:
             raise ProviderError("未配置 base_url")
         target = (model or "").strip() or self.default_model

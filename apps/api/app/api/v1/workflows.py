@@ -38,7 +38,7 @@ def _with_dict(w: Workflow) -> dict[str, object]:
     data: dict[str, object] = {c.name: getattr(w, c.name) for c in w.__table__.columns}
     try:
         data["graph"] = json.loads(str(data.get("graph") or "{}"))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         data["graph"] = {}
     return data
 
@@ -249,9 +249,7 @@ async def duplicate_workflow(
 async def toggle_favorite(
     workflow_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
 ) -> dict[str, object]:
-    wf = (
-        await db.execute(select(Workflow).where(Workflow.id == workflow_id))
-    ).scalar_one_or_none()
+    wf = (await db.execute(select(Workflow).where(Workflow.id == workflow_id))).scalar_one_or_none()
     if not wf:
         raise HTTPException(status_code=404, detail="工作流不存在")
     existing = (
@@ -332,8 +330,12 @@ def _node_prompt(node: dict[str, object], upstream: list[str]) -> str:
 
 
 async def _run_story_node(
-    db: AsyncSession, user_id: str, node_type: str, params: dict[str, object],
-    instruction: str, model: str,
+    db: AsyncSession,
+    user_id: str,
+    node_type: str,
+    params: dict[str, object],
+    instruction: str,
+    model: str,
 ) -> dict[str, object]:
     """Story Forge 创作节点：outline_gen（生成大纲）/ chapter_gen（生成章节）/ revise（修订）。"""
     from app.services import story_forge
@@ -357,9 +359,7 @@ async def _run_story_node(
         chapter_id = str(params.get("chapter_id") or "")
         if not chapter_id:
             return {"output": "（修订节点缺少 chapter_id 参数）", "error": "缺少 chapter_id"}
-        result = await story_forge.revise_chapter(
-            db, user_id, chapter_id, instruction, model=model
-        )
+        result = await story_forge.revise_chapter(db, user_id, chapter_id, instruction, model=model)
         if "error" in result:
             return {"output": f"（修订失败：{result['error']}）", "error": result["error"]}
         return {"output": result["content"], "meta": result}
@@ -399,7 +399,7 @@ async def run_workflow(
         raise HTTPException(status_code=404, detail="工作流不存在")
     try:
         graph = json.loads(wf.graph or "{}")
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         raise HTTPException(status_code=400, detail="工作流图数据损坏") from None
     nodes = graph.get("nodes") if isinstance(graph, dict) else None
     edges = graph.get("edges") if isinstance(graph, dict) else None
@@ -469,8 +469,7 @@ async def run_workflow(
             "story_results": story_results,
             "order": [str(n.get("id")) for n in ordered],
             "node_names": {
-                str(n.get("id")): str((n.get("data") or {}).get("name") or "节点")
-                for n in nodes
+                str(n.get("id")): str((n.get("data") or {}).get("name") or "节点") for n in nodes
             },
         },
     }

@@ -25,15 +25,15 @@ from app.services import story_crew, story_forge
 from app.services.provider_resolver import resolve_text_provider
 
 router = APIRouter()
+
+
 def _sse(ev: dict[str, Any]) -> str:
     """SSE data 行（统一 ensure_ascii=False）。"""
     return "data: " + json.dumps(ev, ensure_ascii=False) + "\n\n"
 
 
-
-
-
 # ==== 请求模型 ====
+
 
 class ProjectCreateRequest(BaseModel):
     title: str
@@ -121,6 +121,7 @@ class CrewRunRequest(BaseModel):
 
 # ==== 项目 ====
 
+
 @router.get("/projects")
 async def list_projects(
     user: User = Depends(get_current_user),
@@ -137,8 +138,13 @@ async def create_project(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     p = await story_forge.create_project(
-        db, user.id, title=req.title, synopsis=req.synopsis, genre=req.genre,
-        character_asset_ids=req.character_asset_ids, settings=req.settings,
+        db,
+        user.id,
+        title=req.title,
+        synopsis=req.synopsis,
+        genre=req.genre,
+        character_asset_ids=req.character_asset_ids,
+        settings=req.settings,
     )
     return {"ok": True, "project": story_forge._project_dict(p)}
 
@@ -162,9 +168,7 @@ async def update_project(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    p = await story_forge.update_project(
-        db, user.id, project_id, req.model_dump(exclude_none=True)
-    )
+    p = await story_forge.update_project(db, user.id, project_id, req.model_dump(exclude_none=True))
     if p is None:
         raise HTTPException(status_code=404, detail="项目不存在")
     return {"ok": True, "project": story_forge._project_dict(p)}
@@ -179,7 +183,9 @@ async def update_compass(
 ) -> dict[str, Any]:
     """创作罗盘：全书承诺 + 当前阶段目标（注入每次生成，防多轮跑偏）。"""
     p = await story_forge.update_project(
-        db, user.id, project_id,
+        db,
+        user.id,
+        project_id,
         {"settings": {"compass": {"intent": req.intent.strip(), "focus": req.focus.strip()}}},
     )
     if p is None:
@@ -207,9 +213,7 @@ async def extract_writing_style_route(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """从指定章节提炼写法特征（存项目 settings，注入后续章节生成）。"""
-    result = await story_forge.extract_writing_style(
-        db, user.id, project_id, req.chapter_id
-    )
+    result = await story_forge.extract_writing_style(db, user.id, project_id, req.chapter_id)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
@@ -349,6 +353,7 @@ async def export_project(
 
 # ==== 章节 ====
 
+
 @router.get("/projects/{project_id}/chapters")
 async def list_chapters(
     project_id: str,
@@ -395,8 +400,12 @@ async def create_chapter(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     c = await story_forge.create_chapter(
-        db, user.id, project_id, chapter_no=req.chapter_no,
-        title=req.title, outline=req.outline,
+        db,
+        user.id,
+        project_id,
+        chapter_no=req.chapter_no,
+        title=req.title,
+        outline=req.outline,
     )
     return {"ok": True, "chapter": story_forge._chapter_dict(c)}
 
@@ -420,9 +429,7 @@ async def update_chapter(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    c = await story_forge.update_chapter(
-        db, user.id, chapter_id, req.model_dump(exclude_none=True)
-    )
+    c = await story_forge.update_chapter(db, user.id, chapter_id, req.model_dump(exclude_none=True))
     if c is None:
         raise HTTPException(status_code=404, detail="章节不存在")
     return {"ok": True, "chapter": story_forge._chapter_dict(c)}
@@ -450,14 +457,24 @@ async def generate_chapter(
     """生成章节正文（同步）：mode=narrative 叙事 / script 剧本。"""
     if req.mode == "script":
         result = await story_forge.generate_chapter_script(
-            db, user.id, req.project_id, chapter_id,
-            rounds=req.rounds, model=req.model, max_tokens=req.max_tokens,
+            db,
+            user.id,
+            req.project_id,
+            chapter_id,
+            rounds=req.rounds,
+            model=req.model,
+            max_tokens=req.max_tokens,
         )
     else:
         result = await story_forge.generate_chapter(
-            db, user.id, req.project_id, chapter_id,
-            model=req.model, max_tokens=req.max_tokens,
-            temperature=req.temperature, instruction=req.instruction,
+            db,
+            user.id,
+            req.project_id,
+            chapter_id,
+            model=req.model,
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+            instruction=req.instruction,
             tool_loop=req.tool_loop,
         )
     if "error" in result:
@@ -532,8 +549,11 @@ async def generate_chapter_stream(
         chunks: list[str] = []
         try:
             async for chunk in provider.stream_generate(
-                user_prompt, resolved.model, system=system_prompt,
-                temperature=req.temperature, max_tokens=req.max_tokens,
+                user_prompt,
+                resolved.model,
+                system=system_prompt,
+                temperature=req.temperature,
+                max_tokens=req.max_tokens,
             ):
                 chunks.append(chunk)
                 yield _sse({"type": "chunk", "content": chunk})
@@ -554,9 +574,7 @@ async def generate_chapter_stream(
             return
         content = "".join(chunks).strip()
         names = [c.get("name") or "角色" for _, c in cards]
-        content = _re.sub(
-            rf"^第\s*{chapter.chapter_no}\s*章.*?\n", "", content, count=1
-        ).strip()
+        content = _re.sub(rf"^第\s*{chapter.chapter_no}\s*章.*?\n", "", content, count=1).strip()
         scripts = await rp._load_regex_scripts(db, user.id)
         if scripts:
             content = rp._apply_regex(scripts, content, "ai_output", names)
@@ -573,9 +591,13 @@ async def generate_chapter_stream(
         except Exception:
             issues = []
         yield _sse(
-            {"type": "done", "chapter_id": chapter.id,
-             "word_count": chapter.word_count, "worldbook_hits": len(wb.activated),
-             "ai_voice": issues[:12]}
+            {
+                "type": "done",
+                "chapter_id": chapter.id,
+                "word_count": chapter.word_count,
+                "worldbook_hits": len(wb.activated),
+                "ai_voice": issues[:12],
+            }
         )
         yield "data: [DONE]\n\n"
 
@@ -601,9 +623,7 @@ async def restore_chapter(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """还原章节到指定版本（当前内容先自动快照）。"""
-    result = await story_forge.restore_chapter_version(
-        db, user.id, chapter_id, version_id
-    )
+    result = await story_forge.restore_chapter_version(db, user.id, chapter_id, version_id)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
@@ -618,15 +638,14 @@ async def revise_chapter(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """按指令修订章节正文。"""
-    result = await story_forge.revise_chapter(
-        db, user.id, chapter_id, instruction, model=model
-    )
+    result = await story_forge.revise_chapter(db, user.id, chapter_id, instruction, model=model)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
 
 
 # ==== 故事角色实例 ====
+
 
 @router.get("/projects/{project_id}/characters")
 async def list_story_characters(
@@ -645,10 +664,17 @@ async def create_story_character(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     s = await story_forge.create_story_character(
-        db, user.id, project_id, name=req.name,
-        character_asset_id=req.character_asset_id, role=req.role,
-        description=req.description, goals=req.goals, arc=req.arc,
-        current_state=req.current_state, skill_ids=req.skill_ids,
+        db,
+        user.id,
+        project_id,
+        name=req.name,
+        character_asset_id=req.character_asset_id,
+        role=req.role,
+        description=req.description,
+        goals=req.goals,
+        arc=req.arc,
+        current_state=req.current_state,
+        skill_ids=req.skill_ids,
     )
     return {"ok": True, "character": story_forge._story_char_dict(s)}
 
@@ -682,6 +708,7 @@ async def delete_story_character(
 
 # ==== 自动连载 ====
 
+
 @router.get("/projects/{project_id}/schedules")
 async def list_schedules(
     project_id: str,
@@ -693,28 +720,34 @@ async def list_schedules(
     from app.models.serial_schedule import SerialSchedule
 
     rows = (
-        await db.execute(
-            select(SerialSchedule).where(
-                SerialSchedule.project_id == project_id,
-                SerialSchedule.user_id == user.id,
+        (
+            await db.execute(
+                select(SerialSchedule).where(
+                    SerialSchedule.project_id == project_id,
+                    SerialSchedule.user_id == user.id,
+                )
             )
         )
-    ).scalars().all()
-    return {"items": [
-        {
-            "id": s.id,
-            "project_id": s.project_id,
-            "interval_minutes": s.interval_minutes,
-            "batch_size": s.batch_size,
-            "next_run_at": str(s.next_run_at) if s.next_run_at else "",
-            "chapter_count": s.chapter_count,
-            "status": s.status,
-            "mode": s.mode,
-            "last_run_at": str(s.last_run_at) if s.last_run_at else "",
-            "error_message": s.error_message,
-        }
-        for s in rows
-    ]}
+        .scalars()
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": s.id,
+                "project_id": s.project_id,
+                "interval_minutes": s.interval_minutes,
+                "batch_size": s.batch_size,
+                "next_run_at": str(s.next_run_at) if s.next_run_at else "",
+                "chapter_count": s.chapter_count,
+                "status": s.status,
+                "mode": s.mode,
+                "last_run_at": str(s.last_run_at) if s.last_run_at else "",
+                "error_message": s.error_message,
+            }
+            for s in rows
+        ]
+    }
 
 
 @router.post("/projects/{project_id}/schedules")
