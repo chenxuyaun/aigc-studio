@@ -12,7 +12,6 @@ const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default:
 const DashboardPage = lazy(() =>
   import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })),
 );
-const CreatePage = lazy(() => import("@/pages/CreatePage").then((m) => ({ default: m.CreatePage })));
 const TextGenPage = lazy(() =>
   import("@/pages/TextGenPage").then((m) => ({ default: m.TextGenPage })),
 );
@@ -132,8 +131,9 @@ export function AppRoutes() {
       <Route path="/share/prompts/:promptId" element={<Page><SharedPromptPage /></Page>} />
       <Route path="/share/music/:workId" element={<Page><SharedMusicPage /></Page>} />
       <Route element={<ProtectedLayout />}>
-        <Route path="/" element={<Page><DashboardPage /></Page>} />
-        <Route path="/create" element={<Page><CreatePage /></Page>} />
+      <Route path="/" element={<Page><DashboardPage /></Page>} />
+      {/* AI 创作已与工作台合一（目标框 + 引擎直控）；/create 直达重定向 */}
+      <Route path="/create" element={<Navigate to="/" replace />} />
         <Route path="/sillytavern" element={<Page><SillyTavernPage /></Page>} />
         <Route path="/roleplay" element={<Page><RoleplayPage /></Page>} />
         <Route path="/story" element={<Page><StoryStudioPage /></Page>} />

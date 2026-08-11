@@ -22,7 +22,8 @@ _PLAN_PROMPT = """你是任务总控大脑（AGI Orchestrator）。把用户的�
 /
   story（写一段故事章节）/ asmr（从 ASMR 库检索音频素材）/
   character（让角色扮演中的角色以角色口吻回应）/ memory（查询角色的记忆档案）/
-  code（生成可运行的代码文件）
+  code（生成可运行的代码文件）/ roundtable（多角色圆桌讨论后定稿——适合需要打磨的高质量创作）/
+  studio（AI 导演工作室：主题→选角建组方案）
 - 1-4 步；每步一个具体产出（prompt 用中文写清楚生成要求）
 - 若某步需要上一步的产出作为素材（如先检索再写），该步加 "input": "prev"
 - 创作/整理/分析类步骤建议指派 Agent：加 "agent": "角色名"（如「民谣词人」「资料猎手」
@@ -65,6 +66,8 @@ _KIND_LABELS = {
     "character": "🎭 角色",
     "memory": "📒 记忆",
     "code": "💻 代码",
+    "roundtable": "🎯 圆桌",
+    "studio": "🎬 导演",
 }
 
 _CODE_PROMPT = """你是资深软件工程师。根据需求生成可运行的代码项目文件。
@@ -424,6 +427,76 @@ async def _execute_code(db: AsyncSession, user_id: str, prompt: str) -> dict[str
     }
 
 
+async def _execute_studio(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
+    """AI 导演工作室引擎：主题 → AI 选角建组方案（复用 creation_service.plan_project）。"""
+
+    from app.services.creation_service import plan_project
+
+    try:
+        data = await plan_project(db, theme=prompt[:500], user_id=user_id)
+    except Exception as exc:
+        return {"summary": f"导演选角失败：{str(exc)[:120]}", "ok": False}
+    roles = data.get("characters") or data.get("roles") or []
+    if not roles:
+        return {"summary": "导演选角失败（未产出角色阵容）", "ok": False}
+    group_name = str(data.get("group_name") or "未命名")[:20]
+    lines = [
+        f"- {r.get('name')}（{r.get('role')}）："
+        f"{str(r.get('personality') or r.get('description') or '')[:60]}"
+        for r in roles[:6]
+    ]
+    summary = f"🎬 导演建组《{group_name}》（{len(roles)} 位角色）\n" + "\n".join(lines)
+    return {"summary": summary[:600], "ok": True, "agent": "AI导演"}
+
+
+async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
+    """创作圆桌引擎：四位角色真实讨论 → 主理人定稿（复用音乐圆桌单次版核心）。"""
+
+    from app.api.v1.generations.music import _ROUNDTABLE_PROMPT
+    from app.services.provider_resolver import resolve_text_provider
+
+    try:
+        resolved = await resolve_text_provider(db, "")
+        result = await resolved.provider.generate(  # type: ignore[attr-defined]
+            _ROUNDTABLE_PROMPT.format(
+                theme=prompt[:300],
+                style="（自由，由讨论决定）",
+                mood="（自由，由讨论决定）",
+            ),
+            resolved.model,
+            temperature=0.95,
+        )
+        data = extract_json(result_text(result))
+        final = data.get("final") or {}
+        title = str(final.get("title") or "未命名")
+        lyrics = str(final.get("lyrics") or "")
+    except Exception as exc:
+        return {"summary": f"圆桌讨论失败：{str(exc)[:120]}", "ok": False}
+    if not lyrics:
+        return {"summary": "圆桌讨论失败（未产出定稿）", "ok": False}
+    try:
+        # 生长闭环：圆桌定稿同样进作品库 + 回填知识库
+        from app.api.v1.generations.music import _auto_save_work
+
+        await _auto_save_work(
+            db,
+            user_id=user_id,
+            theme=prompt[:500],
+            style=str(final.get("style") or "")[:100],
+            final=final,
+            rounds=[],
+            source="mission_roundtable",
+        )
+        _spawn_work_backfill(user_id, title, prompt, final)
+    except Exception:
+        pass  # 入库失败不影响结果
+    return {
+        "summary": f"🎯 圆桌定稿《{title}》\n{lyrics[:280]}",
+        "ok": True,
+        "agent": "圆桌",
+    }
+
+
 async def _execute_media_task(
     db: AsyncSession, user_id: str, task_type: str, prompt: str
 ) -> dict[str, Any]:
@@ -616,6 +689,10 @@ async def execute_step(
             return await _execute_memory(db, user_id, prompt, str(step.get("char") or ""))
         if kind == "code":
             return await _execute_code(db, user_id, prompt)
+        if kind == "roundtable":
+            return await _execute_roundtable(db, user_id, prompt)
+        if kind == "studio":
+            return await _execute_studio(db, user_id, prompt)
     except Exception as exc:
         return {"summary": f"执行失败：{str(exc)[:120]}", "ok": False}
     return {"summary": "未知步骤类型", "ok": False}

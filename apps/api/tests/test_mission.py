@@ -535,3 +535,24 @@ async def test_get_run_chain_orders_from_root(client):
     async with TestingSessionLocal() as session:
         empty = await mission_service.get_run_chain(session, "u1", "no-such")
     assert empty == []
+
+
+@pytest.mark.asyncio
+async def test_execute_studio_plans_cast(client):
+    """导演引擎：主题 → AI 选角建组（复用 creation_service.plan_project）。"""
+    from unittest.mock import AsyncMock as _AM
+
+    fake = _AM()
+    fake.return_value = {
+        "group_name": "矿工之歌",
+        "characters": [
+            {"name": "老周", "role": "主角", "personality": "沉默寡言"},
+            {"name": "阿墨", "role": "词作", "personality": "重意象"},
+        ],
+        "provider": "mock",
+    }
+    with patch("app.services.creation_service.plan_project", new=fake):
+        out = await mission_service._execute_studio(None, "u1", "写一首矿工民谣")
+    assert out["ok"] is True
+    assert "阿墨" in out["summary"]
+    assert out["agent"] == "AI导演"

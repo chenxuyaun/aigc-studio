@@ -24,7 +24,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { apiClient } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
 import { useAuthStore } from "@/stores/auth";
-import { QUICK_TOOLS } from "@/shared/createTools";
+import { CREATE_TOOLS } from "@/shared/createTools";
 
 type CreateType = "image" | "text" | "video" | "audio";
 
@@ -42,7 +42,10 @@ const ROUTE: Record<CreateType, string> = {
   audio: "/create/audio",
 };
 
-const TOOLS = QUICK_TOOLS.map((t) => ({ icon: t.icon, label: t.title, to: t.to }));
+// 引擎直控按钮（任务总控之外的「手动挡」：高级参数精调）
+const TOOLS = CREATE_TOOLS.filter((t) => t.group === "core" || t.to === "/photography").map(
+  (t) => ({ icon: t.icon, label: t.title, to: t.to }),
+);
 
 const TYPE_LABEL: Record<string, string> = {
   text: "文本",
@@ -95,39 +98,7 @@ const SCENES: Scene[] = [
     links: [
       { label: "状态账本", to: "/roleplay" },
       { label: "SillyTavern", to: "/sillytavern" },
-    ],
-  },
-  {
-    icon: "🖼",
-    title: "生成图片 / 视频",
-    desc: "文生图 / 视频 / 漫画 / 写真，任务中心看进度",
-    to: "/create",
-    prompt: "生成一张____的图（画面描述要具体）",
-    links: [
-      { label: "提示词库", to: "/prompts" },
-      { label: "素材库", to: "/assets" },
-      { label: "任务中心", to: "/tasks" },
-    ],
-  },
-  {
-    icon: "📚",
-    title: "积累素材",
-    desc: "知识库导入 → AI 解读 → 创作自动参考；联网兜底",
-    to: "/knowledge",
-    prompt: "检索关于____的资料并整理要点",
-    links: [
-      { label: "待确认素材", to: "/knowledge" },
-      { label: "ASMR 库", to: "/asmr" },
-    ],
-  },
-  {
-    icon: "🗂",
-    title: "管理成果",
-    desc: "音乐作品 / 群演作品 / 素材 / 任务，统一回看",
-    to: "/works",
-    links: [
-      { label: "任务中心", to: "/tasks" },
-      { label: "全站搜索", to: "/search" },
+      { label: "写真参考", to: "/photography" },
     ],
   },
 ];
@@ -146,6 +117,8 @@ const KIND_META: Record<string, { icon: string; label: string }> = {
   character: { icon: "🎭", label: "角色" },
   memory: { icon: "📒", label: "记忆" },
   code: { icon: "💻", label: "代码" },
+  roundtable: { icon: "🎯", label: "圆桌" },
+  studio: { icon: "🎬", label: "导演" },
 };
 
 // SAIOS 执行循环（perceive → plan → execute → observe → reflect → learn）
