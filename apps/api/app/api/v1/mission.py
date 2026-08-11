@@ -85,6 +85,43 @@ async def mission_run_detail(
     return run
 
 
+@router.post("/plan")
+async def mission_plan(
+    req: MissionRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """只规划不执行：返回计划供人工确认/调整（Human-in-the-loop）。"""
+    try:
+        plan = await mission_service.plan_mission(db, user.id, req.goal.strip())
+    except Exception:
+        plan = []
+    if not plan:
+        plan = [
+            {"kind": "text", "prompt": req.goal.strip(), "title": "✍️ 直接生成", "input": ""}
+        ]
+    return {"goal": req.goal.strip(), "plan": plan}
+
+
+class MissionExecuteRequest(BaseModel):
+    goal: str = Field(min_length=2, max_length=800)
+    plan: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@router.post("/execute")
+async def mission_execute(
+    req: MissionExecuteRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """按人工确认/调整后的计划执行（kind 白名单由服务层把关）。"""
+    result = await mission_service.execute_plan(
+        db, user.id, req.goal.strip(), req.plan
+    )
+    result["model"] = "auto"
+    return result
+
+
 @router.post("/runs/{run_id}/reuse")
 async def mission_run_reuse(
     run_id: str,

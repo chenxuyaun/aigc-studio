@@ -256,53 +256,107 @@ export function DashboardPage() {
   // Mission 多轮对话：跑完可继续追问（链式迭代）
   const [continueMsg, setContinueMsg] = useState("");
   const [continueBusy, setContinueBusy] = useState(false);
+  // 计划预览（Human-in-the-loop）：AI 拆解 → 人工确认/调整 → 执行
+  const [planPreview, setPlanPreview] = useState<{
+    goal: string;
+    plan: {
+      kind: string;
+      prompt: string;
+      title: string;
+      input?: string;
+      agent?: string;
+      reason?: string;
+    }[];
+  } | null>(null);
+  const [planBusy, setPlanBusy] = useState(false);
 
   async function runMission() {
     const goal = idea.trim();
     if (!goal || missionBusy) return;
     setMissionBusy(true);
     setMissionResult(null);
+    setPlanPreview(null);
+    try {
+      // 第一步：只规划（预览确认）
+      const p = await apiClient.post<{
+        goal: string;
+        plan: {
+          kind: string;
+          prompt: string;
+          title: string;
+          input?: string;
+          agent?: string;
+          reason?: string;
+        }[];
+      }>("/mission/plan", { goal });
+      setPlanPreview({ goal, plan: p.plan });
+    } finally {
+      setMissionBusy(false);
+    }
+  }
+
+  // 人工确认后的计划 → 执行
+  async function executePlannedMission() {
+    if (!planPreview || planBusy) return;
+    setPlanBusy(true);
+    try {
+      const r = await apiClient.post<typeof missionResult>("/mission/execute", {
+        goal: planPreview.goal,
+        plan: planPreview.plan,
+      });
+      setMissionResult(r);
+      setPlanPreview(null);
+      void refreshMissionHistory();
+    } finally {
+      setPlanBusy(false);
+    }
+  }
+
+  // 快捷：不预览，按 AI 原计划直接执行
+  async function runMissionAuto() {
+    const goal = planPreview?.goal ?? idea.trim();
+    if (!goal || planBusy) return;
+    setPlanBusy(true);
     try {
       const r = await apiClient.post<typeof missionResult>("/mission", { goal });
       setMissionResult(r);
-      // 拉取沉淀的教训 + 历史会话（Reflection + 长期协作记忆）
-      apiClient
-        .get<{
-          lessons: { goal: string; lesson: string; created_at: string }[];
-          runs: {
-            id: string;
-            goal: string;
-            plan: { step: number; kind: string; title: string }[];
-            summary: string;
-            created_at: string;
-          }[];
-        }>("/mission/history")
-        .then((h) => {
-          setMissionLessons(h.lessons.slice(0, 5));
-          setMissionRuns(h.runs.slice(0, 5));
-        })
-        .catch(() => undefined);
-      // 拉取成长档案（平台对你的了解）
-      apiClient
-        .get<{
-          preferences: {
-            styles: string[];
-            themes: string[];
-            steps: string[];
-            agents: { id: string; name: string }[];
-          };
-          profile: string;
-        }>("/mission/profile")
-        .then((p) => setMissionProfile(p))
-        .catch(() => undefined);
-    } catch (e) {
-      setMissionResult({
-        plan: [],
-        results: [{ step: 1, kind: "text", title: "失败", summary: e instanceof Error ? e.message : "任务总控失败", ok: false }],
-        summary: "任务总控执行失败",
-      });
+      setPlanPreview(null);
+      void refreshMissionHistory();
     } finally {
-      setMissionBusy(false);
+      setPlanBusy(false);
+    }
+  }
+
+  async function refreshMissionHistory() {
+    try {
+      const h = await apiClient.get<{
+        lessons: { goal: string; lesson: string; created_at: string }[];
+        runs: {
+          id: string;
+          goal: string;
+          plan: { step: number; kind: string; title: string }[];
+          summary: string;
+          created_at: string;
+        }[];
+      }>("/mission/history");
+      setMissionLessons(h.lessons.slice(0, 5));
+      setMissionRuns(h.runs.slice(0, 5));
+    } catch {
+      // 历史拉取失败不阻塞主流程
+    }
+    try {
+      const p = await apiClient.get<{
+        preferences: {
+          styles: string[];
+          themes: string[];
+          steps: string[];
+          agents: { id: string; name: string }[];
+        };
+        profile: string;
+      }>("/mission/profile");
+      setMissionProfile(p);
+    } catch {
+      // 档案拉取失败不阻塞主流程
     }
   }
 
@@ -478,13 +532,140 @@ export function DashboardPage() {
             <button
               onClick={() => void runMission()}
               disabled={missionBusy || !idea.trim()}
-              title="交给任务总控：自动拆解成多步计划（写歌/生成/检索…）并执行"
+              title="交给任务总控：先拆解计划给你确认，可调整后执行"
               className="inline-flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary-text transition-all duration-200 hover:-translate-y-px hover:border-primary disabled:opacity-50"
             >
-              🎯 {missionBusy ? "任务总控执行中…" : "交给任务总控"}
+              🎯 {missionBusy ? "拆解计划中…" : "交给任务总控"}
             </button>
           </div>
         </div>
+
+        {/* 计划预览（Human-in-the-loop）：AI 拆解 → 人工调整 → 执行 */}
+        {planPreview && (
+          <div className="mt-4 rounded-2xl border border-primary/25 bg-primary/5 p-4">
+            <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
+              🗺 计划预览
+              <span className="text-xs font-normal text-muted-foreground">
+                AI 已拆解 {planPreview.plan.length} 步——可调整顺序/删除/改写后执行
+              </span>
+            </p>
+            <div className="flex flex-col gap-2">
+              {planPreview.plan.map((step, i) => {
+                const meta = KIND_META[step.kind] ?? { icon: "⚙️", label: step.kind };
+                return (
+                  <div key={i} className="flex items-start gap-2 rounded-xl border border-border bg-surface p-2.5">
+                    <span className="mt-1.5 grid h-5 w-5 flex-none place-items-center rounded-full bg-primary/10 text-[10px] text-primary-text">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary-text">
+                          {meta.icon} {meta.label}
+                        </span>
+                        <span className="truncate font-medium">{step.title}</span>
+                        {step.agent && (
+                          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-600">
+                            🤖 {step.agent}
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        value={step.prompt}
+                        onChange={(e) =>
+                          setPlanPreview((p) =>
+                            p
+                              ? {
+                                  ...p,
+                                  plan: p.plan.map((s, j) =>
+                                    j === i ? { ...s, prompt: e.target.value } : s,
+                                  ),
+                                }
+                              : p,
+                          )
+                        }
+                        className="w-full rounded-lg border border-border bg-muted/40 px-2 py-1 text-[11px] outline-none focus:border-primary"
+                      />
+                      {step.reason && (
+                        <p className="mt-1 text-[10px] italic text-muted-foreground/80">
+                          为什么：{step.reason}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-none flex-col gap-1">
+                      <button
+                        onClick={() =>
+                          setPlanPreview((p) => {
+                            if (!p) return p;
+                            const plan = [...p.plan];
+                            if (i === 0) return p;
+                            [plan[i - 1]!, plan[i]!] = [plan[i]!, plan[i - 1]!];
+                            return { ...p, plan };
+                          })
+                        }
+                        disabled={i === 0}
+                        className="rounded border border-border px-1.5 text-[10px] hover:border-primary disabled:opacity-30"
+                        title="上移"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() =>
+                          setPlanPreview((p) => {
+                            if (!p) return p;
+                            const plan = [...p.plan];
+                            if (i === plan.length - 1) return p;
+                            [plan[i + 1]!, plan[i]!] = [plan[i]!, plan[i + 1]!];
+                            return { ...p, plan };
+                          })
+                        }
+                        disabled={i === planPreview.plan.length - 1}
+                        className="rounded border border-border px-1.5 text-[10px] hover:border-primary disabled:opacity-30"
+                        title="下移"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        onClick={() =>
+                          setPlanPreview((p) =>
+                            p ? { ...p, plan: p.plan.filter((_, j) => j !== i) } : p,
+                          )
+                        }
+                        className="rounded border border-border px-1.5 text-[10px] text-danger hover:border-danger"
+                        title="删除此步"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => void executePlannedMission()}
+                disabled={planBusy || planPreview.plan.length === 0}
+                className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-xs font-semibold hover:bg-primary/20 disabled:opacity-50"
+              >
+                🚀 开始执行
+              </button>
+              <button
+                onClick={() => void runMissionAuto()}
+                disabled={planBusy}
+                className="rounded-xl border border-border px-3 py-2 text-[11px] text-muted-foreground hover:border-primary"
+                title="不预览，按 AI 原计划直接执行"
+              >
+                ⚡ 直接执行
+              </button>
+              <button
+                onClick={() => setPlanPreview(null)}
+                className="rounded-xl border border-border px-3 py-2 text-[11px] text-muted-foreground hover:border-danger"
+              >
+                取消
+              </button>
+              {planBusy && <span className="text-xs text-muted-foreground">执行中…</span>}
+            </div>
+          </div>
+        )}
 
         {/* 任务总控结果：计划 → 逐步执行 → 汇总 */}
         {missionResult && (

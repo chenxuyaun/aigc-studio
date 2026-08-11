@@ -478,3 +478,25 @@ async def test_execute_music_truncates_long_theme(client):
             )
     assert out["ok"] is True, "超长 theme 应被截断而非报错"
     assert len(captured["theme"]) <= 500
+
+
+@pytest.mark.asyncio
+async def test_execute_plan_cleans_and_runs(client):
+    """人工干预：提交的 plan 经白名单过滤（非法 kind 丢弃）+ 兜底降级。"""
+    fake_resolver = AsyncMock()
+    fake_resolver.provider.generate.return_value = type("R", (), {"content": "好的"})()
+    fake_resolver.model = "mock"
+    plan = [
+        {"kind": "text", "prompt": "写一段", "title": "a"},
+        {"kind": "hack", "prompt": "evil", "title": "b"},
+    ]
+    with patch(
+        "app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver
+    ):
+        from tests.conftest import TestingSessionLocal
+
+        async with TestingSessionLocal() as session:
+            out = await mission_service.execute_plan(session, "u1", "目标", plan)
+    assert out["summary"].startswith("共 1 步"), "非法 kind 应被过滤"
+    assert out["results"][0]["ok"] is True
+    assert out["run_id"]

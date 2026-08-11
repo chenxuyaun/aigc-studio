@@ -649,17 +649,38 @@ async def _reflect_lessons(
         pass
 
 
-async def run_mission(
-    db: AsyncSession, user_id: str, goal: str, parent_run_id: str = ""
+async def execute_plan(
+    db: AsyncSession,
+    user_id: str,
+    goal: str,
+    plan: list[dict[str, Any]],
+    parent_run_id: str = "",
 ) -> dict[str, Any]:
-    """任务总控主循环：拆解 → 串行执行（结果传递）→ 汇总 → 反思沉淀教训 → 会话持久化。"""
-    try:
-        plan = await plan_mission(db, user_id, goal)
-    except Exception:
-        plan = []
-    if not plan:
+    """按给定计划执行（人工干预模式：计划由用户确认/调整后提交）。
+
+    与 run_mission 共用同一执行循环（结果传递/反思/持久化），仅计划来源不同。
+    """
+    # 白名单 + 结构规范化（防越权 kind / 超长字段）
+    cleaned: list[dict[str, Any]] = []
+    for s in plan[:4]:
+        kind = str(s.get("kind") or "").strip()
+        if kind not in _KIND_LABELS:
+            continue
+        cleaned.append(
+            {
+                "kind": kind,
+                "prompt": str(s.get("prompt") or "")[:500],
+                "title": str(s.get("title") or _KIND_LABELS[kind])[:40],
+                "input": "prev" if str(s.get("input") or "") == "prev" else "",
+                "agent": str(s.get("agent") or "").strip()[:40],
+                "char": str(s.get("char") or "").strip()[:40],
+                "reason": str(s.get("reason") or "").strip()[:100],
+            }
+        )
+    if not cleaned:
         # 降级：目标直接作为单步文本生成
-        plan = [{"kind": "text", "prompt": goal, "title": "✍️ 直接生成", "input": ""}]
+        cleaned = [{"kind": "text", "prompt": goal, "title": "✍️ 直接生成", "input": ""}]
+    plan = cleaned
     results: list[dict[str, Any]] = []
     prev_summary = ""
     for step in plan:
@@ -698,6 +719,17 @@ async def run_mission(
     }
     await _save_run(db, user_id, goal, mission, parent_run_id)
     return mission
+
+
+async def run_mission(
+    db: AsyncSession, user_id: str, goal: str, parent_run_id: str = ""
+) -> dict[str, Any]:
+    """任务总控主循环：拆解 → 串行执行（结果传递）→ 汇总 → 反思沉淀教训 → 会话持久化。"""
+    try:
+        plan = await plan_mission(db, user_id, goal)
+    except Exception:
+        plan = []
+    return await execute_plan(db, user_id, goal, plan, parent_run_id)
 
 
 async def continue_mission(
