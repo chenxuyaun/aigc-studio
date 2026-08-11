@@ -28,6 +28,12 @@ _PLAN_PROMPT = """你是任务总控大脑（AGI Orchestrator）。把用户的�
 - 若某步需要上一步的产出作为素材（如先检索再写），该步加 "input": "prev"
 - 创作/整理/分析类步骤建议指派 Agent：加 "agent": "角色名"（如「民谣词人」「资料猎手」
   ——执行器找不到该角色时会按名字现场创建专属 Agent，无需预建团队）
+- 意图映射（目标中出现以下关键词时，计划**必须**包含对应步骤，不得遗漏）：
+  · 检索/查资料/查一下/搜索/找素材/素材 → 必须含 search 步骤
+  · 让<角色名>讲/说说/评价/聊聊/角色口吻/扮演 → 必须含 character 步骤（char=角色名）
+  · 配图/生成图/封面图/配一张图 → 必须含 image 步骤
+  · 写歌/民谣/歌词/一首歌 → 必须含 music 步骤
+  · 故事/小说/章节/长篇 → 必须含 story 步骤
 - character/memory 步骤可加 "char": "角色名"（角色库中的角色）
 输出 JSON（不要任何多余文字）
 ：
@@ -182,6 +188,19 @@ async def plan_mission(db: AsyncSession, user_id: str, goal: str) -> list[dict[s
         temperature=0.4,
     )
     data = extract_json(result_text(result))
+    return _ensure_intent_steps(goal, _parse_plan(data))
+
+
+# 意图兜底：目标关键词 → 计划缺步骤时确定性补上（纠错器，不依赖 LLM 发挥）
+_INTENT_RULES: list[tuple[tuple[str, ...], str, str]] = [
+    (("检索", "查资料", "查一下", "搜索", "找素材", "查素材", "素材"), "search", "🔍 检索素材"),
+    (("配图", "生成图", "封面图", "配一张图", "配张图", "生成图片"), "image", "🖼 配图"),
+    (("写歌", "民谣", "歌词", "一首歌", "创作一首"), "music", "🎵 写歌"),
+    (("故事", "小说", "章节", "长篇"), "story", "📖 故事章节"),
+]
+
+
+def _parse_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
     plan = []
     for step in (data.get("plan") or [])[:4]:
         kind = str(step.get("kind") or "").strip()
@@ -199,6 +218,50 @@ async def plan_mission(db: AsyncSession, user_id: str, goal: str) -> list[dict[s
             }
         )
     return plan
+
+
+def _ensure_intent_steps(goal: str, plan: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """目标意图兜底：LLM 漏拆步骤时按关键词确定性补上（最多 4 步）。"""
+    import re as _re
+
+    kinds = {str(s.get("kind")) for s in plan}
+    # 角色采访：提取「让<名字>讲/说说/评价…」
+    m = _re.search(
+        r"让([\u4e00-\u9fa5A-Za-z0-9]{1,8}?)(?:用角色|讲讲|说说|评价|聊聊|口吻|来)",
+        goal,
+    )
+    if m and "character" not in kinds and len(plan) < 4:
+        name = m.group(1)
+        plan.insert(
+            0,
+            {
+                "kind": "character",
+                "prompt": f"让{name}用角色口吻回应：{goal[:120]}",
+                "title": f"🎭 {name}回应",
+                "input": "",
+                "agent": "",
+                "char": name[:40],
+                "reason": "目标要求角色回应，自动补角色步骤",
+            },
+        )
+        kinds.add("character")
+    for kws, kind, title in _INTENT_RULES:
+        if kind in kinds or len(plan) >= 4:
+            continue
+        if any(k in goal for k in kws):
+            plan.append(
+                {
+                    "kind": kind,
+                    "prompt": goal[:300],
+                    "title": title,
+                    "input": "",
+                    "agent": "",
+                    "char": "",
+                    "reason": "目标含该意图关键词，自动补步骤",
+                }
+            )
+            kinds.add(kind)
+    return plan[:4]
 
 
 async def _spawn_mission_agent(
@@ -894,6 +957,8 @@ async def run_mission(
         plan = await plan_mission(db, user_id, goal)
     except Exception:
         plan = []
+    # 降级路径同样过意图兜底（LLM 失败时关键词仍能补出正确步骤）
+    plan = _ensure_intent_steps(goal, plan)
     return await execute_plan(db, user_id, goal, plan, parent_run_id)
 
 

@@ -100,6 +100,7 @@ async def mission_plan(
         plan = [
             {"kind": "text", "prompt": req.goal.strip(), "title": "✍️ 直接生成", "input": ""}
         ]
+    plan = mission_service._ensure_intent_steps(req.goal.strip(), plan)
     return {"goal": req.goal.strip(), "plan": plan}
 
 
