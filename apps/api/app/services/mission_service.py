@@ -607,7 +607,8 @@ async def _execute_character(
             f"{char.system_prompt or ''}"
             "用这个角色的口吻、性格与说话习惯回应，不跳出角色。"
         )
-        resolved = await resolve_text_provider(db, "")
+        # 角色扮演固定用 Hermes（本地角色扮演模型）——Grok 有 xAI 身份护栏，拒绝扮演自定义角色
+        resolved = await resolve_text_provider(db, "hermes3")
         result = await resolved.provider.generate(  # type: ignore[attr-defined]
             prompt, resolved.model, system=system_prompt, temperature=0.9
         )
