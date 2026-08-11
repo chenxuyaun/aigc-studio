@@ -256,3 +256,44 @@ async def test_execute_code_kind_generates_files(client):
     assert len(out["code"]) == 2
     assert out["code"][0]["path"] == "app.py"
     assert "python app.py" in out["summary"]
+
+
+@pytest.mark.asyncio
+async def test_execute_music_saves_work_and_backfills(client):
+    """生长闭环：Mission 音乐步骤的产出 → 作品库落库 + 后台回填知识库。"""
+    import asyncio as _asyncio
+
+    from app.models.music_work import MusicWork
+    from sqlalchemy import select as _select
+
+    from tests.conftest import TestingSessionLocal
+
+    fake_data = {
+        "title": "夏光影",
+        "lyrics": "让微风偷走我的烦恼\n清晨的露珠在旧木门前踢踏\n" * 20,  # ≥200 字满足回填条件
+        "chords": "C G Am F",
+        "arrangement": "木吉他 + 口琴",
+        "style": "民谣",
+    }
+    backfill_mock = AsyncMock()
+    with (
+        patch(
+            "app.api.v1.generations.music.compose_song",
+            new=AsyncMock(return_value=dict(fake_data)),
+        ),
+        patch("app.api.v1.generations.music._backfill_work_material", new=backfill_mock),
+        patch("app.services.music_works._auto_tags", new=AsyncMock(return_value="民谣,夏日")),
+    ):
+        async with TestingSessionLocal() as session:
+            out = await mission_service.execute_step(
+                session, "u1", {"kind": "music", "prompt": "写一首关于夏天的歌"}
+            )
+            # 等后台回填任务跑完（回填是 create_task 异步执行）
+            for _ in range(40):
+                if backfill_mock.await_count:
+                    break
+                await _asyncio.sleep(0.05)
+            works = await session.execute(_select(MusicWork).where(MusicWork.title == "夏光影"))
+            assert works.scalar_one_or_none() is not None, "Mission 产出的歌应存入作品库"
+    assert out["ok"] is True
+    assert backfill_mock.await_count >= 1, "应触发知识库回填"

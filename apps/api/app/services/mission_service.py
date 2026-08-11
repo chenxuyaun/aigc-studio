@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 from typing import Any, cast
@@ -267,7 +268,7 @@ async def _execute_text(db: AsyncSession, user_id: str, prompt: str) -> dict[str
 
 
 async def _execute_music(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
-    from app.api.v1.generations.music import MusicComposeRequest, compose_song
+    from app.api.v1.generations.music import MusicComposeRequest, _auto_save_work, compose_song
 
     req = MusicComposeRequest(
         theme=prompt, style="", mood="", language="zh", verse_count=2, model=""
@@ -275,8 +276,50 @@ async def _execute_music(db: AsyncSession, user_id: str, prompt: str) -> dict[st
     data = await compose_song(req, db, cast(Any, user_id))
     if data.get("error"):
         return {"summary": f"写歌失败：{data['error']}", "ok": False}
+    title = str(data.get("title") or "未命名")
     lyrics = str(data.get("lyrics") or "")[:300]
-    return {"summary": f"《{data.get('title') or '未命名'}》\n{lyrics}", "ok": True}
+    try:
+        # 生长闭环：Mission 产出的歌也进作品库（source=mission）
+        await _auto_save_work(
+            db,
+            user_id=user_id,
+            theme=prompt[:500],
+            style=str(data.get("style") or ""),
+            final=data,
+            rounds=[],
+            source="mission",
+        )
+        _spawn_work_backfill(user_id, title, prompt, data)
+    except Exception:
+        pass  # 入库失败不影响 Mission 结果
+    return {"summary": f"《{title}》\n{lyrics}", "ok": True}
+
+
+# 后台回填任务引用（防 GC；done_callback 丢弃引用，满足 RUF006）
+_backfill_tasks: set[asyncio.Task[Any]] = set()
+
+
+def _spawn_work_backfill(
+    user_id: str, title: str, theme: str, data: dict[str, Any]
+) -> None:
+    """把 Mission 产出的好歌词后台回填知识库（异常静默；防刷由回填函数把关）。"""
+
+    from app.api.v1.generations.music import _backfill_work_material
+
+    async def _run() -> None:
+        with contextlib.suppress(Exception):
+            await _backfill_work_material(
+                user_id=user_id,
+                work_title=title,
+                theme=theme[:500],
+                lyrics=str(data.get("lyrics") or ""),
+                chords=str(data.get("chords") or ""),
+                arrangement=str(data.get("arrangement") or ""),
+            )
+
+    task = asyncio.create_task(_run())
+    task.add_done_callback(_backfill_tasks.discard)
+    _backfill_tasks.add(task)
 
 
 async def _execute_code(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
