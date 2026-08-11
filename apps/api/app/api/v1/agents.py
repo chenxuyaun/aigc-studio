@@ -181,6 +181,28 @@ async def update_agent(
     return AgentResponse.model_validate(_with_list(agent))
 
 
+@router.post("/{agent_id}/promote", response_model=AgentResponse)
+async def promote_agent(
+    agent_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> AgentResponse:
+    """Mission 现场角色转正：临时 Agent（source_type=mission）→ 正式 Agent。"""
+    agent = (
+        (await db.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
+    if agent.author_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="无权修改")
+    agent.source_type = "user"
+    if agent.agent_type == "mission":
+        agent.agent_type = "generic"
+    await db.commit()
+    await db.refresh(agent)
+    return AgentResponse.model_validate(_with_list(agent))
+
+
 @router.delete("/{agent_id}")
 async def delete_agent(
     agent_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)

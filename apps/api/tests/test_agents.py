@@ -85,3 +85,35 @@ async def test_agent_search(client, admin_token):
     resp = await client.get("/api/v1/agents/?search=翻译", headers=headers)
     assert resp.json()["total"] == 1
     assert resp.json()["items"][0]["name"] == "翻译助手"
+
+
+@pytest.mark.asyncio
+async def test_agent_promote_mission_role(client, admin_token):
+    """Mission 现场角色转正：source_type mission → user，agent_type mission → generic。"""
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    resp = await client.post(
+        "/api/v1/agents/",
+        json={
+            "name": "民谣词人",
+            "system_prompt": "你是民谣词人",
+            "agent_type": "mission",
+            "source_type": "mission",
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    aid = resp.json()["id"]
+
+    resp = await client.post(f"/api/v1/agents/{aid}/promote", headers=headers)
+    assert resp.status_code == 200, resp.text
+    promoted = resp.json()
+    assert promoted["source_type"] == "user"
+    assert promoted["agent_type"] == "generic"
+
+    # 权限：其他用户不能转正他人的 Agent
+    resp = await client.post(f"/api/v1/agents/{aid}/promote")
+    assert resp.status_code in (401, 403)
+
+    # 404
+    resp = await client.post("/api/v1/agents/not-exist/promote", headers=headers)
+    assert resp.status_code == 404

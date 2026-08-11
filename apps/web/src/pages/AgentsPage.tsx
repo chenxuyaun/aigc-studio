@@ -85,6 +85,14 @@ export function AgentsPage() {
     },
   });
 
+  // Mission 现场角色转正：临时 Agent → 正式 Agent（进入长期团队）
+  const promoteMut = useMutation({
+    mutationFn: (id: string) => apiClient.post<Agent>(`/agents/${id}/promote`, {}),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["agents", "list"] });
+    },
+  });
+
   const items = listQ.data?.items ?? [];
   const total = listQ.data?.total ?? 0;
   const catNames = useMemo(
@@ -233,7 +241,24 @@ export function AgentsPage() {
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Wrench className="h-3 w-3" aria-hidden />
                   <span className="truncate">{a.model || "默认模型"}</span>
-                  <span className="ml-auto rounded-full bg-secondary px-2 py-0.5">{a.agent_type}</span>
+                  {a.source_type === "mission" ? (
+                    <>
+                      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-600">
+                        🤖 Mission 角色
+                      </span>
+                      <button
+                        onClick={() => promoteMut.mutate(a.id)}
+                        title="转正为正式 Agent（进入你的长期团队，可被后续任务复用）"
+                        className="ml-auto rounded-full border border-border px-2 py-0.5 hover:border-primary hover:text-primary-text"
+                      >
+                        转正
+                      </button>
+                    </>
+                  ) : (
+                    <span className="ml-auto rounded-full bg-secondary px-2 py-0.5">
+                      {a.agent_type}
+                    </span>
+                  )}
                 </div>
               </article>
             ))}
