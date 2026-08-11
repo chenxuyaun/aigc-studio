@@ -428,9 +428,9 @@ async def _execute_code(db: AsyncSession, user_id: str, prompt: str) -> dict[str
 
 
 async def _execute_studio(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
-    """AI 导演工作室引擎：主题 → AI 选角建组方案（复用 creation_service.plan_project）。"""
+    """AI 导演工作室引擎：主题 → AI 选角建组 → 直接落成可运行群聊（plan→setup）。"""
 
-    from app.services.creation_service import plan_project
+    from app.services.creation_service import plan_project, setup_project
 
     try:
         data = await plan_project(db, theme=prompt[:500], user_id=user_id)
@@ -446,28 +446,85 @@ async def _execute_studio(db: AsyncSession, user_id: str, prompt: str) -> dict[s
         for r in roles[:6]
     ]
     summary = f"🎬 导演建组《{group_name}》（{len(roles)} 位角色）\n" + "\n".join(lines)
+    # 建组落地：角色卡 + 群聊（可直接进群共创）
+    try:
+        setup = await setup_project(db, owner_id=user_id, theme=prompt[:300], plan=data)
+        gid = str(setup.get("chat_id") or "")
+        if gid:
+            gname = str(setup.get("group_name") or group_name)[:20]
+            summary += (
+                f"\n💬 创作群已建好《{gname}》"
+                "（角色已入群，可直接进群共创）"
+            )
+    except Exception:
+        pass  # 建群失败不影响方案展示
     return {"summary": summary[:600], "ok": True, "agent": "AI导演"}
 
 
 async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
-    """创作圆桌引擎：四位角色真实讨论 → 主理人定稿（复用音乐圆桌单次版核心）。"""
+    """创作圆桌·真讨论版：AI 选角 → 逐轮真实生成（每轮携带前序发言）→ 主理人定稿。
 
-    from app.api.v1.generations.music import _ROUNDTABLE_PROMPT
+    非流式实现（Mission 同步返回）：内容与 SSE 版一致，只是不推流。
+    """
+
+    from app.api.v1.generations.music import (
+        _CAST_PROMPT,
+        _FINAL_PROMPT,
+        _speaker_prompt,
+    )
     from app.services.provider_resolver import resolve_text_provider
 
     try:
         resolved = await resolve_text_provider(db, "")
-        result = await resolved.provider.generate(  # type: ignore[attr-defined]
-            _ROUNDTABLE_PROMPT.format(
-                theme=prompt[:300],
-                style="（自由，由讨论决定）",
-                mood="（自由，由讨论决定）",
-            ),
+        # 第 0 轮：AI 按主题定制会议阵容
+        cast_result = await resolved.provider.generate(  # type: ignore[attr-defined]
+            _CAST_PROMPT.format(theme=prompt[:200], style="（自由）"),
             resolved.model,
-            temperature=0.95,
+            temperature=0.9,
         )
-        data = extract_json(result_text(result))
-        final = data.get("final") or {}
+        cast_data = extract_json(result_text(cast_result))
+        roles = sorted(
+            (cast_data.get("roles") or [])[:4],
+            key=lambda r: int(r.get("order") or 0),
+        )
+        if len(roles) < 2:
+            return {"summary": "圆桌选角失败（角色不足）", "ok": False}
+        # 逐轮真实发言：非主理人角色每人一轮（含毒舌评审），每轮携带前序发言
+        agenda = [r for r in roles if not r.get("finalizer")][:3]
+        rounds: list[dict[str, str]] = []
+        for role in agenda:
+            task = (
+                f"以「{role.get('name')}」（{role.get('field')}）的专业视角发言 60-100 字，"
+                "提出具体创作主张，直面并回应前序发言的问题，不客套。"
+            )
+            result = await resolved.provider.generate(  # type: ignore[attr-defined]
+                _speaker_prompt(prompt[:200], "（自由）", rounds, task),
+                resolved.model,
+                temperature=0.95,
+            )
+            rounds.append(
+                {
+                    "speaker": str(role.get("name") or "专家"),
+                    "content": result_text(result).strip()[:300],
+                }
+            )
+        # 定稿：主理人综合讨论落地
+        finalizer = next((r for r in roles if r.get("finalizer")), roles[0])
+        transcript = "\n".join(f"{r['speaker']}：{r['content']}" for r in rounds)[:2500]
+        final_prompt = _FINAL_PROMPT.format(
+            name=str(finalizer.get("name") or "主理人"),
+            field=str(finalizer.get("field") or "音乐制作"),
+            theme=prompt[:200],
+            style="（自由）",
+            style_profile="",
+            transcript=transcript,
+            fix_list="（无结构化清单：从讨论记录自行提取评审点名批评过的元素与替代方案，定稿必须落实）",
+        )
+        result = await resolved.provider.generate(  # type: ignore[attr-defined]
+            final_prompt, resolved.model, temperature=0.8
+        )
+        final_data = extract_json(result_text(result))
+        final = final_data.get("final") or final_data  # 兼容两种输出结构
         title = str(final.get("title") or "未命名")
         lyrics = str(final.get("lyrics") or "")
     except Exception as exc:
@@ -490,8 +547,9 @@ async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> di
         _spawn_work_backfill(user_id, title, prompt, final)
     except Exception:
         pass  # 入库失败不影响结果
+    discuss = "；".join(f"{r['speaker']}：{r['content'][:36]}" for r in rounds[:2])
     return {
-        "summary": f"🎯 圆桌定稿《{title}》\n{lyrics[:280]}",
+        "summary": f"🎯 圆桌真讨论（{len(rounds)} 轮）定稿《{title}》\n{discuss}\n\n{lyrics[:200]}",
         "ok": True,
         "agent": "圆桌",
     }
@@ -758,25 +816,54 @@ async def execute_plan(
         # 降级：目标直接作为单步文本生成
         cleaned = [{"kind": "text", "prompt": goal, "title": "✍️ 直接生成", "input": ""}]
     plan = cleaned
+
+    # ===== 步骤级并发：无依赖步骤并行（波次），prev 链串行 =====
+    # 并行波内每步用独立 session（AsyncSession 不支持并发共享）
+    from app.core.database import AsyncSessionLocal
+
+    async def _run_step_isolated(step: dict[str, Any], prev: str = "") -> dict[str, Any]:
+        async with AsyncSessionLocal() as s:
+            return await execute_step(s, user_id, step, prev, goal)
+
+    def _outcome(step: dict[str, Any], outcome: dict[str, Any]) -> dict[str, Any]:
+        summary = str(outcome.get("summary") or "")
+        return {
+            "step": len(results) + 1,
+            "kind": step.get("kind", ""),
+            "title": step.get("title", ""),
+            "summary": summary,
+            "ok": outcome.get("ok", False),
+            "task_id": outcome.get("task_id", ""),
+            "agent": str(step.get("agent") or "") or outcome.get("agent") or "",
+            "code": outcome.get("code") or [],
+        }
+
     results: list[dict[str, Any]] = []
     prev_summary = ""
-    for step in plan:
-        outcome = await execute_step(db, user_id, step, prev_summary, goal)
-        summary = str(outcome.get("summary") or "")
-        results.append(
-            {
-                "step": len(results) + 1,
-                "kind": step.get("kind", ""),
-                "title": step.get("title", ""),
-                "summary": summary,
-                "ok": outcome.get("ok", False),
-                "task_id": outcome.get("task_id", ""),
-                "agent": str(step.get("agent") or "") or outcome.get("agent") or "",
-                "code": outcome.get("code") or [],
-            }
-        )
-        if outcome.get("ok") and summary:
-            prev_summary = summary  # 结果传递：供 input=prev 的下一步使用
+    i = 0
+    n = len(plan)
+    while i < n:
+        if plan[i].get("input") == "prev":
+            # prev 依赖链：串行执行，注入上一步产出
+            outcome = await execute_step(db, user_id, plan[i], prev_summary, goal)
+            results.append(_outcome(plan[i], outcome))
+            summary = str(outcome.get("summary") or "")
+            if outcome.get("ok") and summary:
+                prev_summary = summary
+            i += 1
+            continue
+        # 收集连续无依赖步骤 → 并行波
+        j = i
+        while j < n and plan[j].get("input") != "prev":
+            j += 1
+        wave = plan[i:j]
+        outcomes = await asyncio.gather(*[_run_step_isolated(s) for s in wave])
+        for step, outcome in zip(wave, outcomes, strict=True):
+            results.append(_outcome(step, outcome))
+            summary = str(outcome.get("summary") or "")
+            if outcome.get("ok") and summary:
+                prev_summary = summary  # 供后续 prev 链注入
+        i = j
     ok_count = sum(1 for r in results if r["ok"])
     await _reflect_lessons(db, user_id, goal, results)
     mission = {

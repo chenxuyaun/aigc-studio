@@ -551,8 +551,103 @@ async def test_execute_studio_plans_cast(client):
         ],
         "provider": "mock",
     }
-    with patch("app.services.creation_service.plan_project", new=fake):
+    setup_fake = AsyncMock()
+    setup_fake.return_value = {
+        "chat_id": "chat-9",
+        "group_name": "矿工之歌",
+        "genre": "现实",
+        "logline": "x",
+        "characters": [],
+        "reused_count": 0,
+    }
+    with (
+        patch("app.services.creation_service.plan_project", new=fake),
+        patch("app.services.creation_service.setup_project", new=setup_fake),
+    ):
         out = await mission_service._execute_studio(None, "u1", "写一首矿工民谣")
     assert out["ok"] is True
     assert "阿墨" in out["summary"]
     assert out["agent"] == "AI导演"
+    assert "创作群已建好" in out["summary"], "建组应直接落成可运行群聊"
+
+
+@pytest.mark.asyncio
+async def test_roundtable_true_discussion_rounds(client):
+    """圆桌真讨论版：选角 → 逐轮真实发言 → 主理人定稿（非流式）。"""
+    cast_json = json.dumps(
+        {
+            "roles": [
+                {"name": "阿墨", "field": "民谣词作", "order": 1, "finalizer": False},
+                {"name": "毒舌", "field": "评审", "order": 2, "finalizer": False},
+                {"name": "老K", "field": "制作", "order": 3, "finalizer": True},
+            ]
+        }
+    )
+    final_json = json.dumps(
+        {
+            "final": {
+                "title": "晨雾",
+                "lyrics": "雾漫过山脊\n" * 30,
+                "arrangement": "木吉他",
+                "style": "民谣",
+            }
+        }
+    )
+    fake_resolver = AsyncMock()
+    fake_resolver.provider.generate.side_effect = [
+        type("R", (), {"content": cast_json})(),
+        type("R", (), {"content": "阿墨：用意象铺陈晨雾的呼吸感"})(),
+        type("R", (), {"content": "毒舌：副歌太绵软，缺少记忆点"})(),
+        type("R", (), {"content": final_json})(),
+    ]
+    fake_resolver.model = "mock"
+    with (
+        patch(
+            "app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver
+        ),
+        patch("app.api.v1.generations.music._backfill_work_material", new=AsyncMock()),
+        patch("app.services.music_works._auto_tags", new=AsyncMock(return_value="民谣")),
+    ):
+        from tests.conftest import TestingSessionLocal
+
+        async with TestingSessionLocal() as session:
+            out = await mission_service._execute_roundtable(
+                session, "u1", "写一首晨雾民谣"
+            )
+    assert out["ok"] is True
+    assert "圆桌真讨论" in out["summary"], "应标注真讨论版本"
+    assert "晨雾" in out["summary"], "应产出定稿标题"
+    assert fake_resolver.provider.generate.await_count == 4, "应为逐轮真实生成（选角+2轮发言+定稿）"
+
+
+@pytest.mark.asyncio
+async def test_execute_plan_runs_independent_steps_in_parallel(client):
+    """步骤级并发：无依赖步骤并行执行（耗时 ≈ 单步而非总和），prev 链保持串行。"""
+    import asyncio as _asyncio
+    import time as _time
+
+    async def _slow_generate(*_a, **_k):
+        await _asyncio.sleep(0.25)
+        return type("R", (), {"content": "产出"})()
+
+    fake_resolver = AsyncMock()
+    fake_resolver.provider.generate.side_effect = _slow_generate
+    fake_resolver.model = "mock"
+    plan = [
+        {"kind": "text", "prompt": "a", "title": "a"},
+        {"kind": "text", "prompt": "b", "title": "b"},
+        {"kind": "text", "prompt": "c", "title": "c", "input": "prev"},
+    ]
+    with patch(
+        "app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver
+    ):
+        from tests.conftest import TestingSessionLocal
+
+        async with TestingSessionLocal() as session:
+            t0 = _time.monotonic()
+            out = await mission_service.execute_plan(session, "u1", "目标", plan)
+            elapsed = _time.monotonic() - t0
+    assert out["summary"].startswith("共 3 步")
+    assert all(r["ok"] for r in out["results"])
+    assert [r["kind"] for r in out["results"]] == ["text", "text", "text"]
+    assert elapsed < 0.7, f"两步应并行（实测 {elapsed:.2f}s，串行需 ~0.75s）"
