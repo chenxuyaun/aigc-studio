@@ -356,3 +356,44 @@ async def test_execute_agent_auto_spawns_when_missing(client):
             )
         ).scalar_one()
         assert n == 1, "同名角色应复用，不重复创建"
+
+
+@pytest.mark.asyncio
+async def test_execute_music_injects_agent_role(client):
+    """角色编排：music 步骤带 agent 时，角色设定注入创作提示且现场创建 Agent。"""
+    from app.models.agent import Agent as AgentModel
+    from sqlalchemy import select as _select
+
+    from tests.conftest import TestingSessionLocal
+
+    captured: dict[str, str] = {}
+
+    async def _fake_compose(req, _db, _uid):
+        captured["theme"] = req.theme
+        return {
+            "title": "车站",
+            "lyrics": "绿皮火车在深夜进站\n" * 12,
+            "chords": "C G",
+            "arrangement": "口琴",
+            "style": "民谣",
+        }
+
+    with (
+        patch("app.api.v1.generations.music.compose_song", new=_fake_compose),
+        patch("app.api.v1.generations.music._backfill_work_material", new=AsyncMock()),
+        patch("app.services.music_works._auto_tags", new=AsyncMock(return_value="民谣")),
+    ):
+        async with TestingSessionLocal() as session:
+            out = await mission_service._execute_music(
+                session, "u1", "写老火车站的歌", theme_goal="g", agent_name="民谣词人"
+            )
+    assert out["ok"] is True
+    assert "民谣词人" in captured["theme"], "角色设定应注入创作提示"
+    async with TestingSessionLocal() as session:
+        agent = (
+            await session.execute(
+                _select(AgentModel).where(AgentModel.name == "民谣词人")
+            )
+        ).scalars().first()
+        assert agent is not None, "应现场创建角色 Agent"
+        assert agent.agent_type == "mission"

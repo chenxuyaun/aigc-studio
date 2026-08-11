@@ -303,24 +303,46 @@ async def _execute_agent(
         return {"summary": f"Agent 执行失败：{str(exc)[:120]}", "ok": False}
 
 
-async def _execute_text(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
+async def _execute_text(
+    db: AsyncSession, user_id: str, prompt: str, agent_name: str = ""
+) -> dict[str, Any]:
     from app.services.provider_resolver import resolve_text_provider
 
+    role_block = await _agent_role_block(db, user_id, agent_name, prompt)
+    gen_prompt = f"{role_block}{prompt}" if role_block else prompt
     resolved = await resolve_text_provider(db, "")
     result = await resolved.provider.generate(  # type: ignore[attr-defined]
-        prompt, resolved.model, temperature=0.7
+        gen_prompt, resolved.model, temperature=0.7
     )
     text = result_text(result).strip()
     return {"summary": text[:600], "ok": bool(text)}
 
 
+async def _agent_role_block(
+    db: AsyncSession, user_id: str, agent_name: str, task: str
+) -> str:
+    """角色编排：加载/现场创建 Agent，返回注入创作提示的角色设定（无则空串）。"""
+    if not agent_name:
+        return ""
+    agent = await _spawn_mission_agent(db, user_id, agent_name, task)
+    if agent is None:
+        return ""
+    return (
+        f"（以「{agent.name}」的角色视角创作。角色设定："
+        f"{str(agent.system_prompt or '')[:200]}）\n"
+    )
+
+
 async def _execute_music(
-    db: AsyncSession, user_id: str, prompt: str, theme_goal: str = ""
+    db: AsyncSession, user_id: str, prompt: str, theme_goal: str = "", agent_name: str = ""
 ) -> dict[str, Any]:
     from app.api.v1.generations.music import MusicComposeRequest, _auto_save_work, compose_song
 
+    # 角色编排：指派了 Agent 则以其身份视角创作（引擎完整链路保留）
+    role_block = await _agent_role_block(db, user_id, agent_name, prompt)
+    theme_prompt = f"{role_block}{prompt}" if role_block else prompt
     req = MusicComposeRequest(
-        theme=prompt, style="", mood="", language="zh", verse_count=2, model=""
+        theme=theme_prompt, style="", mood="", language="zh", verse_count=2, model=""
     )
     data = await compose_song(req, db, cast(Any, user_id))
     if data.get("error"):
@@ -568,9 +590,13 @@ async def execute_step(
         if kind == "agent":
             return await _execute_agent(db, user_id, prompt, str(step.get("agent") or ""))
         if kind == "music":
-            return await _execute_music(db, user_id, prompt, theme_goal=goal)
+            return await _execute_music(
+                db, user_id, prompt, theme_goal=goal, agent_name=str(step.get("agent") or "")
+            )
         if kind == "text":
-            return await _execute_text(db, user_id, prompt)
+            return await _execute_text(
+                db, user_id, prompt, agent_name=str(step.get("agent") or "")
+            )
         if kind == "image":
             return await _execute_media_task(db, user_id, "image", prompt)
         if kind == "video":
