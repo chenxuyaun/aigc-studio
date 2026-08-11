@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
@@ -151,6 +151,71 @@ const KIND_META: Record<string, { icon: string; label: string }> = {
 // SAIOS 执行循环（perceive → plan → execute → observe → reflect → learn）
 const MISSION_LOOP = ["🎯 感知", "🗺 计划", "⚡ 执行", "👀 观察", "🪞 反思", "🌱 学习"];
 
+// 媒体任务实时进度（时间线内嵌：轮询任务状态 → 徽章 + 产物缩略图）
+const TASK_STATUS_META: Record<string, { icon: string; label: string }> = {
+  queued: { icon: "⏳", label: "排队中" },
+  submitting: { icon: "⏳", label: "提交中" },
+  processing: { icon: "⚙️", label: "生成中" },
+  succeeded: { icon: "✅", label: "完成" },
+  failed: { icon: "❌", label: "失败" },
+  cancelled: { icon: "🚫", label: "已取消" },
+  expired: { icon: "⌛", label: "已过期" },
+};
+
+function TaskProgress({ taskId, kind }: { taskId: string; kind: string }) {
+  const [task, setTask] = useState<GenerationTask | null>(null);
+  useEffect(() => {
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const t = await apiClient.get<GenerationTask>(`/tasks/${taskId}`);
+        if (stop) return;
+        setTask(t);
+        if (["succeeded", "failed", "cancelled", "expired"].includes(t.status)) return;
+      } catch {
+        // 任务接口暂不可用：稍后重试
+      }
+      if (!stop) timer = setTimeout(poll, 3000);
+    };
+    void poll();
+    return () => {
+      stop = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [taskId]);
+  const meta = TASK_STATUS_META[task?.status ?? "queued"] ?? { icon: "⏳", label: "…" };
+  const done = task?.status === "succeeded" && task.result;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+      <span className="rounded-full bg-muted px-2 py-0.5">
+        {meta.icon} {meta.label}
+        {task?.status === "processing" && task.progress > 0 ? ` ${task.progress}%` : ""}
+      </span>
+      {done &&
+        (kind === "image" || kind === "comic" ? (
+          <img
+            src={task.result}
+            alt="生成结果"
+            className="h-20 w-20 rounded-lg border border-border object-cover"
+          />
+        ) : (
+          <a
+            href={task.result}
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-primary-text"
+          >
+            ▶️ 查看产物
+          </a>
+        ))}
+      {task?.status === "failed" && task.error_message && (
+        <span className="truncate text-danger">{task.error_message.slice(0, 80)}</span>
+      )}
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const [idea, setIdea] = useState("");
@@ -183,6 +248,7 @@ export function DashboardPage() {
       summary: string;
       ok: boolean;
       agent?: string;
+      task_id?: string;
       code?: { path: string; content: string }[];
     }[];
     summary: string;
@@ -511,6 +577,11 @@ export function DashboardPage() {
                       <pre className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
                         {res.summary}
                       </pre>
+                      {/* 媒体产物可视化：任务进度 + 缩略图（图片/视频/漫画） */}
+                      {res.task_id &&
+                        (res.kind === "image" || res.kind === "video" || res.kind === "comic") && (
+                          <TaskProgress taskId={res.task_id} kind={res.kind} />
+                        )}
                   {/* 代码产物：文件列表 + 一键复制全部 + 下载项目包 */}
                   {res.code && res.code.length > 0 && (
                     <div className="mt-2 flex flex-col gap-1.5">
