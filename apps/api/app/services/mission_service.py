@@ -251,6 +251,7 @@ async def _execute_agent(
             "summary": f"🤖 {agent.name}：{text[:500]}",
             "ok": bool(text),
             "agent_id": agent_id,
+            "agent": agent.name,
         }
     except Exception as exc:
         return {"summary": f"Agent 执行失败：{str(exc)[:120]}", "ok": False}
@@ -597,6 +598,7 @@ async def run_mission(db: AsyncSession, user_id: str, goal: str) -> dict[str, An
                 "summary": summary,
                 "ok": outcome.get("ok", False),
                 "task_id": outcome.get("task_id", ""),
+                "agent": str(step.get("agent") or "") or outcome.get("agent") or "",
                 "code": outcome.get("code") or [],
             }
         )

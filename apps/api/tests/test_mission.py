@@ -102,6 +102,7 @@ async def test_execute_agent_runs_and_leaves_state(client):
             out = await mission_service._execute_agent(session, "u1", "整理行动清单", "资料整理员")
     assert out["ok"] is True
     assert "资料整理员" in out["summary"]
+    assert out["agent"] == "资料整理员", "执行结果应透传 Agent 名（前端徽章）"
 
     from app.models.agent_run import AgentRun
     from sqlalchemy import select

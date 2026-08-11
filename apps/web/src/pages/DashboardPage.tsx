@@ -132,6 +132,25 @@ const SCENES: Scene[] = [
   },
 ];
 
+// Mission 步骤类型元信息（时间线徽章）
+const KIND_META: Record<string, { icon: string; label: string }> = {
+  music: { icon: "🎵", label: "写歌" },
+  text: { icon: "✍️", label: "文本" },
+  image: { icon: "🖼", label: "图片" },
+  video: { icon: "🎬", label: "视频" },
+  comic: { icon: "📚", label: "漫画" },
+  search: { icon: "🔍", label: "检索" },
+  agent: { icon: "🤖", label: "Agent" },
+  story: { icon: "📖", label: "故事" },
+  asmr: { icon: "🎧", label: "ASMR" },
+  character: { icon: "🎭", label: "角色" },
+  memory: { icon: "📒", label: "记忆" },
+  code: { icon: "💻", label: "代码" },
+};
+
+// SAIOS 执行循环（perceive → plan → execute → observe → reflect → learn）
+const MISSION_LOOP = ["🎯 感知", "🗺 计划", "⚡ 执行", "👀 观察", "🪞 反思", "🌱 学习"];
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const [idea, setIdea] = useState("");
@@ -148,13 +167,14 @@ export function DashboardPage() {
     profile: string;
   } | null>(null);
   const [missionResult, setMissionResult] = useState<{
-    plan: { step: number; kind: string; title: string }[];
+    plan: { step: number; kind: string; title: string; agent?: string; reason?: string }[];
     results: {
       step: number;
       kind: string;
       title: string;
       summary: string;
       ok: boolean;
+      agent?: string;
       code?: { path: string; content: string }[];
     }[];
     summary: string;
@@ -404,30 +424,63 @@ export function DashboardPage() {
                 </div>
               </div>
             )}
-            {missionResult.plan.length > 0 && (
-              <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
-                {missionResult.plan.map((p) => (
+            {/* SAIOS 执行循环指示条 */}
+            <div className="mb-3 flex flex-wrap items-center gap-x-1 gap-y-1 text-[10px] text-muted-foreground">
+              {MISSION_LOOP.map((s, i) => (
+                <span key={s} className="flex items-center gap-1">
                   <span
-                    key={p.step}
-                    className="rounded-full bg-surface px-2.5 py-1 text-muted-foreground"
-                    title={(p as { reason?: string }).reason || p.kind}
+                    className={cn(
+                      "rounded-full px-2 py-0.5",
+                      i === 2 ? "bg-primary/10 text-primary-text" : "bg-muted",
+                    )}
                   >
-                    {p.step}. {p.kind}
-                    {(p as { reason?: string }).reason ? " ⓘ" : ""}
-                    {p.title ? ` · ${p.title}` : ""}
+                    {s}
                   </span>
-                ))}
-              </div>
-            )}
-            <div className="flex flex-col gap-2">
-              {missionResult.results.map((res) => (
-                <div key={res.step} className="rounded-xl border border-border bg-surface p-3">
-                  <p className="mb-1 text-xs font-semibold">
-                    {res.ok ? "✅" : "❌"} 步骤 {res.step} · {res.title}
-                  </p>
-                  <pre className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                    {res.summary}
-                  </pre>
+                  {i < MISSION_LOOP.length - 1 && <span className="text-muted-foreground/40">→</span>}
+                </span>
+              ))}
+            </div>
+            {/* 步骤时间线：节点 + 引擎徽章 + Agent 徽章 + 理由 + 产出 */}
+            <div className="relative flex flex-col gap-3 pl-5">
+              <span className="absolute bottom-3 left-[9px] top-3 w-px bg-border" aria-hidden />
+              {missionResult.results.map((res) => {
+                const meta = KIND_META[res.kind] ?? { icon: "⚙️", label: res.kind };
+                const planStep = missionResult.plan.find((p) => p.step === res.step);
+                return (
+                  <div key={res.step} className="relative">
+                    <span
+                      className={cn(
+                        "absolute -left-5 top-3.5 h-4 w-4 rounded-full border-2 border-surface",
+                        res.ok ? "bg-emerald-500" : "bg-red-500",
+                      )}
+                      aria-hidden
+                    />
+                    <div
+                      className={cn(
+                        "rounded-xl border bg-surface p-3",
+                        res.ok ? "border-border" : "border-red-500/40",
+                      )}
+                    >
+                      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                        <span className="font-semibold">{res.ok ? "✅" : "❌"} 步骤 {res.step}</span>
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary-text">
+                          {meta.icon} {meta.label}
+                        </span>
+                        {res.agent && (
+                          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-600">
+                            🤖 {res.agent}
+                          </span>
+                        )}
+                        <span className="ml-auto font-medium">{res.title}</span>
+                      </div>
+                      {planStep?.reason && (
+                        <p className="mb-1.5 text-[10px] italic text-muted-foreground/80">
+                          为什么这步：{planStep.reason}
+                        </p>
+                      )}
+                      <pre className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                        {res.summary}
+                      </pre>
                   {/* 代码产物：文件列表 + 一键复制全部 + 下载项目包 */}
                   {res.code && res.code.length > 0 && (
                     <div className="mt-2 flex flex-col gap-1.5">
@@ -490,8 +543,10 @@ export function DashboardPage() {
                       ))}
                     </div>
                   )}
-                </div>
-              ))}
+                    </div>
+                    </div>
+                  );
+                })}
             </div>
             {missionLessons.length > 0 && (
               <div className="mt-2 rounded-xl border border-border bg-surface p-3">
