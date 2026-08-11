@@ -694,11 +694,13 @@ export function DashboardPage() {
           <div className="mt-4 rounded-2xl border border-primary/25 bg-primary/5 p-4">
             <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
               🎯 任务总控
-              <span className="text-xs font-normal text-muted-foreground">{missionResult.summary}</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                👀 观察：{missionResult.summary}
+              </span>
             </p>
             {missionProfile && (
               <div className="mb-3 rounded-xl border border-border bg-surface p-3">
-                <p className="mb-1 text-xs font-semibold">🧬 成长档案（平台对你的了解）</p>
+                <p className="mb-1 text-xs font-semibold">🌱 学习：成长档案（平台对你的了解）</p>
                 {missionProfile.profile && (
                   <p className="mb-2 rounded-lg bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
                     {missionProfile.profile}
@@ -723,14 +725,27 @@ export function DashboardPage() {
                 </div>
               </div>
             )}
-            {/* SAIOS 执行循环指示条 */}
+            {/* SAIOS 执行循环指示条（按真实状态推进：计划→执行→观察→反思→学习） */}
             <div className="mb-3 flex flex-wrap items-center gap-x-1 gap-y-1 text-[10px] text-muted-foreground">
               {MISSION_LOOP.map((s, i) => (
                 <span key={s} className="flex items-center gap-1">
                   <span
                     className={cn(
-                      "rounded-full px-2 py-0.5",
-                      i === 2 ? "bg-primary/10 text-primary-text" : "bg-muted",
+                      "rounded-full px-2 py-0.5 transition-colors",
+                      (() => {
+                        let done = 0;
+                        if (planPreview) done = 1;
+                        else if (missionBusy || planBusy) done = 2;
+                        else if (missionResult && missionResult.results.length > 0) {
+                          done = missionLessons.length > 0 ? 4 : 3;
+                          if (missionProfile) done = 5;
+                        }
+                        return i < done
+                          ? "bg-primary/10 text-primary-text"
+                          : i === done
+                            ? "bg-primary/25 text-primary-text ring-1 ring-primary"
+                            : "bg-muted";
+                      })(),
                     )}
                   >
                     {s}
@@ -878,12 +893,19 @@ export function DashboardPage() {
             )}
             {missionLessons.length > 0 && (
               <div className="mt-2 rounded-xl border border-border bg-surface p-3">
-                <p className="mb-1 text-xs font-semibold">🧠 平台从失败中沉淀的教训（后续任务会自动避开）</p>
+                <p className="mb-1 text-xs font-semibold">🪞 反思沉淀（失败教训，后续任务会自动避开）</p>
                 <ul className="list-disc pl-4 text-[11px] leading-relaxed text-muted-foreground">
                   {missionLessons.map((l, i) => (
                     <li key={i}>{l.lesson}</li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {missionResult && missionResult.results.length > 0 && missionLessons.length === 0 && (
+              <div className="mt-2 rounded-xl border border-border bg-surface p-3">
+                <p className="text-[11px] text-muted-foreground">
+                  🪞 反思：本次执行全部成功，未沉淀新教训
+                </p>
               </div>
             )}
             {missionRuns.length > 0 && (
