@@ -25,7 +25,8 @@ _PLAN_PROMPT = """你是任务总控大脑（AGI Orchestrator）。把用户的�
   code（生成可运行的代码文件）
 - 1-4 步；每步一个具体产出（prompt 用中文写清楚生成要求）
 - 若某步需要上一步的产出作为素材（如先检索再写），该步加 "input": "prev"
-- 若某步适合交给某个 Agent 执行（如资料整理、文案写作、专业分析），加 "agent": "Agent名"
+- 创作/整理/分析类步骤建议指派 Agent：加 "agent": "角色名"（如「民谣词人」「资料猎手」
+  ——执行器找不到该角色时会按名字现场创建专属 Agent，无需预建团队）
 - character/memory 步骤可加 "char": "角色名"（角色库中的角色）
 输出 JSON（不要任何多余文字）
 ：
@@ -197,6 +198,48 @@ async def plan_mission(db: AsyncSession, user_id: str, goal: str) -> list[dict[s
     return plan
 
 
+async def _spawn_mission_agent(
+    db: AsyncSession, user_id: str, name: str, task: str
+) -> Any | None:
+    """现场招人：按角色名创建专属 Agent（同名已存在则复用，零 LLM 开销）。"""
+
+    from sqlalchemy import select
+
+    from app.models.agent import Agent
+
+    try:
+        existed = (
+            (
+                await db.execute(
+                    select(Agent).where(Agent.name == name).limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if existed is not None:
+            return existed
+        agent = Agent(
+            name=name[:200],
+            description=f"Mission 现场编排创建的角色 Agent（任务：{task[:80]}）",
+            system_prompt=(
+                f"你是「{name}」，本任务中的角色专家。\n"
+                f"任务主题：{task[:300]}\n"
+                "规则：输出直接可用、贴合用户目标的内容；结构清晰；不空谈。"
+            ),
+            agent_type="mission",
+            is_public=False,
+            author_id=user_id,
+            source_type="mission",
+        )
+        db.add(agent)
+        await db.commit()
+        await db.refresh(agent)
+        return agent
+    except Exception:
+        return None
+
+
 async def _execute_agent(
     db: AsyncSession, user_id: str, prompt: str, agent_name: str = ""
 ) -> dict[str, Any]:
@@ -214,6 +257,9 @@ async def _execute_agent(
     if agent_name:
         query = query.where(Agent.name == agent_name)
     agent = (await db.execute(query.order_by(Agent.use_count.desc()).limit(1))).scalars().first()
+    if agent is None and agent_name:
+        # 编排水位：Orchestrator 指派的角色不存在 → 现场创建专属 Agent（无需预建团队）
+        agent = await _spawn_mission_agent(db, user_id, agent_name, prompt)
     if agent is None:
         return {"summary": f"未找到可用 Agent（{agent_name or '任意'}）", "ok": False}
     agent_id = str(agent.id)

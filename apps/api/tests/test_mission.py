@@ -303,3 +303,56 @@ async def test_execute_music_saves_work_and_backfills(client):
             assert saved.theme == "写一首关于夏天的民谣", "作品主题应继承用户原始目标"
     assert out["ok"] is True
     assert backfill_mock.await_count >= 1, "应触发知识库回填"
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_auto_spawns_when_missing(client):
+    """编排水位：Orchestrator 指派不存在的角色 → 现场创建专属 Agent 再执行。"""
+    from app.models.agent import Agent as AgentModel
+    from sqlalchemy import select as _select
+
+    from tests.conftest import TestingSessionLocal
+
+    fake_resolver = AsyncMock()
+    fake_resolver.provider.generate.return_value = type(
+        "R", (), {"content": "灯下修鞋匠：三十年顶针磨亮，退休那天把工具箱传给徒弟。"}
+    )()
+    fake_resolver.model = "mock"
+    async with TestingSessionLocal() as session:
+        with patch(
+            "app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver
+        ):
+            out = await mission_service._execute_agent(
+                session, "u1", "写民谣人物小传", "民谣词人"
+            )
+    assert out["ok"] is True
+    assert out["agent"] == "民谣词人", "执行结果应带现场创建的 Agent 名"
+    async with TestingSessionLocal() as session:
+        agent = (
+            await session.execute(
+                _select(AgentModel).where(AgentModel.name == "民谣词人")
+            )
+        ).scalars().first()
+        assert agent is not None, "应现场创建专属 Agent"
+        assert agent.agent_type == "mission"
+        assert "民谣词人" in agent.system_prompt
+    # 再次执行同一角色：复用不重复创建
+    async with TestingSessionLocal() as session:
+        with patch(
+            "app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver
+        ):
+            out2 = await mission_service._execute_agent(
+                session, "u1", "再写一篇", "民谣词人"
+            )
+    assert out2["ok"] is True
+    async with TestingSessionLocal() as session:
+        from sqlalchemy import func as _func
+
+        n = (
+            await session.execute(
+                _select(_func.count()).select_from(AgentModel).where(
+                    AgentModel.name == "民谣词人"
+                )
+            )
+        ).scalar_one()
+        assert n == 1, "同名角色应复用，不重复创建"
