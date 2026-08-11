@@ -500,3 +500,38 @@ async def test_execute_plan_cleans_and_runs(client):
     assert out["summary"].startswith("共 1 步"), "非法 kind 应被过滤"
     assert out["results"][0]["ok"] is True
     assert out["run_id"]
+
+
+@pytest.mark.asyncio
+async def test_get_run_chain_orders_from_root(client):
+    """对话链回看：沿 parent 收集，正序返回（根 → 最新），非法 id 防死循环。"""
+    from app.models.mission_run import MissionRun
+
+    from tests.conftest import TestingSessionLocal
+
+    async with TestingSessionLocal() as session:
+        for rid, parent in (
+            ("chain-1", ""),
+            ("chain-2", "chain-1"),
+            ("chain-3", "chain-2"),
+        ):
+            session.add(
+                MissionRun(
+                    id=rid,
+                    user_id="u1",
+                    goal=f"目标{rid}",
+                    plan="[]",
+                    results="[]",
+                    summary="ok",
+                    parent_run_id=parent or None,
+                )
+            )
+        await session.commit()
+
+    async with TestingSessionLocal() as session:
+        chain = await mission_service.get_run_chain(session, "u1", "chain-3")
+    assert [r["id"] for r in chain] == ["chain-1", "chain-2", "chain-3"], "应正序返回整条链"
+    # 不存在的 id → 空（调用方 404）
+    async with TestingSessionLocal() as session:
+        empty = await mission_service.get_run_chain(session, "u1", "no-such")
+    assert empty == []

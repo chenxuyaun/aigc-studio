@@ -732,6 +732,24 @@ async def run_mission(
     return await execute_plan(db, user_id, goal, plan, parent_run_id)
 
 
+async def get_run_chain(
+    db: AsyncSession, user_id: str, run_id: str
+) -> list[dict[str, Any]]:
+    """沿 parent_run_id 收集整条对话链（正序：根 → 最新，上限 20 轮防循环）。"""
+    chain: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    current = run_id
+    while current and current not in seen and len(chain) < 20:
+        seen.add(current)
+        r = await get_run(db, user_id, current)
+        if r is None:
+            break
+        chain.append(r)
+        current = str(r.get("parent_run_id") or "")
+    chain.reverse()
+    return chain
+
+
 async def continue_mission(
     db: AsyncSession, user_id: str, run_id: str, message: str
 ) -> dict[str, Any] | None:

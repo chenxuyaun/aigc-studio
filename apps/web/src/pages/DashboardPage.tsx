@@ -360,6 +360,44 @@ export function DashboardPage() {
     }
   }
 
+  // 多轮对话链回看：整条链一次展开（缓存已拉取的链）
+  const [chainCache, setChainCache] = useState<
+    Record<
+      string,
+      {
+        id: string;
+        goal: string;
+        summary: string;
+        created_at: string;
+        parent_run_id?: string;
+        results: { kind: string; ok: boolean; title: string }[];
+      }[]
+    >
+  >({});
+  const [chainLoading, setChainLoading] = useState<string | null>(null);
+
+  async function toggleChain(runId: string) {
+    if (chainCache[runId]) {
+      setChainCache((c) => {
+        const next = { ...c };
+        delete next[runId];
+        return next;
+      });
+      return;
+    }
+    setChainLoading(runId);
+    try {
+      const r = await apiClient.get<{ runs: { id: string; goal: string; summary: string; created_at: string; results: { kind: string; ok: boolean; title: string }[] }[] }>(
+        `/mission/runs/${runId}/chain`,
+      );
+      setChainCache((c) => ({ ...c, [runId]: r.runs }));
+    } catch {
+      // 链拉取失败：静默
+    } finally {
+      setChainLoading(null);
+    }
+  }
+
   // 多轮对话：基于当前结果继续追问（上下文链式迭代）
   async function continueMission() {
     const runId = missionResult?.run_id;
@@ -869,30 +907,70 @@ export function DashboardPage() {
                 <p className="mb-1 text-xs font-semibold">🗂 历史任务（平台记得你下达过的目标，可回看再跑）</p>
                 <div className="flex flex-col gap-1.5">
                   {missionRuns.map((run) => (
-                    <div key={run.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11px] font-medium">
-                          {run.parent_run_id ? "↳ 延续 · " : ""}
-                          {run.goal}
+                    <div key={run.id} className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[11px] font-medium">
+                            {run.parent_run_id ? "↳ 延续 · " : ""}
+                            {run.goal}
+                          </span>
+                          <span className="block text-[10px] text-muted-foreground">
+                            {run.summary} · {run.created_at ? new Date(run.created_at).toLocaleString("zh-CN") : ""}
+                          </span>
                         </span>
-                        <span className="block text-[10px] text-muted-foreground">
-                          {run.summary} · {run.created_at ? new Date(run.created_at).toLocaleString("zh-CN") : ""}
-                        </span>
-                      </span>
-                      <button
-                        onClick={() => void (async () => {
-                          setMissionBusy(true);
-                          try {
-                            const r = await apiClient.post<typeof missionResult>(`/mission/runs/${run.id}/reuse`, {});
-                            setMissionResult(r);
-                          } finally {
-                            setMissionBusy(false);
-                          }
-                        })()}
-                        className="shrink-0 rounded-full border border-border px-2.5 py-1 text-[10px] hover:border-primary"
-                      >
-                        🔁 再跑
-                      </button>
+                        <button
+                          onClick={() => void toggleChain(run.id)}
+                          disabled={chainLoading === run.id}
+                          className="shrink-0 rounded-full border border-border px-2.5 py-1 text-[10px] hover:border-primary"
+                          title="展开整条对话链（首轮 → 最新）"
+                        >
+                          {chainLoading === run.id ? "…" : chainCache[run.id] ? "🔗 收起" : "🔗 链"}
+                        </button>
+                        <button
+                          onClick={() => void (async () => {
+                            setMissionBusy(true);
+                            try {
+                              const r = await apiClient.post<typeof missionResult>(`/mission/runs/${run.id}/reuse`, {});
+                              setMissionResult(r);
+                            } finally {
+                              setMissionBusy(false);
+                            }
+                          })()}
+                          className="shrink-0 rounded-full border border-border px-2.5 py-1 text-[10px] hover:border-primary"
+                        >
+                          🔁 再跑
+                        </button>
+                      </div>
+                      {chainCache[run.id] && (
+                        <div className="mt-2 flex flex-col gap-1.5 border-t border-border pt-2">
+                          {chainCache[run.id]!.map((c, ci) => (
+                            <div key={c.id} className="rounded-lg bg-surface px-2.5 py-2">
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary-text">
+                                  第 {ci + 1} 轮
+                                </span>
+                                <span className="min-w-0 flex-1 truncate font-medium">{c.goal}</span>
+                                <span className="shrink-0 text-muted-foreground">
+                                  {c.created_at ? new Date(c.created_at).toLocaleString("zh-CN") : ""}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
+                                {c.results
+                                  .filter((r2) => r2.ok)
+                                  .map((r2) => {
+                                    const m2 = KIND_META[r2.kind] ?? { icon: "⚙️", label: r2.kind };
+                                    return (
+                                      <span key={r2.kind + r2.title} className="rounded-full bg-muted px-1.5 py-0.5">
+                                        {m2.icon} {r2.title}
+                                      </span>
+                                    );
+                                  })}
+                                <span className="ml-auto truncate text-muted-foreground">{c.summary}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

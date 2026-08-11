@@ -160,6 +160,21 @@ async def mission_run_continue(
     return result
 
 
+@router.get("/runs/{run_id}/chain")
+async def mission_run_chain(
+    run_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """多轮对话链完整回看：沿 parent 收集整条链（根 → 最新）。"""
+    from fastapi import HTTPException
+
+    chain = await mission_service.get_run_chain(db, user.id, run_id)
+    if not chain:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return {"runs": chain}
+
+
 @router.get("/agents")
 async def mission_agents(
     user: User = Depends(get_current_user),
