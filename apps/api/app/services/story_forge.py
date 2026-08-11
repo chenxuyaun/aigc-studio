@@ -642,6 +642,33 @@ async def _build_chapter_prompt(
     bible = await _bible_text(db, user_id, project, cards)
     summary = _project_summary(project)
 
+    # 前章回放：本章之前已完成章节的「事件摘要」（只用大纲，不用原文——防模型照抄句子）
+    recap_lines: list[str] = []
+    try:
+        from sqlalchemy import select
+
+        from app.models.story_chapter import StoryChapter as _SC
+
+        prev_rows = (
+            (
+                await db.execute(
+                    select(_SC)
+                    .where(
+                        _SC.project_id == project.id,
+                        _SC.chapter_no < int(chapter.chapter_no or 0),
+                    )
+                    .order_by(_SC.chapter_no.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for r in prev_rows[-4:]:
+            evt = (r.outline or "").strip().replace("\n", " ")[:120]
+            recap_lines.append(f"- 第{r.chapter_no}章《{r.title}》已发生：{evt}")
+    except Exception:
+        pass
+
     parts: list[str] = [
         f"【创作任务】你是小说《{project.title}》的执笔作者（{project.genre or '类型未定'}）。",
     ]
@@ -667,6 +694,11 @@ async def _build_chapter_prompt(
     parts.append("【角色设定】\n" + bible)
     if summary:
         parts.append(f"【前情摘要（保持连贯）】\n{summary}")
+    if recap_lines:
+        parts.append(
+            "【前章回放（已发生的事实——不可重写、不可倒退、不可照抄）】\n"
+            + "\n".join(recap_lines)
+        )
     if wb_after:
         parts.append("【世界观（世界书·后置）】\n" + "\n".join(f"- {t}" for t in wb_after))
     parts.append(
@@ -674,7 +706,9 @@ async def _build_chapter_prompt(
         "- 以第三人称叙事，场景/动作/对话自然流畅\n"
         "- 严格遵守世界观与角色设定，人物言行与性格一致\n"
         "- 单章 800-1500 字，有完整的起承转合\n"
-        "- 只输出正文本身，不要输出标题、大纲或任何解释"
+        "- 只输出正文本身，不要输出标题、大纲或任何解释\n"
+        "- 严禁重复：禁止与【前章回放】或本章已出现的句子/场景/意象重复；若重复即视为失败\n"
+        "- 每章必须有新的事件推进（新场景/新线索/新冲突/新揭示），结尾禁止总结套话"
     )
     system_prompt = "\n\n".join(parts)
 
