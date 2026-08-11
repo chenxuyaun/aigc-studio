@@ -35,6 +35,11 @@ cd apps/web && npx tsc --noEmit # 前端类型检查
 cd apps/web && E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test --project=chromium-desktop --grep-invert @heavy --workers=1
 ```
 
+**⚠️ 502 排障（2026-08-11 实战）**：重建 api 容器后 IP 会变，nginx 反代 `api:8000` 可能 DNS 缓存旧 IP → 登录 502（`connect() failed (111) while connecting to upstream`）。
+修复：`docker exec aigc-studio-frontend-1 nginx -s reload`（强制重新解析）即可恢复。
+若 reload 无效且 api 容器出现 `invalid IP` / 网络损坏：`docker compose down && docker compose up -d`（网络彻底重建，volumes 数据保留）。
+勿用固定 IP 方案（Docker Desktop WSL2 下 `ipv4_address` 会引发 invalid IP + DNS 失效，已踩坑回滚）。
+
 ## 当前状态（2026-08-07 更新）
 
 **已完成的待办**（均含自动化测试）：
