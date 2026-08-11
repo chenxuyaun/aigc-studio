@@ -286,7 +286,10 @@ async def test_execute_music_saves_work_and_backfills(client):
     ):
         async with TestingSessionLocal() as session:
             out = await mission_service.execute_step(
-                session, "u1", {"kind": "music", "prompt": "写一首关于夏天的歌"}
+                session,
+                "u1",
+                {"kind": "music", "prompt": "写一首关于夏天的歌"},
+                goal="写一首关于夏天的民谣",
             )
             # 等后台回填任务跑完（回填是 create_task 异步执行）
             for _ in range(40):
@@ -294,6 +297,8 @@ async def test_execute_music_saves_work_and_backfills(client):
                     break
                 await _asyncio.sleep(0.05)
             works = await session.execute(_select(MusicWork).where(MusicWork.title == "夏光影"))
-            assert works.scalar_one_or_none() is not None, "Mission 产出的歌应存入作品库"
+            saved = works.scalar_one_or_none()
+            assert saved is not None, "Mission 产出的歌应存入作品库"
+            assert saved.theme == "写一首关于夏天的民谣", "作品主题应继承用户原始目标"
     assert out["ok"] is True
     assert backfill_mock.await_count >= 1, "应触发知识库回填"

@@ -267,7 +267,9 @@ async def _execute_text(db: AsyncSession, user_id: str, prompt: str) -> dict[str
     return {"summary": text[:600], "ok": bool(text)}
 
 
-async def _execute_music(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
+async def _execute_music(
+    db: AsyncSession, user_id: str, prompt: str, theme_goal: str = ""
+) -> dict[str, Any]:
     from app.api.v1.generations.music import MusicComposeRequest, _auto_save_work, compose_song
 
     req = MusicComposeRequest(
@@ -278,18 +280,20 @@ async def _execute_music(db: AsyncSession, user_id: str, prompt: str) -> dict[st
         return {"summary": f"写歌失败：{data['error']}", "ok": False}
     title = str(data.get("title") or "未命名")
     lyrics = str(data.get("lyrics") or "")[:300]
+    # 落库主题优先取用户原始目标（步骤 prompt 是执行细节，不适合当作品主题）
+    theme = (theme_goal or prompt)[:500]
     try:
         # 生长闭环：Mission 产出的歌也进作品库（source=mission）
         await _auto_save_work(
             db,
             user_id=user_id,
-            theme=prompt[:500],
+            theme=theme,
             style=str(data.get("style") or ""),
             final=data,
             rounds=[],
             source="mission",
         )
-        _spawn_work_backfill(user_id, title, prompt, data)
+        _spawn_work_backfill(user_id, title, theme, data)
     except Exception:
         pass  # 入库失败不影响 Mission 结果
     return {"summary": f"《{title}》\n{lyrics}", "ok": True}
@@ -506,6 +510,7 @@ async def execute_step(
     user_id: str,
     step: dict[str, Any],
     prev_summary: str = "",
+    goal: str = "",
 ) -> dict[str, Any]:
     """执行单步计划（kind → 现有能力；input=prev 时把上一步产出注入 prompt）。"""
     kind = step.get("kind", "")
@@ -516,7 +521,7 @@ async def execute_step(
         if kind == "agent":
             return await _execute_agent(db, user_id, prompt, str(step.get("agent") or ""))
         if kind == "music":
-            return await _execute_music(db, user_id, prompt)
+            return await _execute_music(db, user_id, prompt, theme_goal=goal)
         if kind == "text":
             return await _execute_text(db, user_id, prompt)
         if kind == "image":
@@ -582,7 +587,7 @@ async def run_mission(db: AsyncSession, user_id: str, goal: str) -> dict[str, An
     results: list[dict[str, Any]] = []
     prev_summary = ""
     for step in plan:
-        outcome = await execute_step(db, user_id, step, prev_summary)
+        outcome = await execute_step(db, user_id, step, prev_summary, goal)
         summary = str(outcome.get("summary") or "")
         results.append(
             {
