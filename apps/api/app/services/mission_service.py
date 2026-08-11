@@ -341,6 +341,7 @@ async def _execute_music(
     # 角色编排：指派了 Agent 则以其身份视角创作（引擎完整链路保留）
     role_block = await _agent_role_block(db, user_id, agent_name, prompt)
     theme_prompt = f"{role_block}{prompt}" if role_block else prompt
+    theme_prompt = theme_prompt[:500]  # MusicComposeRequest.theme 上限 500
     req = MusicComposeRequest(
         theme=theme_prompt, style="", mood="", language="zh", verse_count=2, model=""
     )
@@ -648,7 +649,9 @@ async def _reflect_lessons(
         pass
 
 
-async def run_mission(db: AsyncSession, user_id: str, goal: str) -> dict[str, Any]:
+async def run_mission(
+    db: AsyncSession, user_id: str, goal: str, parent_run_id: str = ""
+) -> dict[str, Any]:
     """任务总控主循环：拆解 → 串行执行（结果传递）→ 汇总 → 反思沉淀教训 → 会话持久化。"""
     try:
         plan = await plan_mission(db, user_id, goal)
@@ -693,11 +696,38 @@ async def run_mission(db: AsyncSession, user_id: str, goal: str) -> dict[str, An
         "summary": f"共 {len(results)} 步，成功 {ok_count} 步"
         + ("" if ok_count == len(results) else "（失败步骤见明细，已沉淀教训）"),
     }
-    await _save_run(db, user_id, goal, mission)
+    await _save_run(db, user_id, goal, mission, parent_run_id)
     return mission
 
 
-async def _save_run(db: AsyncSession, user_id: str, goal: str, mission: dict[str, Any]) -> str:
+async def continue_mission(
+    db: AsyncSession, user_id: str, run_id: str, message: str
+) -> dict[str, Any] | None:
+    """Mission 多轮对话：基于上次会话（目标+产出）延续迭代。
+
+    组装「延续目标」→ 新一轮 run_mission（parent_run_id 关联成链）。
+    找不到会话返回 None（调用方 404）。
+    """
+    parent = await get_run(db, user_id, run_id)
+    if parent is None:
+        return None
+    prev_results = "；".join(
+        f"步骤{i}({r.get('kind')})：{str(r.get('summary') or '')[:200]}"
+        for i, r in enumerate(parent["results"], 1)
+        if r.get("ok")
+    )
+    goal = (
+        "继续上次任务并按下述要求迭代：\n"
+        f"【上次目标】{parent['goal'][:400]}\n"
+        f"【上次产出】{prev_results[:600] or '（无成功步骤）'}\n"
+        f"【本次要求】{message[:300]}"
+    )
+    return await run_mission(db, user_id, goal, parent_run_id=run_id)
+
+
+async def _save_run(
+    db: AsyncSession, user_id: str, goal: str, mission: dict[str, Any], parent_run_id: str = ""
+) -> str:
     """会话持久化：目标/计划/结果/汇总入库，返回 run_id。"""
 
     from app.models.mission_run import MissionRun
@@ -708,6 +738,7 @@ async def _save_run(db: AsyncSession, user_id: str, goal: str, mission: dict[str
         plan=json.dumps(mission.get("plan") or [], ensure_ascii=False),
         results=json.dumps(mission.get("results") or [], ensure_ascii=False),
         summary=str(mission.get("summary") or "")[:200],
+        parent_run_id=parent_run_id or None,
     )
     db.add(run)
     await db.commit()
@@ -742,6 +773,7 @@ async def list_runs(db: AsyncSession, user_id: str, limit: int = 20) -> list[dic
             "plan": json.loads(r.plan or "[]"),
             "results": json.loads(r.results or "[]"),
             "summary": r.summary,
+            "parent_run_id": r.parent_run_id or "",
             "created_at": str(r.created_at) if r.created_at else "",
         }
         for r in rows
@@ -768,5 +800,6 @@ async def get_run(db: AsyncSession, user_id: str, run_id: str) -> dict[str, Any]
         "plan": json.loads(r.plan or "[]"),
         "results": json.loads(r.results or "[]"),
         "summary": r.summary,
+        "parent_run_id": r.parent_run_id or "",
         "created_at": str(r.created_at) if r.created_at else "",
     }

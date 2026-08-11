@@ -24,4 +24,6 @@ class MissionRun(Base):
     # JSON：结果 [{step, kind, title, summary, ok, task_id}]
     results: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     summary: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    # 多轮对话链：延续自哪次会话（null=首轮）
+    parent_run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())

@@ -159,7 +159,14 @@ export function DashboardPage() {
   const [missionBusy, setMissionBusy] = useState(false);
   const [missionLessons, setMissionLessons] = useState<{ goal: string; lesson: string; created_at: string }[]>([]);
   const [missionRuns, setMissionRuns] = useState<
-    { id: string; goal: string; plan: { step: number; kind: string; title: string }[]; summary: string; created_at: string }[]
+    {
+      id: string;
+      goal: string;
+      plan: { step: number; kind: string; title: string }[];
+      summary: string;
+      parent_run_id?: string;
+      created_at: string;
+    }[]
   >([]);
   // 成长档案（平台对你的了解：偏好聚合 + LLM 画像）
   const [missionProfile, setMissionProfile] = useState<{
@@ -167,6 +174,7 @@ export function DashboardPage() {
     profile: string;
   } | null>(null);
   const [missionResult, setMissionResult] = useState<{
+    run_id?: string;
     plan: { step: number; kind: string; title: string; agent?: string; reason?: string }[];
     results: {
       step: number;
@@ -179,6 +187,9 @@ export function DashboardPage() {
     }[];
     summary: string;
   } | null>(null);
+  // Mission 多轮对话：跑完可继续追问（链式迭代）
+  const [continueMsg, setContinueMsg] = useState("");
+  const [continueBusy, setContinueBusy] = useState(false);
 
   async function runMission() {
     const goal = idea.trim();
@@ -226,6 +237,25 @@ export function DashboardPage() {
       });
     } finally {
       setMissionBusy(false);
+    }
+  }
+
+  // 多轮对话：基于当前结果继续追问（上下文链式迭代）
+  async function continueMission() {
+    const runId = missionResult?.run_id;
+    const msg = continueMsg.trim();
+    if (!runId || !msg || continueBusy) return;
+    setContinueBusy(true);
+    try {
+      const r = await apiClient.post<typeof missionResult>(`/mission/runs/${runId}/continue`, {
+        message: msg,
+      });
+      setMissionResult(r);
+      setContinueMsg("");
+      const h = await apiClient.get<{ runs: typeof missionRuns }>("/mission/history");
+      setMissionRuns(h.runs.slice(0, 5));
+    } finally {
+      setContinueBusy(false);
     }
   }
   const [type, setType] = useState<CreateType>("image");
@@ -548,6 +578,30 @@ export function DashboardPage() {
                   );
                 })}
             </div>
+            {/* 多轮对话：跑完可继续追问（链式迭代） */}
+            {missionResult.run_id && (
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  value={continueMsg}
+                  onChange={(e) => setContinueMsg(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void continueMission();
+                    }
+                  }}
+                  placeholder="继续对话：例如「副歌再温暖一点」…"
+                  className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-xs outline-none focus:border-primary"
+                />
+                <button
+                  onClick={() => void continueMission()}
+                  disabled={continueBusy || !continueMsg.trim()}
+                  className="shrink-0 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium hover:bg-primary/20 disabled:opacity-40"
+                >
+                  {continueBusy ? "迭代中…" : "💬 继续"}
+                </button>
+              </div>
+            )}
             {missionLessons.length > 0 && (
               <div className="mt-2 rounded-xl border border-border bg-surface p-3">
                 <p className="mb-1 text-xs font-semibold">🧠 平台从失败中沉淀的教训（后续任务会自动避开）</p>
@@ -565,7 +619,10 @@ export function DashboardPage() {
                   {missionRuns.map((run) => (
                     <div key={run.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5">
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11px] font-medium">{run.goal}</span>
+                        <span className="block truncate text-[11px] font-medium">
+                          {run.parent_run_id ? "↳ 延续 · " : ""}
+                          {run.goal}
+                        </span>
                         <span className="block text-[10px] text-muted-foreground">
                           {run.summary} · {run.created_at ? new Date(run.created_at).toLocaleString("zh-CN") : ""}
                         </span>

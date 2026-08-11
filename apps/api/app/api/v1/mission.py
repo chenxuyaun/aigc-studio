@@ -100,6 +100,29 @@ async def mission_run_reuse(
     return await mission_service.run_mission(db, user.id, str(run["goal"]))
 
 
+class MissionContinueRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=500)
+
+
+@router.post("/runs/{run_id}/continue")
+async def mission_run_continue(
+    run_id: str,
+    req: MissionContinueRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """多轮对话：基于上次会话（目标+产出）延续迭代（parent 关联成链）。"""
+    from fastapi import HTTPException
+
+    result = await mission_service.continue_mission(
+        db, user.id, run_id, req.message.strip()
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    result["model"] = "auto"
+    return result
+
+
 @router.get("/agents")
 async def mission_agents(
     user: User = Depends(get_current_user),

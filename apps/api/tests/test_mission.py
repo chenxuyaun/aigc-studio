@@ -397,3 +397,84 @@ async def test_execute_music_injects_agent_role(client):
         ).scalars().first()
         assert agent is not None, "应现场创建角色 Agent"
         assert agent.agent_type == "mission"
+
+
+@pytest.mark.asyncio
+async def test_continue_mission_chains_to_parent(client):
+    """多轮对话：continue 组装延续目标（含上次产出+追问），parent_run_id 关联成链。"""
+    from app.models.mission_run import MissionRun
+    from sqlalchemy import select as _select
+
+    from tests.conftest import TestingSessionLocal
+
+    async with TestingSessionLocal() as session:
+        session.add(
+            MissionRun(
+                id="run-parent-1",
+                user_id="u1",
+                goal="写一首关于夏天的歌",
+                plan="[]",
+                results='[{"step":1,"kind":"music","summary":"《夏光影》歌词","ok":true}]',
+                summary="ok",
+            )
+        )
+        await session.commit()
+
+    fake_resolver = AsyncMock()
+    fake_resolver.provider.generate.return_value = type("R", (), {"content": "好的"})()
+    fake_resolver.model = "mock"
+    with (
+        patch("app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver),
+        patch("app.services.mission_service.plan_mission", new=AsyncMock(return_value=[])),
+    ):
+        async with TestingSessionLocal() as session:
+            out = await mission_service.continue_mission(
+                session, "u1", "run-parent-1", "副歌再温暖一点"
+            )
+    assert out is not None
+    assert out["run_id"]
+    assert "副歌再温暖一点" in out["goal"], "追问应进入新一轮目标"
+    assert "上次目标" in out["goal"]
+    assert "上次产出" in out["goal"]
+    async with TestingSessionLocal() as session:
+        child = (
+            await session.execute(
+                _select(MissionRun).where(MissionRun.id == out["run_id"])
+            )
+        ).scalar_one()
+        assert child.parent_run_id == "run-parent-1", "应关联父会话成链"
+    # 不存在的会话 → None（调用方 404）
+    async with TestingSessionLocal() as session:
+        none_out = await mission_service.continue_mission(session, "u1", "no-such", "x")
+    assert none_out is None
+
+
+@pytest.mark.asyncio
+async def test_execute_music_truncates_long_theme(client):
+    """多轮对话长目标：theme 超 500 字时截断，不触发 validation error。"""
+    captured: dict[str, str] = {}
+
+    async def _fake_compose(req, _db, _uid):
+        captured["theme"] = req.theme
+        return {
+            "title": "x",
+            "lyrics": "词\n" * 120,
+            "chords": "C",
+            "arrangement": "",
+            "style": "民谣",
+        }
+
+    long_prompt = "写一首关于山间晨雾的民谣" + "，加上阳光意象和露珠细节" * 40
+    with (
+        patch("app.api.v1.generations.music.compose_song", new=_fake_compose),
+        patch("app.api.v1.generations.music._backfill_work_material", new=AsyncMock()),
+        patch("app.services.music_works._auto_tags", new=AsyncMock(return_value="民谣")),
+    ):
+        from tests.conftest import TestingSessionLocal
+
+        async with TestingSessionLocal() as session:
+            out = await mission_service._execute_music(
+                session, "u1", long_prompt, theme_goal="g"
+            )
+    assert out["ok"] is True, "超长 theme 应被截断而非报错"
+    assert len(captured["theme"]) <= 500
