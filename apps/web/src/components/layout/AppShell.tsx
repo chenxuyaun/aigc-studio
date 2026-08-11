@@ -49,14 +49,9 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { to: "/", label: "工作台", short: "首页", icon: LayoutDashboard, mobile: true },
       { to: "/create", label: "AI 创作", short: "创作", icon: Wand2, mobile: true },
-      { to: "/works", label: "我的创作", short: "我的", icon: Clapperboard, mobile: true },
-    ],
-  },
-  {
-    label: "写作与角色",
-    items: [
       { to: "/story", label: "创作工作室", short: "写作", icon: PenLine, mobile: true },
       { to: "/roleplay", label: "角色扮演", short: "角色", icon: MessageCircle, mobile: true },
+      { to: "/works", label: "我的创作", short: "我的", icon: Clapperboard, mobile: true },
     ],
   },
   {

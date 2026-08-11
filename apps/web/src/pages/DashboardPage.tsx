@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import type {
   DashboardStats, GenerationTask, Paginated, Prompt } from "@aigc/shared-types";
@@ -218,8 +218,19 @@ function TaskProgress({ taskId, kind }: { taskId: string; kind: string }) {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [idea, setIdea] = useState("");
   const ideaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // 跨页目标传递：AI 创作页「交给任务总控」→ /?goal=… → 自动填入并触发
+  useEffect(() => {
+    const goal = new URLSearchParams(location.search).get("goal");
+    if (!goal) return;
+    setIdea(goal);
+    void runMission(goal);
+    navigate(location.pathname, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
   // 任务总控（Mission）：目标 → 自动拆解执行
   const [missionBusy, setMissionBusy] = useState(false);
   const [missionLessons, setMissionLessons] = useState<{ goal: string; lesson: string; created_at: string }[]>([]);
@@ -270,8 +281,8 @@ export function DashboardPage() {
   } | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
 
-  async function runMission() {
-    const goal = idea.trim();
+  async function runMission(goalArg?: string) {
+    const goal = (goalArg ?? idea).trim();
     if (!goal || missionBusy) return;
     setMissionBusy(true);
     setMissionResult(null);
