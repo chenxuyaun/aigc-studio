@@ -86,7 +86,7 @@ export function LoginPage() {
         <div className="pointer-events-none absolute -bottom-24 -left-24 h-80 w-80 rounded-full bg-primary/15 blur-3xl" />
         <div className="relative flex h-full flex-col justify-between p-9">
           <span className="animate-enter font-mono-ui text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            AI 创作中心
+            SAIOS · 共生智能操作系统
           </span>
           <div className="animate-enter" style={{ "--stagger": "120ms" } as CSSProperties}>
             <h2 className="max-w-[14ch] text-3xl font-bold tracking-tight text-balance">
@@ -108,11 +108,14 @@ export function LoginPage() {
           >
             <img
               src="/logo.png"
-              alt="AIGC Studio"
+              alt="SAIOS"
               className="shadow-soft h-9 w-9 rounded-xl object-cover"
               draggable={false}
             />
-            <span className="font-display text-xl font-semibold tracking-tight">AIGC Studio</span>
+            <span className="font-display text-xl font-semibold tracking-tight">
+              SAIOS
+              <span className="ml-2 text-sm font-normal text-muted-foreground">AIGC Studio</span>
+            </span>
           </div>
           <p
             className="animate-enter font-mono-ui text-xs uppercase tracking-[0.16em] text-muted-foreground"

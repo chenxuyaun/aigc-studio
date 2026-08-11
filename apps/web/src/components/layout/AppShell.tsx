@@ -249,11 +249,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-2.5 px-2 pb-4">
             <img
               src="/logo.png"
-              alt="AIGC Studio"
+              alt="SAIOS"
               className="h-8 w-8 rounded-[10px] object-cover"
               draggable={false}
             />
-            <span className="font-bold tracking-tight">AIGC Studio</span>
+            <span className="font-bold leading-tight tracking-tight">
+              SAIOS
+              <span className="block text-[10px] font-normal text-muted-foreground">
+                AIGC Studio
+              </span>
+            </span>
           </div>
           <nav className="flex-1 space-y-1 overflow-y-auto" aria-label="主导航">
             {NAV_GROUPS.map((group) => {

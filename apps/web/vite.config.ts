@@ -37,9 +37,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["pwa-192.png", "pwa-512.png"],
       manifest: {
-        name: "AIGC Studio · AI 创作中心",
-        short_name: "AIGC Studio",
-        description: "AI 创作工作台：文本/图片/视频/语音生成、知识库、Agent",
+        name: "SAIOS · 共生智能操作系统",
+        short_name: "SAIOS",
+        description: "SAIOS（Symbiotic AI OS）：一句话目标 → AI 自主规划执行 · 创作 / 角色 / 记忆 / 多引擎融合",
         theme_color: "#e8912a",
         background_color: "#faf9f6",
         display: "standalone",

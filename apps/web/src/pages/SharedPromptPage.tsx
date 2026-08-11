@@ -40,7 +40,7 @@ export function SharedPromptPage() {
         <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-gradient-to-br from-primary to-primary-hover text-sm font-extrabold text-primary-foreground">
           A
         </span>
-        <span className="font-bold tracking-tight">AIGC Studio · 分享</span>
+        <span className="font-bold tracking-tight">SAIOS · 分享</span>
       </div>
 
       {error ? (
