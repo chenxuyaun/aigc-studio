@@ -19,9 +19,7 @@ import {
   Server,
   Sun,
   Users,
-  Wand2,
   MessageCircle,
-  PenLine,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 
@@ -48,9 +46,6 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "创作",
     items: [
       { to: "/", label: "工作台", short: "首页", icon: LayoutDashboard, mobile: true },
-      { to: "/create", label: "AI 创作", short: "创作", icon: Wand2, mobile: true },
-      { to: "/story", label: "创作工作室", short: "写作", icon: PenLine, mobile: true },
-      { to: "/roleplay", label: "角色扮演", short: "角色", icon: MessageCircle, mobile: true },
       { to: "/works", label: "我的创作", short: "我的", icon: Clapperboard, mobile: true },
     ],
   },
@@ -62,6 +57,12 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { to: "/assets", label: "素材库", short: "素材", icon: FolderOpen, mobile: true },
       { to: "/asmr", label: "ASMR 库", short: "ASMR", icon: Headphones, mobile: true },
       { to: "/agents", label: "Agent 库", short: "Agent", icon: Bot, mobile: false },
+    ],
+  },
+  {
+    label: "角色",
+    items: [
+      { to: "/roleplay", label: "角色扮演", short: "角色", icon: MessageCircle, mobile: true },
     ],
   },
   {
