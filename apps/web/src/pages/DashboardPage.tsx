@@ -901,13 +901,25 @@ export function DashboardPage() {
                 </ul>
               </div>
             )}
-            {missionResult && missionResult.results.length > 0 && missionLessons.length === 0 && (
-              <div className="mt-2 rounded-xl border border-border bg-surface p-3">
-                <p className="text-[11px] text-muted-foreground">
-                  🪞 反思：本次执行全部成功，未沉淀新教训
-                </p>
-              </div>
-            )}
+            {missionResult &&
+              missionResult.results.length > 0 &&
+              missionResult.results.some((r) => !r.ok) &&
+              missionLessons.length === 0 && (
+                <div className="mt-2 rounded-xl border border-border bg-surface p-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    🪞 反思：本次有失败步骤，但教训沉淀未成功（可能上游不可用），失败明细见上
+                  </p>
+                </div>
+              )}
+            {missionResult &&
+              missionResult.results.length > 0 &&
+              !missionResult.results.some((r) => !r.ok) && (
+                <div className="mt-2 rounded-xl border border-border bg-surface p-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    🪞 反思：本次执行全部成功，未沉淀新教训
+                  </p>
+                </div>
+              )}
             {missionRuns.length > 0 && (
               <div className="mt-2 rounded-xl border border-border bg-surface p-3">
                 <p className="mb-1 text-xs font-semibold">🗂 历史任务（平台记得你下达过的目标，可回看再跑）</p>
