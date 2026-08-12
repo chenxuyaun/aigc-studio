@@ -132,7 +132,7 @@ def test_validate_lyrics_flags_hollow_praise_words() -> None:
         "【桥段】你的笑声像雨后锈铁。\n"
     )
     warnings = _validate_lyrics(lyrics)
-    assert any("空洞赞颂词" in w for w in warnings), warnings
+    assert any("空洞赞颂" in w for w in warnings), warnings
 
 
 def test_validate_lyrics_no_false_positive_on_concrete_lyrics() -> None:
@@ -302,3 +302,35 @@ async def test_extract_fix_list_empty_without_criticism(client) -> None:
     with patch("app.services.provider_resolver.resolve_text_provider") as m_r:
         assert await _extract_fix_list(None, rounds) == ""
     m_r.assert_not_awaited()
+
+
+def test_validate_lyrics_flags_literary_style():
+    """定稿自检：作文腔/鸡汤词触发自动重写（门不再放行散文诗）。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    literary = """【主歌1】铁皮温热，还留着白天焊枪刚撤走的呼吸
+整个空车间突然很轻，静得能听见夜班在褪尽
+而十二年的焊点，在更衣柜里悄悄排成行
+【副歌】焊条当蜡烛火苗轻颤
+可它自己学会了灿烂
+【主歌2】呵气在铁皮上结霜，想象它开出深夜的厂房
+【桥段】铁皮学会用光斑抚摸未凉的焊点，像淘尽了十二年沙
+【副歌】铁皮在黑夜不发一言
+可它自己找到了光芒"""
+    checks = _validate_lyrics(literary)
+    assert any("作文腔" in c for c in checks), "作文腔应被拦截"
+    assert any("空洞赞颂" in c for c in checks), "鸡汤词应被拦截"
+    assert _severe_checks(checks), "应触发自动重写"
+
+    plain = """【主歌1】老周提前四十分钟到岗，用废料拼车模藏在更衣柜
+工友笑他傻，他擦掉面罩上的焊渣说：等拼完车门，我就去报成人高考
+【副歌】等拼完车门，我就去报成人高考
+等拼完车门，我就去报成人高考
+【主歌2】车间熄灯后他还在敲，焊条烫穿了裤兜
+师傅骂他两句，又帮他补了一针
+【桥段】准考证复印件贴在车模挡风玻璃上，塑封膜起泡了
+【副歌】等拼完车门，我就去报成人高考
+等拼完车门，我就去报成人高考"""
+    checks2 = _validate_lyrics(plain)
+    assert not any("作文腔" in c for c in checks2), "口语化歌词不应误报"
+    assert not any("空洞赞颂" in c for c in checks2), "口语化歌词不应误报"
