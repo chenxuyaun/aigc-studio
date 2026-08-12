@@ -14,6 +14,7 @@ import { copyText } from "@/lib/clipboard";
 import { useRoleplayEngine } from "@/pages/roleplay/useRoleplayEngine";
 import { CharacterPanel } from "@/pages/roleplay/CharacterPanel";
 import { LorePanel } from "@/pages/roleplay/LorePanel";
+import { CardMarketPanel } from "@/pages/roleplay/CardMarketPanel";
 import { RegexPanel } from "@/pages/roleplay/RegexPanel";
 import { SettingsPanel } from "@/pages/roleplay/SettingsPanel";
 import { MemoryPanel } from "@/pages/roleplay/MemoryPanel";
@@ -595,6 +596,7 @@ export function RoleplayPage() {
                 ["settings", "设置"],
                 ["memory", "记忆"],
                 ["book", "状态账本"],
+                ["market", "卡库"],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -643,6 +645,7 @@ export function RoleplayPage() {
               />
             )}
             {rightTab === "book" && <StatusBookPanel chatId={sessionId} />}
+            {rightTab === "market" && <CardMarketPanel />}
           </div>
 
           <div className="mt-3 border-t border-border pt-2">

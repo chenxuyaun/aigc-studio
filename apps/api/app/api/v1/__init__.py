@@ -6,6 +6,7 @@ from app.api.v1 import (
     asmr,
     assets,
     auth,
+    cardmarket,
     character_cards,
     creation,
     dashboard,
@@ -63,6 +64,7 @@ router.include_router(character_cards.router, prefix="/character-cards", tags=["
 router.include_router(roleplay.router, prefix="/roleplay", tags=["roleplay"])
 router.include_router(search.router, prefix="/search", tags=["search"])
 router.include_router(story.router, prefix="/story", tags=["story"])
+router.include_router(cardmarket.router, tags=["cardmarket"])
 router.include_router(agentlist.router, prefix="", tags=["agentlist"])
 router.include_router(asmr.router, prefix="/asmr", tags=["asmr"])
 router.include_router(roundtable.router, prefix="/roundtable", tags=["roundtable"])

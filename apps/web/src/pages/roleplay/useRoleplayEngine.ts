@@ -64,7 +64,9 @@ export function useRoleplayEngine() {
   const [autoInterval, setAutoInterval] = useState(8);
 
   // 右侧标签
-  const [rightTab, setRightTab] = useState<"lore" | "character" | "regex" | "settings" | "memory" | "book">("lore");
+  const [rightTab, setRightTab] = useState<
+    "lore" | "character" | "regex" | "settings" | "memory" | "book" | "market"
+  >("lore");
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const busyRef = useRef(false);
