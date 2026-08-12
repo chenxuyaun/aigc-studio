@@ -909,7 +909,6 @@ async def roundtable_stream(
             pass
         yield _sse_event({"type": "materials", "titles": material_titles})
         # 第 0 轮：AI 按主题定制会议阵容（4 位专业角色）
-        cast: list[dict[str, Any]] = []
         yield _sse_event({"type": "cast_start"})
         cast_prompt = (
             _CAST_PROMPT.format(theme=req.theme, style=req.style or "（自由）")
@@ -940,10 +939,10 @@ async def roundtable_stream(
                     ]
                     generic = sum(
                         1
-                        for c in cast
+                        for c in cast_list
                         if str(c["name"]).startswith("专家") or not c["persona"].strip()
                     )
-                    if generic < max(1, len(cast) // 2):
+                    if generic < max(1, len(cast_list) // 2):
                         break  # 定制合格
                 cast_list = []  # 通用占位/数量不足 → 重试或 fallback
             except Exception:
@@ -996,11 +995,11 @@ async def roundtable_stream(
                         "order": n,
                         "finalizer": False,
                     }
-                    for n in range(len(cast) + 1, 5)
+                    for n in range(len(cast_list) + 1, 5)
                 ]
             )[:4]
-        ordered = sorted(cast, key=lambda r: int(r.get("order") or 99))
-        yield _sse_event({"type": "cast", "cast": cast})
+        ordered = sorted(cast_list, key=lambda r: int(r.get("order") or 99))
+        yield _sse_event({"type": "cast", "cast": cast_list})
 
         # 讨论顺序：1 率先 → 2/3 补充 → 4 挑刺 → 2 回应 → 1 修正（quick 模式跳过回应/修正）
         agenda: list[dict[str, Any]] = []
@@ -1106,7 +1105,7 @@ async def roundtable_stream(
                 "type": "final",
                 "final": final,
                 "rounds": rounds,
-                "cast": cast,
+                "cast": cast_list,
                 "checks": checks,
                 "work_id": work_id,
                 "rewrote": rewrote,
