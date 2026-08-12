@@ -701,6 +701,13 @@ async def _build_chapter_prompt(
         )
     if wb_after:
         parts.append("【世界观（世界书·后置）】\n" + "\n".join(f"- {t}" for t in wb_after))
+    if instruction:
+        # 写作指令双通道：system 强约束（不融入即失败）+ user 提示
+        parts.append(
+            "【本次写作指令（必须执行——不融入即视为写作失败，须重写）】\n"
+            f"{instruction}\n"
+            "- 指令中的具体素材（回忆/场景/对话/细节）必须写成具体情节融入本章正文"
+        )
     parts.append(
         "【写作要求】\n"
         "- 以第三人称叙事，场景/动作/对话自然流畅\n"
