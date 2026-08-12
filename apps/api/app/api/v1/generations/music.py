@@ -917,26 +917,39 @@ async def roundtable_stream(
             + kb_block
         )
         resolved = await resolve_text_provider(db, req.model)
-        try:
-            cast_result = await resolved.provider.generate(  # type: ignore[attr-defined]
-                cast_prompt, resolved.model, temperature=0.9
-            )
-            cast_data = _extract_json(_provider_text(cast_result))
-            roles = cast_data.get("roles") or []
-            if isinstance(roles, list):
-                cast = [
-                    {
-                        "name": str(r.get("name") or f"专家{idx}")[:20],
-                        "field": str(r.get("field") or "音乐创作")[:40],
-                        "persona": str(r.get("persona") or "")[:300],
-                        "icon": str(r.get("icon") or "🎙️")[:4],
-                        "order": int(r.get("order") or idx + 1),
-                        "finalizer": bool(r.get("finalizer")),
-                    }
-                    for idx, r in enumerate(roles[:4])
-                ]
-        except Exception:
-            cast = [
+        cast_list: list[dict[str, Any]] = []
+        # 选角质量校验：通用占位（「专家N」/空 persona）视为发挥波动 → 重试一次
+        for _attempt in range(2):
+            try:
+                cast_result = await resolved.provider.generate(  # type: ignore[attr-defined]
+                    cast_prompt, resolved.model, temperature=0.9
+                )
+                cast_data = _extract_json(_provider_text(cast_result))
+                roles = cast_data.get("roles") or []
+                if isinstance(roles, list) and len(roles) >= 2:
+                    cast_list = [
+                        {
+                            "name": str(r.get("name") or f"专家{idx}")[:20],
+                            "field": str(r.get("field") or "音乐创作")[:40],
+                            "persona": str(r.get("persona") or "")[:300],
+                            "icon": str(r.get("icon") or "🎙️")[:4],
+                            "order": int(r.get("order") or idx + 1),
+                            "finalizer": bool(r.get("finalizer")),
+                        }
+                        for idx, r in enumerate(roles[:4])
+                    ]
+                    generic = sum(
+                        1
+                        for c in cast
+                        if str(c["name"]).startswith("专家") or not c["persona"].strip()
+                    )
+                    if generic < max(1, len(cast) // 2):
+                        break  # 定制合格
+                cast_list = []  # 通用占位/数量不足 → 重试或 fallback
+            except Exception:
+                cast_list = []
+        if not cast_list:
+            cast_list = [
                 {
                     "name": "作词人",
                     "field": "词作与意象",
@@ -971,9 +984,9 @@ async def roundtable_stream(
                 },
             ]
             cast_data = {}
-        if len(cast) < 4:  # 数量不足补位
-            cast = (
-                cast
+        if len(cast_list) < 4:  # 数量不足补位
+            cast_list = (
+                cast_list
                 + [
                     {
                         "name": f"专家{n}",
