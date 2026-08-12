@@ -334,3 +334,27 @@ def test_validate_lyrics_flags_literary_style():
     checks2 = _validate_lyrics(plain)
     assert not any("作文腔" in c for c in checks2), "口语化歌词不应误报"
     assert not any("空洞赞颂" in c for c in checks2), "口语化歌词不应误报"
+
+
+def test_validate_lyrics_flags_missing_punchline():
+    """点睛检测：全程白描无人物声音 → 触发自动重写；有心口之言不误报。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    plain = """【主歌1】他拧小火，监控屏绿光来回扫
+赊账单背面的字像在动
+记账笔断水，他哈口气，划成一道痕
+【副歌】天亮之前他把昨夜抄了三遍
+一遍比一遍轻
+轻到硬币落在收银台上
+人没听见就走了
+【主歌2】油渍洇开第三行，他没擦只是看着
+【桥段】分不清哪张是诗，哪张是别人欠的帐
+【副歌】天亮之前他把昨夜抄了三遍
+一遍比一遍轻"""
+    checks = _validate_lyrics(plain)
+    assert any("点睛" in c for c in checks), "全程白描应被拦截"
+    assert _severe_checks(checks), "应触发自动重写"
+
+    with_punch = plain.replace("划成一道痕", "划成一道痕，他对自己说：别怕")
+    checks2 = _validate_lyrics(with_punch)
+    assert not any("点睛" in c for c in checks2), "有心口之言不应误报"
