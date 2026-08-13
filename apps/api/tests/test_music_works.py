@@ -358,3 +358,38 @@ def test_validate_lyrics_flags_missing_punchline():
     with_punch = plain.replace("划成一道痕", "划成一道痕，他对自己说：别怕")
     checks2 = _validate_lyrics(with_punch)
     assert not any("点睛" in c for c in checks2), "有心口之言不应误报"
+
+
+def test_validate_lyrics_flags_antithetical_hook():
+    """钩子事件化：副歌首行若是道理对仗格言 → 拦截；具体事件句不误报。"""
+    from app.api.v1.generations.music import _is_antithetical_hook, _severe_checks, _validate_lyrics
+
+    # 对仗格言应命中
+    assert _is_antithetical_hook("车铃响三声，夜路短一截") is True
+    assert _is_antithetical_hook("他走他的路，我补我的乐") is True
+    # 具体事件应不命中
+    assert _is_antithetical_hook("栽进排水沟") is False
+    assert _is_antithetical_hook("我那年下夜班，铃是个哑巴") is False
+
+    # 完整歌词：对仗副歌触发重写
+    lyrics = """【主歌1】棉纺厂后门，周建国把内胎按进水盆
+【副歌】车铃响三声，夜路短一截，
+车铃响三声，腰也能直一些。
+【主歌2】玲姐推着嘎吱的后轮
+【桥段】我那年下夜班，铃是个哑巴，栽进排水沟
+【副歌】车铃响三声，夜路短一截，
+车铃响三声，腰也能直一些。"""
+    checks = _validate_lyrics(lyrics)
+    assert any("格言" in c for c in checks), "对仗格言副歌应被拦截"
+    assert _severe_checks(checks), "应触发自动重写"
+
+    # 事件式副歌不误报
+    lyrics2 = """【主歌1】老周把内胎按进水盆
+【副歌】我那年下夜班，铃是个哑巴，栽进排水沟
+车铃擦得发亮，他按三下才放人走
+【主歌2】红黄蓝胶带缠三道
+【桥段】不是为你好，是我不信邪
+【副歌】我那年下夜班，铃是个哑巴，栽进排水沟
+车铃擦得发亮，他按三下才放人走"""
+    checks2 = _validate_lyrics(lyrics2)
+    assert not any("格言" in c for c in checks2), "事件式副歌不应误报"
