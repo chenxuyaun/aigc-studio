@@ -560,8 +560,12 @@ async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> di
                 f"以「{role.get('name')}」（{role.get('field')}）的专业视角发言 60-100 字，"
                 "提出具体创作主张，直面并回应前序发言的问题，不客套。"
             )
+            opponent_block = ""
+            if rounds:
+                opp = rounds[-1]
+                opponent_block = f"{opp['speaker']}：{opp['content']}"
             result = await resolved.provider.generate(  # type: ignore[attr-defined]
-                _speaker_prompt(prompt[:200], "（自由）", rounds, task),
+                _speaker_prompt(prompt[:200], "（自由）", task, opponent=opponent_block),
                 resolved.model,
                 temperature=0.95,
             )
