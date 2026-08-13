@@ -404,12 +404,20 @@ _CAST_PROMPT = """你是「音乐创作圆桌会议」的选角导演。根据�
 def _speaker_prompt(
     theme: str,
     style: str,
-    rounds: list[dict[str, str]],
     task: str,
+    opponent: str = "",
     extra: str = "",
 ) -> str:
-    """构造发言者 prompt：主题 + 风格特征 + 前序发言记录 + 本轮任务。"""
-    history = "\n".join(f"{r['speaker']}：{r['content']}" for r in rounds) or "（你是第一位发言者）"
+    """构造发言者 prompt：主题 + 风格 + 本轮任务 + 针对性回应对象（自我中心投影）。
+
+    关键：不再全文拼接历史（那会导致"总结性续写"和复读套话），
+    只给「上一个对手的原话」——让回应针锋相对，而非对全文泛泛而谈。
+    """
+    target = (
+        f"【你要回应的对象（上一轮的原话）——必须针对它回应，引用它的具体说法】\n{opponent}"
+        if opponent
+        else "（你是第一位发言者，没有前文可回应，直接发表你的方案）"
+    )
     return (
         f"【第一信条·人民性】你从人民中来，为人民而写：站在普通人一边，写普通人的真实生活、劳动、尊严与悲欢；不居高临下地歌颂，用人民的语言，禁止鸡汤与宣传腔。\n"
         f"【语言铁律】讨论与歌词都禁止专业/技术术语直接入词（模型名/参数/代码/黑话只可作人物设定背景），意象来自普通人的具体生活。\n"
@@ -418,7 +426,7 @@ def _speaker_prompt(
         f"风格基调：{style or '（自由）'}\n"
         f"{_style_profile_block(style)}"
         f"{extra}"
-        f"\n\n【前序发言】\n{history}\n\n"
+        f"\n\n{target}\n\n"
         f"【本轮任务】{task}"
     )
 
@@ -769,31 +777,46 @@ def _severe_checks(checks: list[str]) -> bool:
     )
 
 
-# 讨论顺序模板：order 1 率先 → 2/3 补充 → 4 挑刺 → 2 回应 → 1 修正 → finalizer 定稿
-# 讨论纪律：批评必须落到实质改进——换全新意象/方案，禁止"保留+微调"式敷衍
-def _round_task(order: int, role_count: int) -> str:
-    if order == 1:
-        return (
-            "你率先发言：**如果主题没有点名具体的人（谁/什么身份），第一步先为创作对象立一个"
-            "具体可信的人物原型**——称呼或名字、年龄身份、一件只有他/她做得出的具体的事"
-            "（如'巷口炸油条三十年的老张，每天第一根油条总递给上夜班的环卫工，收摊前留半碗豆浆给流浪猫'），"
-            "全曲必须围绕这个立住的人物写，禁止对着模糊的'你'唱空泛的赞歌；"
-            "然后从你的专业领域出发提出创作方向：核心意象必须**具体可感**（用具象物件/生活细节/感官细节，"
-            "如手机屏保、便利店关东煮、门禁卡、地铁报站声），"
-            "禁止抽象大词（灯光/星光/孤独/回忆这类被用滥的意象要做出新意）；"
-            "**并给出副歌金句的雏形**（一句口语化、朗朗上口的钩子），80-120 字。"
-        )
-    if order == 2 or order == 3:
-        return (
-            "基于前序发言补充：从你的专业领域给出**可落地的具体方案**"
-            "（和声走向/配器/节奏型要具体到调式/拍号/BPM），60-100 字。"
-        )
+# 对抗式讨论任务（提案 → 反驳 → 辩护 → 补充 → 裁决）
+# 纪律：评审只挑刺不给方案（替代是提案方的事）；提案方允许反驳（不为和谐全盘接受）
+def _proposer_task() -> str:
+    """提案轮：立人物 + 核心意象 + 副歌钩子，立场鲜明。"""
     return (
-        "你担任挑剔的听众：针对前三位发言毒舌挑刺，必须具体到 1-2 个被用滥的意象/方案，"
-        "并且**每个被批评的点都要给出一个反方向的替代方向**（如：把抽象的'灯光'换成具体的'便利店关东煮的热气'）；"
-        "**若主题未点名对象而方案把'你'写成了没有面孔的模糊形象，必须要求立人物**"
-        "（给出身份 + 一件具体的事作为替代，如'与其对着模糊的您唱赞歌，不如写：夜班公交司机老周，方向盘上磨出茧'）；"
-        "**副歌金句也要挑**——太弱/太俗/不朗朗上口就指出并给一句更好的候选，60-100 字。"
+        "你是本场第一个发言的提案人：**先为创作对象立一个具体可信的人物原型**"
+        "（称呼/名字 + 年龄身份 + 一件只有他/她做得出的具体的事），全曲围绕这个人物写，"
+        "禁止对着模糊的'你'唱空泛赞歌；"
+        "然后提出核心意象（具体可感：物件/生活细节/感官细节，禁抽象大词）"
+        "和副歌金句雏形（口语化、朗朗上口）。"
+        "你的方案马上会被质疑——**立场要鲜明，写清你坚持什么、为什么**，别含糊。"
+    )
+
+
+def _critic_task() -> str:
+    """反驳轮：纯反对——逐条引用提案原话挑刺，禁止给替代方案。"""
+    return (
+        "你是本场的质疑者：**逐条引用提案人的原话**，指出其中最致命的 1-2 个具体问题"
+        "（意象俗套/人物没立住/副歌钩子弱/空洞口号/白描无点睛）。"
+        "**默认否定：除非提案里有你无法反驳的具体证据，否则先当它不合格。**"
+        "**禁止给出替代方案或'应该改成…'的建议**——替代是提案人自己的事，你只负责指出问题。"
+        "每个批评都要落到提案的原话上，不许空泛地说'质量低'。"
+    )
+
+
+def _defense_task() -> str:
+    """辩护轮：针对质疑逐条回应，允许反驳/让步。"""
+    return (
+        "针对质疑者的每一条批评，**逐条明确表态**：同意 / 反驳 / 部分让步，并给理由。"
+        "**允许并且应当反驳**你不认同的批评——如果对方挑错了，就说'这条我不接受，因为…'，"
+        "不要为了和谐而全盘接受。对真有道理的批评，才让步并给出实质改进。50-90 字。"
+    )
+
+
+def _supporter_task() -> str:
+    """补充轮：基于辩论结果给专业方案，默认怀疑。"""
+    return (
+        "基于前面的提案与辩论，从你的专业领域给出**可落地的具体方案**"
+        "（和声走向/配器/节奏型，具体到调式/拍号/BPM）。"
+        "默认怀疑前文，专业判断优先：只有你认为正确的才采纳，不要人云亦云。60-100 字。"
     )
 
 
@@ -812,9 +835,15 @@ _FINAL_PROMPT = """【第一信条·人民性】（最高原则，一切创作�
   禁止只有动作和物件、没有一句人物声音或情感落点的"观察报告式"歌词
 
 你是{name}（{field}），担任这场创作圆桌的主理人兼主编。产出定稿前先自查，再产出高质量定稿。
+
+【裁决要求】（定稿前必做——把讨论收成明确的取舍，禁止"综合了事"）
+- 逐条引用讨论中的原话，明确记录：**采纳了谁的具体哪句、否决了谁的具体哪句、为什么**
+- 裁决基于质量而非发言长度——**不要偏爱更长或更靠后的发言**，短而准的意见同样采纳
+- 若无实质分歧，如实写"各方一致，无否决项"；有分歧才裁决
 严格输出 JSON（不要任何多余文字）：
 
 {{
+  "verdict": "裁决记录（2-4 条，每条引用原话：采纳了〈角色名〉的「…」/否决了〈角色名〉的「…」，因为…）",
   "title": "歌名（2-6 字，有记忆点）",
   "lyrics": "定稿歌词（标【主歌1】【副歌】【主歌2】【桥段】【副歌】），详见下方结构要求",
   "chords": "逐段和弦谱（每段一行：段落标记 + 和弦进行，如：【主歌1】C G Am F ｜【副歌】F G C C），给吉他弹唱/Suno 直接用",
@@ -1015,40 +1044,69 @@ async def roundtable_stream(
         ordered = sorted(cast_list, key=lambda r: int(r.get("order") or 99))
         yield _sse_event({"type": "cast", "cast": cast_list})
 
-        # 讨论顺序：1 率先 → 2/3 补充 → 4 挑刺 → 2 回应 → 1 修正（quick 模式跳过回应/修正）
+        # 对抗式议程：提案 → 反驳 → 辩护 → 补充（quick 模式跳过补充，裁决在定稿轮）
+        proposer = ordered[0] if ordered else None
+        critic = next((r for r in ordered if int(r.get("order") or 99) == 4), None)
+        supporters = [
+            r
+            for r in ordered
+            if r is not proposer and r is not critic and not r.get("finalizer")
+        ]
         agenda: list[dict[str, Any]] = []
-        for r in ordered:
-            agenda.append({"role": r, "task": _round_task(int(r.get("order") or 1), len(ordered))})
-        if len(ordered) >= 3 and not req.quick:
+        if proposer is not None:
             agenda.append(
                 {
-                    "role": ordered[1],
-                    "task": (
-                        "回应挑剔者的批评：必须**实质性改变至少一个方案点**"
-                        "（换全新意象/换和声走向/换配器，给出具体做法）；"
-                        "最多辩护 1 点且要有专业理由。禁止'保留+微调'式敷衍，50-90 字。"
-                    ),
+                    "role": proposer,
+                    "task": _proposer_task(),
+                    "stance": "你立场鲜明，敢于坚持自己的方案，不怕被质疑。",
                 }
             )
+        if critic is not None and proposer is not None:
             agenda.append(
                 {
-                    "role": ordered[0],
-                    "task": (
-                        "根据讨论修正你的方案：必须用**至少一个全新的核心意象**替换被批评的部分"
-                        "（用具象物件/场景细节，禁止对旧意象换说法）；"
-                        "你只负责你自己的专业领域（词作者改词，编曲的交给编曲位落实），50-90 字。"
-                    ),
+                    "role": critic,
+                    "task": _critic_task(),
+                    "stance": "你默认否定，除非有具体证据；你只挑刺，不给替代方案。",
                 }
             )
+        if proposer is not None and critic is not None:
+            agenda.append(
+                {
+                    "role": proposer,
+                    "task": _defense_task(),
+                    "stance": "你敢于反驳不认同的批评，不为和谐而全盘接受。",
+                }
+            )
+        if not req.quick:
+            for sup in supporters:
+                agenda.append(
+                    {
+                        "role": sup,
+                        "task": _supporter_task(),
+                        "stance": "你默认怀疑前文，专业判断优先，不人云亦云。",
+                    }
+                )
 
         rounds: list[dict[str, str]] = []
         for idx, item in enumerate(agenda, start=1):
             role = item["role"]
             speaker = str(role.get("name") or f"专家{idx}")
             yield _sse_event({"type": "round_start", "speaker": speaker, "round_no": idx})
-            persona = f"你是{role.get('name')}（{role.get('field')}）：{role.get('persona')}"
+            persona = (
+                f"你是{role.get('name')}（{role.get('field')}）：{role.get('persona')}\n"
+                f"【本轮立场】{item['stance']}"
+            )
+            # 自我中心投影：只给上一个对手的原话（不全文拼接，防复读套话）
+            opponent_block = ""
+            if rounds:
+                opp = rounds[-1]
+                opponent_block = f"{opp['speaker']}：{opp['content']}"
             prompt = _speaker_prompt(
-                req.theme, req.style, rounds, str(item["task"]), extra=kb_block
+                req.theme,
+                req.style,
+                str(item["task"]),
+                opponent=opponent_block,
+                extra=kb_block,
             )
             resolved = await resolve_text_provider(db, req.model)
             try:
