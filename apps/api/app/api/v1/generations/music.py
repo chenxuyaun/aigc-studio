@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import random
 import re
 from collections.abc import AsyncIterator
 from typing import Any
@@ -444,6 +445,18 @@ def _transcript_block(rounds: list[dict[str, str]], limit: int = 2500) -> str:
     return "\n".join(reversed(parts)) or "（无讨论记录）"
 
 
+def _shuffled_transcript(rounds: list[dict[str, str]], limit: int = 2500) -> str:
+    """裁决去位置偏见：随机打乱发言块顺序（保留发言者名），打破 primacy/recency 锚定。
+
+    搜索结论（Judging the Judges）：judge 有系统性位置偏见，机械修复（随机化/轮换）
+    比「写更公正的 rubric」有效。主理人裁决时应按观点质量而非发言顺序——随机化
+    迫使它逐条看观点内容（每个块都带 speaker 名，可归因），而非"谁最后说就听谁的"。
+    """
+    shuffled = list(rounds)
+    random.shuffle(shuffled)
+    return _transcript_block(shuffled, limit)
+
+
 def _repair_lyrics(lyrics: str) -> str:
     """程序化修复常见结构错误：同一段落标签连续重复时合并（主歌/桥段各 1 段，副歌最多 2 遍）。
 
@@ -729,7 +742,8 @@ async def _produce_final(
     rewrite_warnings 非空时为重写轮：把上一轮自检警告注入 prompt 要求逐条修正。
     """
     finalizer_name = str((finalizer or {}).get("name") or "主理人")
-    transcript = _transcript_block(rounds)
+    # 裁决去位置偏见：随机化发言块顺序（每个块带 speaker 名，主理人按观点质量而非顺序裁决）
+    transcript = _shuffled_transcript(rounds)
     # 定稿前把「批评→替代」结构化提取（失败返回空，定稿照常）
     try:
         fix_list = await _extract_fix_list(db, rounds)
@@ -818,6 +832,33 @@ def _supporter_task() -> str:
         "（和声走向/配器/节奏型，具体到调式/拍号/BPM）。"
         "默认怀疑前文，专业判断优先：只有你认为正确的才采纳，不要人云亦云。60-100 字。"
     )
+
+
+async def _has_unresolved_conflict(
+    db: AsyncSession, theme: str, rounds: list[dict[str, str]]
+) -> bool:
+    """共识检测（需求6：共识就停）——判断辩论是否还有未解决的实质分歧。
+
+    辩护轮后调用：若已收敛（辩护实质回应了关键批评）→ False，跳过补充轮；
+    若仍有明显对立 → True，跑补充轮。判断失败时保守返回 True（跑补充轮）。
+    """
+    transcript = _transcript_block(rounds, limit=1500)
+    prompt = (
+        f"下面是关于「{theme}」的创作讨论（提案 → 反驳 → 辩护）：\n{transcript}\n\n"
+        "判断：提案与反驳之间是否还有「未解决的实质分歧」？\n"
+        "- 若辩护轮已实质回应了所有关键批评（达成共识/收敛），has_conflict=false\n"
+        "- 若仍有明显对立、关键问题未被回应，has_conflict=true\n"
+        '严格输出 JSON（不要任何多余文字）：{"has_conflict": true} 或 {"has_conflict": false}'
+    )
+    try:
+        resolved = await resolve_text_provider(db, "")
+        result = await resolved.provider.generate(  # type: ignore[attr-defined]
+            prompt, resolved.model, temperature=0.0
+        )
+        data = _extract_json(_provider_text(result))
+        return bool(data.get("has_conflict", False))
+    except Exception:
+        return True  # 判断失败保守处理：跑补充轮
 
 
 _FINAL_PROMPT = """【第一信条·人民性】（最高原则，一切创作以此为纲）
@@ -1052,9 +1093,10 @@ async def roundtable_stream(
             for r in ordered
             if r is not proposer and r is not critic and not r.get("finalizer")
         ]
-        agenda: list[dict[str, Any]] = []
+        # 核心对抗闭环：提案 → 反驳 → 辩护
+        core: list[dict[str, Any]] = []
         if proposer is not None:
-            agenda.append(
+            core.append(
                 {
                     "role": proposer,
                     "task": _proposer_task(),
@@ -1062,7 +1104,7 @@ async def roundtable_stream(
                 }
             )
         if critic is not None and proposer is not None:
-            agenda.append(
+            core.append(
                 {
                     "role": critic,
                     "task": _critic_task(),
@@ -1070,28 +1112,18 @@ async def roundtable_stream(
                 }
             )
         if proposer is not None and critic is not None:
-            agenda.append(
+            core.append(
                 {
                     "role": proposer,
                     "task": _defense_task(),
                     "stance": "你敢于反驳不认同的批评，不为和谐而全盘接受。",
                 }
             )
-        if not req.quick:
-            for sup in supporters:
-                agenda.append(
-                    {
-                        "role": sup,
-                        "task": _supporter_task(),
-                        "stance": "你默认怀疑前文，专业判断优先，不人云亦云。",
-                    }
-                )
 
         rounds: list[dict[str, str]] = []
-        for idx, item in enumerate(agenda, start=1):
+
+        async def _speak(item: dict[str, Any]) -> str:
             role = item["role"]
-            speaker = str(role.get("name") or f"专家{idx}")
-            yield _sse_event({"type": "round_start", "speaker": speaker, "round_no": idx})
             persona = (
                 f"你是{role.get('name')}（{role.get('field')}）：{role.get('persona')}\n"
                 f"【本轮立场】{item['stance']}"
@@ -1113,11 +1145,35 @@ async def roundtable_stream(
                 result = await resolved.provider.generate(  # type: ignore[attr-defined]
                     prompt, resolved.model, system=persona, temperature=0.9
                 )
-                text = _provider_text(result).strip()
+                return _provider_text(result).strip()
             except Exception as exc:
-                text = f"（发言中断：{str(exc)[:80]}）"
+                return f"（发言中断：{str(exc)[:80]}）"
+
+        for idx, item in enumerate(core, start=1):
+            role = item["role"]
+            speaker = str(role.get("name") or f"专家{idx}")
+            yield _sse_event({"type": "round_start", "speaker": speaker, "round_no": idx})
+            text = await _speak(item)
             rounds.append({"speaker": speaker, "content": text})
             yield _sse_event({"type": "round", "speaker": speaker, "content": text})
+
+        # 需求6：共识检测——辩护后仍有分歧才跑补充轮（共识就停，不固定轮次）
+        if not req.quick and supporters:
+            has_conflict = await _has_unresolved_conflict(db, req.theme, rounds)
+            if has_conflict:
+                for sup in supporters:
+                    item = {
+                        "role": sup,
+                        "task": _supporter_task(),
+                        "stance": "你默认怀疑前文，专业判断优先，不人云亦云。",
+                    }
+                    speaker = str(sup.get("name") or "补充")
+                    yield _sse_event(
+                        {"type": "round_start", "speaker": speaker, "round_no": len(rounds) + 1}
+                    )
+                    text = await _speak(item)
+                    rounds.append({"speaker": speaker, "content": text})
+                    yield _sse_event({"type": "round", "speaker": speaker, "content": text})
 
         # 定稿轮：主理人主编把关 + 自检 + 严重问题自动重写一轮 + 自动存入「我的作品」
         finalizer = next(
