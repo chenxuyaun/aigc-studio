@@ -846,10 +846,13 @@ async def generate_chapter(
     temperature: float | None = None,
     instruction: str = "",
     tool_loop: bool = False,
+    draft_mode: bool | None = None,
 ) -> dict[str, Any]:
     """叙事模式：以角色扮演设定驱动作者视角，生成第 N 章小说正文。
 
     tool_loop=True：允许模型调用 MCP 工具（技能/创作工具），结果回填后续写。
+    draft_mode：None=按 CREATIVE_ENGINE_ENABLED 配置；True=走 L0 质量门+修复循环
+    （创作智能内核，见 app/services/story_gate.py）；False=legacy 直通（默认行为）。
     """
     project = await get_project(db, user_id, project_id)
     chapter = await get_chapter(db, user_id, chapter_id)
@@ -903,26 +906,66 @@ async def generate_chapter(
     # 去除模型偶尔输出的章节标题前缀
     content = re.sub(rf"^第\s*{chapter.chapter_no}\s*章.*?\n", "", content, count=1).strip()
 
+    # 创作智能内核（P3-1）：draft_mode → L0 质量门 + 修复循环
+    if draft_mode is None:
+        from app.core.config import settings as _settings
+
+        draft_mode = bool(getattr(_settings, "CREATIVE_ENGINE_ENABLED", 0) or 0)
+    if draft_mode:
+        from app.services.story_gate import run_gated_generation
+
+        gated = await run_gated_generation(
+            db,
+            user_id=user_id,
+            project=project,
+            chapter=chapter,
+            provider=provider,
+            model=resolved.model,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        if "error" in gated:
+            return gated
+        content = gated["content"]
+        chapter_status = gated["status"]  # done / review
+        quality_report = gated.get("quality_report")
+        repair_history = gated.get("repair_history", [])
+    else:
+        chapter_status = "done"
+        quality_report = None
+        repair_history = []
+
     await _snapshot_chapter(db, chapter, note="重新生成")
     chapter.content = content
     chapter.word_count = len(content)
     chapter.model = resolved.model
-    chapter.status = "done"
+    chapter.status = chapter_status
+    notes = _load_json(chapter.notes, {})
     if tool_log:
-        notes = _load_json(chapter.notes, {})
         notes["tool_calls"] = tool_log
-        chapter.notes = json.dumps(notes, ensure_ascii=False)
+    if quality_report:
+        notes["quality_report"] = quality_report
+    if repair_history:
+        notes["repair_history"] = repair_history
+    chapter.notes = json.dumps(notes, ensure_ascii=False)
     await db.commit()
     await db.refresh(chapter)
-    return {
+    result: dict[str, Any] = {
         "chapter_id": chapter.id,
         "content": content,
         "word_count": chapter.word_count,
         "model": resolved.model,
         "worldbook_hits": len(wb.activated),
         "tool_calls": tool_log,
-        "status": "done",
+        "status": chapter_status,
     }
+    if quality_report:
+        result["quality_report"] = quality_report
+    if repair_history:
+        result["repair_history"] = repair_history
+    return result
 
 
 # ==== 剧本模式生成（群聊引擎） ====

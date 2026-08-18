@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     # 0 = 进程内 asyncio（默认）；1 = 投递 Celery（需 worker 在线）
     USE_CELERY_WORKER: int = 0
 
+    # 创作智能内核（docs/creative-engine/）：0 = legacy 直通生成（默认，行为不变）；
+    # 1 = generate_chapter 走 L0 质量门 + 修复循环（draft_mode 默认开启）
+    CREATIVE_ENGINE_ENABLED: int = 0
+    # 单章节 L0 修复轮数上限（超过 → HUMAN_REVIEW_REQUIRED）
+    CREATIVE_MAX_REPAIR_ROUNDS: int = 2
+
     # 简易内存限流：每 IP 每分钟最大请求数（0=关闭）
     RATE_LIMIT_PER_MINUTE: int = 120
     # 登录接口更严

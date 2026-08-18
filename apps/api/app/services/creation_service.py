@@ -42,7 +42,11 @@ _PLAN_PROMPT = """你是影视/小说项目的选角导演。根据创作主题�
       "personality": "性格关键词与说话风格（20-40 字）",
       "first_mes": "角色开场白（1-2 句，有辨识度，直接进入情境）",
       "source": "new 或 existing（复用角色池中的角色填 existing）",
-      "asset_id": "source=existing 时必填（角色池中的 asset_id）；new 时省略"
+      "asset_id": "source=existing 时必填（角色池中的 asset_id）；new 时省略",
+      "value_hierarchy": {{"价值名": 0-1 权重, ...}}（4-6 条，顶部权重唯一，如 责任 0.95 > 家庭 0.75）,
+      "core_values": ["核心价值观 2-4 条，必须是 value_hierarchy 的子集"],
+      "mission": "角色使命（一句话，挂在最高价值上）",
+      "emotional_triggers": ["情绪触发器 1-2 条（⚠️ 与核心价值分离，只影响即时反应不决定重大行为）"]
     }}
   ]
 }}
@@ -50,6 +54,8 @@ _PLAN_PROMPT = """你是影视/小说项目的选角导演。根据创作主题�
 要求：
 - 角色 3-6 个，定位互补（主角 + 对手 + 帮手/关系人），覆盖故事推进所需
 - 每个角色适合真人扮演或 AI 扮演，定位清晰
+- value_hierarchy 必须区分「核心价值」（决定重大选择）与「情绪触发器」（决定即时反应），
+  禁止把 妻子/孩子/爱情/死亡 自动提升为最高层动机
 - 主题：{theme}
 - 若提供【主题相关资料】，必须优先基于资料设定角色（世界观/人物/事件以资料为准）
 - 若提供【已有角色池】：人设合适的角色**优先复用**（source=existing + 其 asset_id），不要为已有角色造重复卡；确实缺的定位才新建（source=new）"""
@@ -87,6 +93,7 @@ _SCRIPT_PROMPT = """你是资深编剧 + 剧作统筹。根据创作主题与角
           "location": "场景（地点+时间，如：深夜食堂·店内·雨夜）",
           "characters": "出场角色（用角色名，逗号分隔）",
           "beat": "本场节拍（40-80 字：发生什么/冲突/转折，禁止流水账）",
+          "driver": "本场转折的因果驱动者（谁的决定 / 什么环境力量推动，如：老赵决定提前打烊→小雅被迫摊牌；禁止用巧合）",
           "dialogue_hint": "关键台词提示（1-2 句，贴合角色性格，可直接演）"
         }}
       ]
@@ -352,8 +359,12 @@ async def publish_project(
     user_id: str,
     chat_id: str,
     title: str | None = None,
+    plan: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """群演出 → 完整剧本 → 存入创作工作室（story 项目 + 首章）。
+
+    创作内核（P3-6）：plan 携带 value_hierarchy 时，为角色建 story_characters
+    实例并写入 Character Constitution（决策模型随项目落库）。
 
     返回 {project_id, chapter_id, project_title}；群为空/无归属返回 error。
     """
@@ -400,11 +411,74 @@ async def publish_project(
     )
     chapter = await create_chapter(db, user_id, project.id, title="群演完整剧本", outline="")
     await update_chapter_content(db, user_id, chapter.id, script_text)
+    # 创作内核（P3-6）：plan 带 value_hierarchy → 角色实例 + Constitution 落库
+    modeled = 0
+    for c in (plan or {}).get("characters") or []:
+        constitution = _constitution_from_plan_char(c)
+        if constitution is None:
+            continue
+        from app.models.story_character import StoryCharacter
+
+        asset_id = str(c.get("asset_id") or "")
+        db.add(
+            StoryCharacter(
+                id=str(uuid.uuid4()),
+                project_id=project.id,
+                user_id=user_id,
+                character_asset_id=asset_id or None,
+                name=str(c.get("name") or "角色")[:100],
+                role="protagonist" if "主角" in str(c.get("role") or "") else "supporting",
+                description=str(c.get("description") or "")[:2000],
+                constitution=constitution.model_dump_json(),
+            )
+        )
+        modeled += 1
+    await db.commit()
     return {
         "project_id": project.id,
         "chapter_id": chapter.id,
         "project_title": project.title,
+        "constitution_modeled": modeled,
     }
+
+
+def _constitution_from_plan_char(c: dict[str, Any]) -> Any | None:
+    """从选角方案的角色字段组装 CharacterConstitution（宽容：不完整/非法 → None）。
+
+    value_hierarchy 必须非空；core_values 缺失时取层级顶部 2 条；
+    情绪触发器与核心价值分离由 schema 校验保证。
+    """
+    vh_raw = c.get("value_hierarchy") or {}
+    if not isinstance(vh_raw, dict) or not vh_raw:
+        return None
+    vh: dict[str, float] = {}
+    for k, v in vh_raw.items():
+        try:
+            w = float(v)
+        except (TypeError, ValueError):
+            continue
+        if 0.0 <= w <= 1.0:
+            vh[str(k)[:50]] = w
+    if not vh:
+        return None
+    core = [str(x)[:50] for x in (c.get("core_values") or []) if str(x)]
+    core = [x for x in core if x in vh]  # 只保留层级内
+    if not core:
+        core = [k for k, _ in sorted(vh.items(), key=lambda kv: -kv[1])[:1]]
+    from app.creative.schemas import CharacterConstitution
+
+    try:
+        return CharacterConstitution(
+            identity=str(c.get("description") or "")[:2000],
+            core_values=core,
+            value_hierarchy=vh,
+            mission=str(c.get("mission") or "")[:2000],
+            emotional_triggers=[
+                str(x)[:100] for x in (c.get("emotional_triggers") or [])[:5]
+            ],
+        )
+    except Exception:
+        return None
 
 
 async def update_chapter_content(

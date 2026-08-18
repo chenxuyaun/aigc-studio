@@ -223,3 +223,80 @@ async def test_story_mcp_tools_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "error" in out
     out = await update_character_state("p1", "no-such-char", "状态")
     assert "error" in out
+
+
+@pytest.mark.anyio
+async def test_write_chapter_quality_gate_review(monkeypatch: pytest.MonkeyPatch) -> None:
+    """创作内核（P3-3）：正文含价值崩塌嫌疑（人物已建模）→ write_chapter 置 review 不直接定稿。"""
+    import json as _json
+
+    import app.mcp.server as mcp_server
+    from app.mcp.server import write_chapter
+
+    from tests.conftest import TestingSessionLocal
+
+    async def fake_admin(db: object) -> str:
+        return "u1"
+
+    monkeypatch.setattr(mcp_server, "_admin_user_id", fake_admin)
+    monkeypatch.setattr(mcp_server, "AsyncSessionLocal", TestingSessionLocal)
+    from app.core.database import Base
+
+    from tests.conftest import _test_engine
+
+    async with _test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with TestingSessionLocal() as db:
+        from app.models.story_character import StoryCharacter
+        from app.services import story_forge
+
+        p = await story_forge.create_project(db, "u1", title="桥的故事")
+        constitution = {
+            "identity": "陈工，守桥人",
+            "worldview": "工程质量即生命",
+            "beliefs": [],
+            "core_values": ["公共安全"],
+            "value_hierarchy": {"公共安全": 1.0, "责任": 0.95, "家庭": 0.75},
+            "mission": "守住这座桥",
+            "goals": [],
+            "desires": [],
+            "fears": [],
+            "needs": [],
+            "relationships": [{"name": "妻子", "relation": "配偶", "emotional_weight": 0.9,
+                               "value_link": "家庭"}],
+            "history": [],
+            "skills": [],
+            "weaknesses": [],
+            "contradictions": [],
+            "boundaries": [],
+            "moral_limits": [],
+            "decision_rules": [],
+            "emotional_triggers": ["提到那座垮掉的桥"],
+            "character_arc": "",
+        }
+        db.add(StoryCharacter(
+            id="c-bridge", project_id=p.id, user_id="u1", name="陈工",
+            role="protagonist",
+            constitution=_json.dumps(constitution, ensure_ascii=False),
+        ))
+        await db.commit()
+
+        # 价值崩塌嫌疑正文：行为仅由亡妻驱动，无价值信号
+        out = await write_chapter(p.id, 1, "通车那天他没去剪彩，因为想起亡妻。", title="通车日")
+        assert out["ok"] is True
+        assert out["review"] is True
+        assert out["quality_report"] is not None
+        assert out["quality_report"]["final_status"] == "HUMAN_REVIEW_REQUIRED"
+        chapters = await story_forge.list_chapters(db, "u1", p.id)
+        assert chapters[0]["status"] == "review"
+
+        # 干净正文 → done
+        out2 = await write_chapter(
+            p.id, 2,
+            "通车那天他没有去剪彩。剪彩前夜，3 号墩的复检数据出来了，他带报告去了桥墩现场。",
+            title="复检",
+        )
+        assert out2["ok"] is True
+        assert out2["review"] is False
+        chapters = await story_forge.list_chapters(db, "u1", p.id)
+        assert any(c["chapter_no"] == 2 and c["status"] == "done" for c in chapters)

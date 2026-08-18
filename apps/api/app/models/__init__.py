@@ -7,6 +7,12 @@ from app.models.asmr_favorite import AsmrFavorite
 from app.models.asmr_netdisk_item import AsmrNetdiskItem
 from app.models.asmr_work import AsmrWork
 from app.models.asset import Asset
+from app.models.creative_models import (
+    CreativePrompt,
+    CreativeRun,
+    StoryStateRow,
+    StoryStateSnapshot,
+)
 from app.models.generation_task import GenerationTask
 from app.models.inspection_report import InspectionReport
 from app.models.mission_lesson import MissionLesson
@@ -53,6 +59,8 @@ __all__ = [
     "AsmrNetdiskItem",
     "AsmrWork",
     "Asset",
+    "CreativePrompt",
+    "CreativeRun",
     "GenerationTask",
     "InspectionReport",
     "MissionLesson",
@@ -81,6 +89,8 @@ __all__ = [
     "StoryChapterVersion",
     "StoryCharacter",
     "StoryProject",
+    "StoryStateRow",
+    "StoryStateSnapshot",
     "TextDocument",
     "User",
     "Workflow",

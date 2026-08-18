@@ -437,8 +437,115 @@ async def test_setup_uses_asset_id_from_plan(client, user_token) -> None:
 
 
 @pytest.mark.asyncio
+async def test_constitution_from_plan_char() -> None:
+    """创作内核（P3-6）：选角方案的 value_hierarchy → CharacterConstitution。"""
+    from app.services.creation_service import _constitution_from_plan_char
+
+    # 合法：value_hierarchy + core_values 子集 + mission + 情绪触发器分离
+    c = _constitution_from_plan_char(
+        {
+            "name": "陈工",
+            "description": "守桥人",
+            "value_hierarchy": {"公共安全": 1.0, "责任": 0.95, "家庭": 0.75},
+            "core_values": ["公共安全", "责任"],
+            "mission": "守住这座桥",
+            "emotional_triggers": ["提到那座垮掉的桥"],
+        }
+    )
+    assert c is not None
+    assert c.top_value() == "公共安全"
+    assert c.mission == "守住这座桥"
+    assert c.value_hierarchy["家庭"] == 0.75
+
+    # 无 value_hierarchy → None（不建模）
+    assert _constitution_from_plan_char({"name": "路人"}) is None
+
+    # core_values 不在层级内 → 宽容取顶部
+    c2 = _constitution_from_plan_char(
+        {"value_hierarchy": {"责任": 0.9, "家庭": 0.7}, "core_values": ["不存在"]}
+    )
+    assert c2 is not None
+    assert set(c2.core_values) == {"责任"}
+
+
+@pytest.mark.asyncio
+async def test_publish_with_plan_models_constitutions(
+    client, user_token, monkeypatch
+) -> None:
+    """创作内核（P3-6）：publish 带 plan（value_hierarchy）→ story_characters 落 constitution。"""
+    from app.models.story_character import StoryCharacter
+    from app.models.story_project import StoryProject
+    from app.models.user import User
+    from app.providers.base import TextResult
+    from app.services import sessions as _sessions
+    from app.services.group_service import create_group as _create_group
+    from app.services.provider_resolver import ResolvedTextProvider
+
+    async with TestingSessionLocal() as db:
+        u = (await db.execute(select(User).where(User.username == "user1"))).scalar_one()
+        chat = await _sessions.create_chat(
+            db, u.id, title="桥的故事", character_asset_ids=[], group=True, is_room=True
+        )
+        await _create_group(db, owner_id=u.id, chat_id=chat.id, name="桥的故事", description="")
+        await _sessions.append_message(
+            db, chat, {"role": "user", "content": "（第1场）陈工在桥墩复检。"}
+        )
+        await _sessions.append_message(
+            db, chat, {"role": "assistant", "content": "陈工：复检数据出来了。"}
+        )
+        await db.commit()
+        chat_id = chat.id
+
+    class _RecordingProvider:
+        async def generate(self, prompt: str, model: str = "", **kwargs):
+            return TextResult(content="**第一幕**\n桥墩复检……", model=model, provider="fake")
+
+    rec = _RecordingProvider()
+
+    async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
+        return ResolvedTextProvider(rec, "cpa", False, provider_config_id=None, source="fake")
+
+    monkeypatch.setattr("app.services.creation_service.resolve_text_provider", fake_resolver)
+    r = await client.post(
+        "/api/v1/creation/publish",
+        headers=_headers(user_token),
+        json={
+            "chat_id": chat_id,
+            "plan": {
+                "characters": [
+                    {
+                        "name": "陈工",
+                        "description": "守桥人",
+                        "value_hierarchy": {"公共安全": 1.0, "责任": 0.95, "家庭": 0.75},
+                        "core_values": ["公共安全"],
+                        "mission": "守住这座桥",
+                    }
+                ]
+            },
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data.get("constitution_modeled") == 1
+
+    async with TestingSessionLocal() as db:
+        proj = await db.get(StoryProject, data["project_id"])
+        assert proj is not None
+        from sqlalchemy import select as _select
+
+        chars = (
+            await db.execute(
+                _select(StoryCharacter).where(StoryCharacter.project_id == proj.id)
+            )
+        ).scalars().all()
+        assert len(chars) == 1
+        assert chars[0].name == "陈工"
+        constitution = chars[0].get_constitution()
+        assert constitution.get("value_hierarchy", {}).get("公共安全") == 1.0
+
+
+@pytest.mark.asyncio
 async def test_publish_creates_story_project(client, user_token, monkeypatch) -> None:
-    """群演出 → 剧本存入创作工作室（story 项目 + 章节正文）。"""
     from app.models.story_chapter import StoryChapter
     from app.models.story_project import StoryProject
     from app.models.user import User

@@ -101,7 +101,7 @@ async def run_crew(
         updated = await story_forge.update_project(db, user_id, project_id, {"settings": settings})
         return {"stage": "director", "direction": content["text"], "ok": updated is not None}
 
-    # ---- editor：审校报告 ----
+    # ---- editor：审校报告（创作内核：集成 CVI 确定性预检） ----
     if stage == "editor":
         if not chapter_id:
             return {"error": "editor 阶段需要 chapter_id"}
@@ -113,13 +113,28 @@ async def run_crew(
             + f"\n【角色设定】\n{bible}"
             + f"\n【指定章节《{chapter.title}》】\n{chapter.content}"
         )
+        # 创作内核（P3-2）：CVI 确定性预检（人物已建模时），预检问题交 LLM 复核
+        prechecks = await _cvi_precheck_for_chapter(db, user_id, project_id, chapter.content)
+        if prechecks:
+            lines = "\n".join(
+                f"- 【{p['character']}】{p['detail']}（行为：{p['behavior'][:40]}）"
+                for p in prechecks
+            )
+            system_prompt += (
+                "\n【CVI 确定性预检发现（必须逐条复核，确认后纳入审校结论）】\n" + lines
+            )
         content = await _ask(db, system_prompt, model)
         if "error" in content:
             return content
         notes = story_forge._load_json(chapter.notes, {})
         notes["review"] = content["text"]
+        if prechecks:
+            notes["cvi_precheck"] = prechecks
         await story_forge.update_chapter(db, user_id, chapter_id, {"notes": notes})
-        return {"stage": "editor", "review": content["text"], "ok": True}
+        editor_result: dict[str, Any] = {"stage": "editor", "review": content["text"], "ok": True}
+        if prechecks:
+            editor_result["cvi_precheck"] = prechecks
+        return editor_result
 
     # ---- stagehand：角色状态推进 ----
     if stage == "stagehand":
@@ -183,6 +198,39 @@ async def _ask(
     if not text:
         return {"error": "模型未返回内容"}
     return {"text": text, "model": resolved.model}
+
+
+async def _cvi_precheck_for_chapter(
+    db: AsyncSession, user_id: str, project_id: str, content: str
+) -> list[dict[str, Any]]:
+    """CVI 确定性预检（P3-2，创作内核）：人物已建模时对章节行为做价值参与检查。
+
+    返回 [{character, behavior, ok, failure_type, detail, ...}]，仅记录未通过项。
+    未建模/无行为 → 空列表（legacy 行为不变）。
+    """
+    from app.creative.critics.cvi_precheck import assess_behavior_motivation
+
+    project = await story_forge.get_project(db, user_id, project_id)
+    if project is None:
+        return []
+    try:
+        from app.services.story_gate import _extract_behaviors, _load_constitutions
+
+        constitutions = await _load_constitutions(db, project)
+    except Exception:
+        return []
+    if not constitutions:
+        return []
+    out: list[dict[str, Any]] = []
+    for name, constitution in constitutions.items():
+        for behavior in _extract_behaviors(content):
+            pre = assess_behavior_motivation(behavior, constitution)
+            if not pre.ok:
+                item = pre.as_dict()
+                item["character"] = name
+                out.append(item)
+                break  # 每人最多一条（避免刷屏）
+    return out
 
 
 def _parse_states(raw: str) -> dict[str, str]:

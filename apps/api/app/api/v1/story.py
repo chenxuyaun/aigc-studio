@@ -582,6 +582,14 @@ async def generate_chapter_stream(
         chapter.word_count = len(content)
         chapter.model = resolved.model
         chapter.status = "done"
+        # 创作内核（P3-5）：确定性预检 → quality_report（零 LLM，流式场景不跑 LLM Critic）
+        quality_report = None
+        try:
+            from app.services.story_gate import deterministic_quality_report
+
+            quality_report = await deterministic_quality_report(db, project, content, chapter)
+        except Exception:
+            quality_report = None
         await db.commit()
         # AI 腔体检（分级报告：套话/机械句式/连接词/宣传腔/空洞修饰）
         try:
@@ -597,6 +605,7 @@ async def generate_chapter_stream(
                 "word_count": chapter.word_count,
                 "worldbook_hits": len(wb.activated),
                 "ai_voice": issues[:12],
+                "quality_report": quality_report,
             }
         )
         yield "data: [DONE]\n\n"

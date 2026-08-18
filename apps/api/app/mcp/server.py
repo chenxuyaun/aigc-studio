@@ -510,7 +510,12 @@ async def write_chapter(
     title: str = "",
     ctx: Any | None = None,
 ) -> dict[str, Any]:
-    """把正文写入指定章节（创作工具：agent/角色提交自己的章节内容）。"""
+    """把正文写入指定章节（创作工具：agent/角色提交自己的章节内容）。
+
+    创作内核（P3-3，提案化）：写入后跑确定性质量预检（零 LLM）。
+    - 无 Critical → status=done + quality_report
+    - 有 Critical（如 CVI 价值崩塌嫌疑）→ status=review（需人工审查），不直接定稿
+    """
     from app.services import story_forge
 
     async with AsyncSessionLocal() as db:
@@ -527,24 +532,57 @@ async def write_chapter(
             fields["title"] = title
         updated = await story_forge.update_chapter(db, uid, target["id"], fields)
         wc = updated.word_count if updated else 0
-        return {"ok": True, "chapter_id": target["id"], "word_count": wc}
+        # 创作内核：确定性质量预检 → 提案定稿（done/review）
+        qr = None
+        review = False
+        try:
+            project = await story_forge.get_project(db, uid, project_id)
+            from app.services.story_gate import deterministic_quality_report
+
+            qr = await deterministic_quality_report(db, project, content, updated)
+            review = bool(qr and qr.get("final_status") == "HUMAN_REVIEW_REQUIRED")
+            await story_forge.update_chapter(
+                db, uid, target["id"], {"status": "review" if review else "done"}
+            )
+        except Exception:
+            await story_forge.update_chapter(db, uid, target["id"], {"status": "done"})
+        return {
+            "ok": True,
+            "chapter_id": target["id"],
+            "word_count": wc,
+            "review": review,
+            "quality_report": qr,
+        }
 
 
 @mcp.tool()
 async def update_character_state(
     project_id: str, character_id: str, state: str, ctx: Any | None = None
 ) -> dict[str, Any]:
-    """更新故事角色的当前状态（剧务/主编推进角色弧线用）。"""
+    """更新故事角色的当前状态（剧务/主编推进角色弧线用）。
+
+    创作内核（P3-3，schema 校验）：state 支持结构化 JSON（CharacterState：
+    stage ∈ S0-S4、value_weights、active_conflict...），非法结构回退纯文本。
+    """
     from app.services import story_forge
 
     async with AsyncSessionLocal() as db:
         uid = await _request_user_id(ctx)
+        state_text = str(state)
+        try:
+            data = json.loads(state) if isinstance(state, str) else state
+            from app.creative.schemas import CharacterState as _CS
+
+            cs = _CS.model_validate(data)  # stage/value_weights 校验
+            state_text = cs.model_dump_json()
+        except Exception:
+            pass  # 非结构化文本：回退 legacy 行为
         updated = await story_forge.update_story_character(
-            db, uid, character_id, {"current_state": state}
+            db, uid, character_id, {"current_state": state_text}
         )
         if updated is None:
             return {"error": f"角色实例不存在: {character_id}"}
-        return {"ok": True, "character_id": character_id, "current_state": state}
+        return {"ok": True, "character_id": character_id, "current_state": state_text}
 
 
 @mcp.tool()

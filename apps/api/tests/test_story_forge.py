@@ -16,7 +16,7 @@ from app.core.database import Base
 from app.models.generation_task import GenerationTask
 from app.models.serial_schedule import SerialSchedule
 from app.services import story_forge
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from tests.conftest import TestingSessionLocal, _test_engine
 
@@ -411,6 +411,101 @@ async def test_serial_tick_skips_unfinished(
     await db.commit()
     out = await story_tasks._run_serial_tick()
     assert out["created"] == 0 and out["skipped"] == 1
+
+
+@pytest.mark.anyio
+async def test_serial_tick_review_pauses_after_3(
+    db_session: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """创作内核：卡在 review（L0 未过）连续 3 次 tick → 自动暂停（08 §7）。"""
+    from datetime import UTC, datetime, timedelta
+
+    from app.tasks import story_tasks
+
+    _install_fakes(monkeypatch)
+    monkeypatch.setattr(story_tasks, "AsyncSessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(story_tasks, "_dispatch_story", lambda tid: None)
+    db = db_session  # type: ignore[assignment]
+    p = await story_forge.create_project(db, "u1", title="连载书")
+    ch = await story_forge.create_chapter(db, "u1", p.id, title="待审章")
+    await story_forge.update_chapter(db, "u1", ch.id, {"status": "review"})
+    s = SerialSchedule(
+        project_id=p.id,
+        user_id="u1",
+        interval_minutes=10,
+        next_run_at=datetime.now(UTC) - timedelta(minutes=1),
+        status="active",
+        mode="narrative",
+    )
+    db.add(s)
+    await db.commit()
+
+    # 前 2 次 tick：跳过、fail_count 递增，仍 active
+    # （每次先把 next_run_at 拨回过去——tick 会把它推后到未来，模拟时间推进）
+    for _ in range(2):
+        await db.execute(
+            update(SerialSchedule)
+            .where(SerialSchedule.id == s.id)
+            .values(next_run_at=datetime.now(UTC) - timedelta(minutes=1))
+        )
+        await db.commit()
+        out = await story_tasks._run_serial_tick()
+        assert out["created"] == 0 and out["skipped"] == 1
+        await db.refresh(s)
+        assert s.status == "active"
+    # 第 3 次：自动暂停
+    await db.execute(
+        update(SerialSchedule)
+        .where(SerialSchedule.id == s.id)
+        .values(next_run_at=datetime.now(UTC) - timedelta(minutes=1))
+    )
+    await db.commit()
+    await story_tasks._run_serial_tick()
+    await db.refresh(s)
+    assert s.status == "paused"
+    assert "L0" in (s.error_message or "")
+
+
+@pytest.mark.anyio
+async def test_serial_tick_draft_mode_when_enabled(
+    db_session: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """创作内核灰度：CREATIVE_ENGINE_ENABLED=1 时连载任务 params 携带 draft_mode=1。"""
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.config import settings as cfg_settings
+    from app.tasks import story_tasks
+
+    _install_fakes(monkeypatch)
+    monkeypatch.setattr(story_tasks, "AsyncSessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(story_tasks, "_dispatch_story", lambda tid: None)
+    monkeypatch.setattr(cfg_settings, "CREATIVE_ENGINE_ENABLED", 1)
+    db = db_session  # type: ignore[assignment]
+    p = await story_forge.create_project(db, "u1", title="连载书")
+    s = SerialSchedule(
+        project_id=p.id,
+        user_id="u1",
+        interval_minutes=10,
+        next_run_at=datetime.now(UTC) - timedelta(minutes=1),
+        status="active",
+        mode="narrative",
+    )
+    db.add(s)
+    await db.commit()
+    await story_tasks._run_serial_tick()
+    tasks = (
+        await db.execute(
+            select(GenerationTask).where(GenerationTask.task_type == "chapter")
+        )
+    ).scalars().all()
+    # 按 project 过滤（created_at 秒级精度在全量跑时可能相同，避免取到其他测试的任务）
+    row = next(
+        (t for t in tasks if (json.loads(t.params or "{}") or {}).get("project_id") == p.id),
+        None,
+    )
+    assert row is not None
+    params = json.loads(row.params or "{}")
+    assert params.get("draft_mode") == 1
 
 
 # ==== 技能工具循环 ====

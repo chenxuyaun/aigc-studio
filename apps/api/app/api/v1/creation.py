@@ -40,6 +40,7 @@ class CreationSetupRequest(BaseModel):
 class CreationPublishRequest(BaseModel):
     chat_id: str = Field(min_length=8, max_length=64)
     title: str | None = Field(default=None, max_length=200)  # 可选：作品名（默认取群名）
+    plan: dict[str, Any] | None = None  # 可选：角色方案（含 value_hierarchy → 建模）
 
 
 @router.post("/plan")
@@ -84,7 +85,7 @@ async def creation_publish(
 ) -> dict[str, Any]:
     """群演存档：群演出 → 完整剧本 → 存入创作工作室（story 项目+首章）。"""
     result = await creation_service.publish_project(
-        db, user_id=user.id, chat_id=req.chat_id, title=req.title
+        db, user_id=user.id, chat_id=req.chat_id, title=req.title, plan=req.plan
     )
     await db.commit()
     return result

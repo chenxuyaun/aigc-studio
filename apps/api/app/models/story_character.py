@@ -38,7 +38,24 @@ class StoryCharacter(Base):
     skill_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     # JSON 字符串：备注
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    # JSON 字符串：Character Constitution（创作智能内核 P0，见 app/creative/schemas.py）
+    # 人物决策模型：identity/worldview/beliefs/core_values/value_hierarchy/mission/...
+    # 空 "{}" = 尚未建模（legacy 行为）；非空后由 CVI 检查器约束重大行为
+    constitution: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         TZDateTime(), server_default=func.now(), onupdate=func.now()
     )
+
+    def get_constitution(self) -> dict:
+        """宽容解析 constitution JSON；失败返回 {}（不阻断 legacy 路径）。"""
+        import json
+
+        raw = self.constitution or ""
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+        except (ValueError, TypeError):
+            return {}
+        return data if isinstance(data, dict) else {}

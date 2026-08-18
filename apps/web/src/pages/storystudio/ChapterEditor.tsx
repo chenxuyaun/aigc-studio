@@ -16,6 +16,29 @@ interface ChapterVersion {
   created_at?: string | null;
 }
 
+/** Creative Quality Report（创作智能内核，docs/creative-engine/06）。 */
+interface QualityIssueItem {
+  level: string;
+  text: string;
+}
+interface QualityReport {
+  character_value_integrity: number;
+  character_agency: number;
+  causal_integrity: number;
+  world_consistency: number;
+  semantic_diversity: number;
+  narrative_diversity: number;
+  emotional_authenticity: number;
+  theme_emergence: number;
+  cliche_risk: number;
+  style_risk: number;
+  critical_issues: QualityIssueItem[];
+  major_issues: QualityIssueItem[];
+  minor_issues: QualityIssueItem[];
+  repair_history: { round: number; issue: string; fixed: boolean }[];
+  final_status: string;
+}
+
 interface Props {
   projectId: string;
   chapter: StoryChapter | null;
@@ -42,6 +65,8 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
   const [reviseText, setReviseText] = useState("");
   // AI 腔体检报告：生成完成后的分级质检（套话/机械句式/连接词/宣传腔/空洞修饰）
   const [aiVoice, setAiVoice] = useState<{ kind: string; level: string; sample: string; suggestion: string }[]>([]);
+  // 创作智能内核：Creative Quality Report（L0 质量门结果，生成后展示）
+  const [qualityReport, setQualityReport] = useState<QualityReport | null>(null);
   const [tab, setTab] = useState<"write" | "preview">("preview");
   const [toolLoop, setToolLoop] = useState(false);
   const savedRef = useRef(false);
@@ -52,6 +77,7 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
     setOutline(chapter?.outline ?? "");
     setContent(chapter?.content ?? "");
     setStreaming("");
+    setQualityReport(null); // 切换章节重置质量报告
     // 仅在章节切换时重置表单（依赖 chapter.id 即可）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapter?.id]);
@@ -100,6 +126,7 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
             setStreaming("");
             onChanged({ ...chapter, content: String(ev.content ?? ""), status: "done" });
             if (Array.isArray(ev.ai_voice)) setAiVoice(ev.ai_voice as typeof aiVoice);
+            if (ev.quality_report) setQualityReport(ev.quality_report as QualityReport);
             toast.success(`生成完成（${ev.word_count ?? 0} 字）`);
           } else if (ev.type === "error") {
             toast.error(String(ev.error ?? "生成失败"));
@@ -321,6 +348,83 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 创作智能内核：Creative Quality Report（L0 质量门，生成后展示） */}
+      {qualityReport && (
+        <div
+          className={`rounded-xl border p-3 ${
+            qualityReport.final_status === "HUMAN_REVIEW_REQUIRED"
+              ? "border-destructive/40 bg-destructive/5"
+              : qualityReport.critical_issues.length > 0
+                ? "border-red-500/40 bg-red-500/5"
+                : "border-emerald-500/30 bg-emerald-500/5"
+          }`}
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs font-semibold">🧠 创作质量报告</span>
+            {qualityReport.final_status === "HUMAN_REVIEW_REQUIRED" ? (
+              <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                L0 未通过 · 需人工审查
+              </span>
+            ) : qualityReport.critical_issues.length > 0 ? (
+              <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+                有 Critical 问题
+              </span>
+            ) : (
+              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+                L0 通过
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {([
+              ["CVI 人物价值", qualityReport.character_value_integrity],
+              ["CAI 人物自主", qualityReport.character_agency],
+              ["CCI 因果连贯", qualityReport.causal_integrity],
+              ["WCI 世界一致", qualityReport.world_consistency],
+            ] as const).map(([label, value]) => {
+              const ok = value >= (label === "WCI 世界一致" ? 0.9 : 0.85);
+              return (
+                <div key={label} className="rounded-md bg-surface px-2 py-1.5">
+                  <p className="text-[10px] text-muted-foreground">{label}</p>
+                  <p className={`text-sm font-semibold ${ok ? "text-emerald-600" : "text-destructive"}`}>
+                    {value > 0 ? value.toFixed(2) : "—"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          {qualityReport.cliche_risk > 0 && (
+            <p className="mt-2 text-[11px] text-amber-600">
+              情绪捷径风险：{(qualityReport.cliche_risk * 100).toFixed(0)}%
+            </p>
+          )}
+          {(qualityReport.critical_issues.length > 0 || qualityReport.major_issues.length > 0) && (
+            <div className="mt-2 flex max-h-28 flex-col gap-1 overflow-y-auto">
+              {[...qualityReport.critical_issues, ...qualityReport.major_issues].map((i, idx) => (
+                <div key={idx} className="flex items-start gap-2 rounded-md bg-surface px-2.5 py-1.5 text-[11px]">
+                  <span
+                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
+                      i.level === "critical"
+                        ? "bg-destructive/10 text-destructive"
+                        : "bg-amber-500/15 text-amber-600"
+                    }`}
+                  >
+                    {i.level === "critical" ? "Critical" : "Major"}
+                  </span>
+                  <span className="min-w-0 flex-1 text-muted-foreground">{i.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {qualityReport.repair_history.length > 0 && (
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              修复 {qualityReport.repair_history.length} 轮：
+              {qualityReport.repair_history.map((r) => `${r.round}轮(${r.fixed ? "✓" : "✗"})`).join(" ")}
+            </p>
+          )}
         </div>
       )}
 

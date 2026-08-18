@@ -1,0 +1,531 @@
+# Golden Cases：创作质量回归基准（docs/creative-engine/09）
+#
+# 每次修改 Prompt / Agent / 模型路由 / 质量门后自动回归。
+# 结构：id / title / category / kind / input / expect / note
+#   kind: generator（给生成器：期望产出质量）| detector（给检查器：期望检测命中）
+#   expect: PASS / FAIL / WARN + failure_type（detector 类）
+# 判定：确定性检查器纯函数断言；LLM 检查器用 Golden Case 期望区间（runner 实现）。
+
+# ============ 一、人物降维（5） ============
+
+- id: GC-01
+  title: 守桥人降维成亡妻丈夫（桥的名字·典型错误）
+  category: 人物降维
+  kind: detector
+  input: "通车那天他没去剪彩，因为想起亡妻。"
+  expect:
+    verdict: FAIL
+    failure_type: CHARACTER_VALUE_HIERARCHY_COLLAPSE
+  note: 行为仅由情绪触发器驱动，职业价值（责任/工程伦理）完全缺席。等价 REGRESSION_CASE_001 scenario_a。
+
+- id: GC-02
+  title: 法医重大决定只用"想起女儿"解释
+  category: 人物降维
+  kind: detector
+  input: "他决定隐瞒尸检报告的异常，因为想起女儿的话。"
+  expect:
+    verdict: FAIL
+    failure_type: MOTIVATION_DOWNGRADE
+  note: 专业身份（法医）与职业伦理未参与重大决定。
+
+- id: GC-03
+  title: 工程师一切行为动机 = 初恋
+  category: 人物降维
+  kind: detector
+  input: "他推翻了加固方案，因为那是初恋提过的设计。"
+  expect:
+    verdict: FAIL
+    failure_type: MOTIVATION_DOWNGRADE
+  note: 重大工程决策由低层情感驱动，价值层级缺席。
+
+- id: GC-04
+  title: 无职业/价值参与的可替换主角
+  category: 人物降维
+  kind: detector
+  input: "他决定离开，因为剧情需要他去远方。"
+  expect:
+    verdict: FAIL
+    failure_type: GENERIC_CHARACTER
+  note: 换成任何职业/身份都成立的木偶行为。
+
+- id: GC-05
+  title: 替换关系对象故事完全不变
+  category: 人物降维
+  kind: detector
+  input: "妻子、父亲、战友、老师——换成谁都一样，故事没有任何变化。"
+  expect:
+    verdict: FAIL
+    failure_type: GENERIC_CHARACTER
+  note: 反事实 Test E 失败：关系未进入人物模型。
+
+# ============ 二、情绪套路（6） ============
+
+- id: GC-06
+  title: 「妻子死了→他一生等待」无价值参与
+  category: 情绪套路
+  kind: detector
+  input: "妻子死后，他等了十年，再也没有娶妻。"
+  expect:
+    verdict: WARN
+    failure_type: EMOTIONAL_SHORTCUT_WARNING
+  note: 等待作为深刻替代品，人物价值/使命缺席。
+
+- id: GC-07
+  title: 悲情四件套（雨+旧照片+遗物+十年）
+  category: 情绪套路
+  kind: detector
+  input: "雨下了十年，他守着旧照片和妻子的遗物，在故乡的老屋里等待。"
+  expect:
+    verdict: WARN
+    failure_type: EMOTIONAL_SHORTCUT_WARNING
+  note: 套路组合拳（cluster ≥3），人物维度词极少。
+
+- id: GC-08
+  title: 套路元素只渲染不参与叙事
+  category: 情绪套路
+  kind: detector
+  input: "他走过桥，看见月下的背影，又想起那个雨夜。"
+  expect:
+    verdict: WARN
+    failure_type: EMOTIONAL_SHORTCUT_WARNING
+  note: 渲染 > 参与：元素出现但未与人物价值/历史绑定。
+
+- id: GC-09
+  title: 「背影消失在雨里」当深刻收尾
+  category: 情绪套路
+  kind: detector
+  input: "她转身走进雨里，背影渐渐消失。这就是他的一生。"
+  expect:
+    verdict: WARN
+    failure_type: EMOTIONAL_SHORTCUT_WARNING
+  note: 意象收尾替代人物弧线交代。
+
+- id: GC-10
+  title: 套路元素与人物历史真正相关
+  category: 情绪套路
+  kind: detector
+  input: "雨落在桥墩上，他想起自己守桥三十年的第一个雨季，在责任书上签了字。"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 不误杀：元素与价值/职业绑定，depth 信号在场。
+
+- id: GC-11
+  title: 随机死亡（无因果铺垫）
+  category: 情绪套路
+  kind: detector
+  input: "他走出工地，被一辆失控的卡车撞倒，故事结束。"
+  expect:
+    verdict: FAIL
+    failure_type: FORCED_DEATH
+  note: 死亡为悲剧而悲剧，无价值冲突/环境必然性。
+
+# ============ 三、主题强行植入（4） ============
+
+- id: GC-12
+  title: 「为了表现奉献，人物牺牲」 无价值链
+  category: 主题强行植入
+  kind: detector
+  input: "为了表现他的奉献精神，他毅然放弃了生命。"
+  expect:
+    verdict: FAIL
+    failure_type: THEME_FORCED_ACTION
+  note: 主题驱动行动，无人物价值结构支撑。
+
+- id: GC-13
+  title: 「为了表现家国，放弃爱情」无决策过程
+  category: 主题强行植入
+  kind: detector
+  input: "为了表现家国情怀，他放弃了心爱的姑娘。"
+  expect:
+    verdict: FAIL
+    failure_type: THEME_FORCED_ACTION
+  note: 无决策过程/价值冲突呈现。
+
+- id: GC-14
+  title: 叙述者直接点题说教
+  category: 主题强行植入
+  kind: detector
+  input: "这就是责任的意义。他明白了一切。"
+  expect:
+    verdict: WARN
+    failure_type: THEME_EXPOSITION
+  note: 主题由叙述者宣布，而非读者从选择推导。
+
+- id: GC-15
+  title: 主题从人物冲突自然涌现
+  category: 主题强行植入
+  kind: generator
+  input: "守桥人的责任 vs 家庭的呼唤"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 主题通过人物选择产生（正例）。
+
+# ============ 四、职业失真（4） ============
+
+- id: GC-16
+  title: 医生违反医疗流程且无解释
+  category: 职业失真
+  kind: detector
+  input: "他看了病人一眼，没做检查就直接下了手术决定。"
+  expect:
+    verdict: FAIL
+    failure_type: TIMELINE_CONFLICT
+  note: 职业流程失真（WCI 类）。failure_type 由 LLM critic 判定，此处为确定性代理。
+
+- id: GC-17
+  title: 工程师发现隐患不上报
+  category: 职业失真
+  kind: detector
+  input: "他发现 3 号墩有严重裂缝，但没有上报，因为怕麻烦。"
+  expect:
+    verdict: FAIL
+    failure_type: CHARACTER_VALUE_HIERARCHY_COLLAPSE
+  note: 违反工程伦理（若 constitution 中责任/安全为最高价值）。
+
+- id: GC-18
+  title: 律师程序性场合行为失范
+  category: 职业失真
+  kind: detector
+  input: "在法庭上，他直接抢过证人证词撕掉了。"
+  expect:
+    verdict: FAIL
+    failure_type: WCI
+  note: 职业行为与制度冲突且无代价呈现。
+
+- id: GC-19
+  title: 职业细节真实且参与叙事
+  category: 职业失真
+  kind: generator
+  input: "梅雨导致铁路限速，排水工程师连夜值守"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 主题×人物×职业×世界的独特交叉（正例）。
+
+# ============ 五、价值观崩塌（4） ============
+
+- id: GC-20
+  title: 最高价值人物无过程反转
+  category: 价值观崩塌
+  kind: detector
+  input: "他守了一辈子桥，一夜之间决定炸掉它。"
+  expect:
+    verdict: FAIL
+    failure_type: VALUE_FLIP_WITHOUT_PROCESS
+  note: 价值翻转无多场景铺垫（状态机 S0→S4 跳跃）。
+
+- id: GC-21
+  title: 行为违反最高价值且无冲突剧情
+  category: 价值观崩塌
+  kind: detector
+  input: "他知道桥有隐患，却让车队通过。"
+  expect:
+    verdict: FAIL
+    failure_type: CHARACTER_VALUE_HIERARCHY_COLLAPSE
+  note: 违反最高价值（公共安全）且无冲突代价呈现。
+
+- id: GC-22
+  title: 假两难（其实没冲突硬拗纠结）
+  category: 价值观崩塌
+  kind: detector
+  input: "他纠结了很久：选 A 还是选 A（其实 A 明显正确）。"
+  expect:
+    verdict: WARN
+    failure_type: FALSE_DILEMMA
+  note: 两难必须来自真实价值冲突（权重差 <0.2）。
+
+- id: GC-23
+  title: 价值权重渐变 + 铺垫充分
+  category: 价值观崩塌
+  kind: generator
+  input: "从守桥到放下的渐变弧线"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 正例：多场景铺垫的价值变化。
+
+# ============ 六、强行反转/牺牲/死亡（5） ============
+
+- id: GC-24
+  title: 反转无伏笔（"其实他是卧底"）
+  category: 强行反转
+  kind: detector
+  input: "最后一页揭示：其实他一直是卧底。"
+  expect:
+    verdict: FAIL
+    failure_type: FORCED_TWIST
+  note: 反转无因果铺垫。
+
+- id: GC-25
+  title: 反转由人物选择/信息揭示驱动
+  category: 强行反转
+  kind: generator
+  input: "伏笔埋设 + 信息逐步揭示的卧底反转"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 正例。
+
+- id: GC-26
+  title: 强行牺牲（无价值理由）
+  category: 强行牺牲
+  kind: detector
+  input: "他突然扑向炸弹，没有任何理由，只是剧情需要。"
+  expect:
+    verdict: FAIL
+    failure_type: PLOT_FORCED_ACTION
+  note: 人物被剧情推动行动。
+
+- id: GC-27
+  title: 死亡为悲剧而悲剧
+  category: 强行死亡
+  kind: detector
+  input: "一切圆满时，她忽然倒地死去。"
+  expect:
+    verdict: FAIL
+    failure_type: FORCED_DEATH
+  note: 随机悲剧。
+
+- id: GC-28
+  title: 巧合驱动重大转折
+  category: 强行反转
+  kind: detector
+  input: "他正要放弃，恰好十年未见的老友路过，恰好知道一切。"
+  expect:
+    verdict: FAIL
+    failure_type: COINCIDENCE_DEPENDENCY
+  note: 双重巧合。
+
+# ============ 七、金句驱动/象征过载（4） ============
+
+- id: GC-29
+  title: 金句与人物价值矛盾
+  category: 金句驱动
+  kind: detector
+  input: "他一生守护安全，最后却说'安全是最不重要的'。"
+  expect:
+    verdict: FAIL
+    failure_type: CHARACTER_VALUE_HIERARCHY_COLLAPSE
+  note: 为了金句改变人物价值。
+
+- id: GC-30
+  title: 同一意象反复出现且无意义演进
+  category: 象征过载
+  kind: detector
+  input: "月亮出现了五次，每次只是'月亮很亮'，没有任何意义推进。"
+  expect:
+    verdict: WARN
+    failure_type: SYMBOL_OVERLOAD
+  note: 象征过载。
+
+- id: GC-31
+  title: 意象与人物内心真实呼应且克制
+  category: 象征过载
+  kind: generator
+  input: "桥的意象贯穿守桥人一生，随弧线演进"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 正例。
+
+- id: GC-32
+  title: 堆砌形容词（深刻/感人/克制/有力量）
+  category: 金句驱动
+  kind: detector
+  input: "这是深刻而感人的故事，克制而有力量，真实得令人动容。"
+  expect:
+    verdict: WARN
+    failure_type: ADJECTIVE_STACKING
+  note: 形容词堆砌替代具体呈现。
+
+# ============ 八、第一联想/套路组合（4） ============
+
+- id: GC-33
+  title: 「烟雨朦胧」→ 江南油纸伞第一联想
+  category: 第一联想
+  kind: detector
+  input: "烟雨朦胧"
+  expect:
+    verdict: WARN
+    failure_type: COMMON_ASSOCIATION
+  note: 语义方向同质簇（江南/油纸伞/青石板/雨巷）。failure_type 映射到 WARN。
+
+- id: GC-34
+  title: 主题×职业×世界的独特交叉
+  category: 第一联想
+  kind: generator
+  input: "雨季排水工程师×铁路限速"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 正例（Semantic Diversity Score ≥ 阈值）。
+
+- id: GC-35
+  title: 套路组合拳（雨+故乡+老屋+等待）
+  category: 套路组合
+  kind: detector
+  input: "雨落在故乡的老屋，他等了一生。"
+  expect:
+    verdict: FAIL
+    failure_type: EMOTIONAL_SHORTCUT_WARNING
+  note: cluster ≥3。
+
+- id: GC-36
+  title: 语义方向多样性达标（≥3 方向）
+  category: 第一联想
+  kind: detector
+  input: "城市排水 / 工程检测 / 铁路调度"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 跨域方向（正例）。
+
+# ============ 九、角色/剧情工具化（4） ============
+
+- id: GC-37
+  title: 角色只为推动剧情存在
+  category: 角色工具化
+  kind: detector
+  input: "一个无名路人恰好知道真相，告诉主角后就消失了。"
+  expect:
+    verdict: FAIL
+    failure_type: SWAPPABLE_CHARACTER
+  note: 工具人无价值参与。
+
+- id: GC-38
+  title: 工具人角色也有动机链
+  category: 角色工具化
+  kind: generator
+  input: "传递真相的路人有自己的利益与代价"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 正例。
+
+- id: GC-39
+  title: 剧情为角色弧线服务
+  category: 剧情工具化
+  kind: generator
+  input: "事件由角色选择推动，而非剧情需要"
+  expect:
+    verdict: PASS
+    failure_type: null
+  note: 正例（CAI 高）。
+
+- id: GC-40
+  title: 作者解释腔（"他之所以…是因为…"）
+  category: 剧情工具化
+  kind: detector
+  input: "他之所以不去剪彩，是因为他内心深处害怕面对成功。"
+  expect:
+    verdict: WARN
+    failure_type: AUTHORIAL_FORCED_ACTION
+  note: 叙述者替行为解释。
+
+# ============ 十、因果/时间线/记忆/世界规则（6） ============
+
+- id: GC-41
+  title: A→D 因果跳跃（无中间环节）
+  category: 因果断裂
+  kind: detector
+  input: "他打了个电话，第二天公司就倒闭了。"
+  expect:
+    verdict: FAIL
+    failure_type: CAUSAL_LEAP
+  note: 缺 B、C 及必然性。
+
+- id: GC-42
+  title: 时间线矛盾
+  category: 时间线
+  kind: detector
+  input: "第一章说昨天发生的事，第三章说上周发生的同一件事。"
+  expect:
+    verdict: FAIL
+    failure_type: TIMELINE_CONFLICT
+  note: 时间引用自洽性。
+
+- id: GC-43
+  title: 人物记忆错误
+  category: 人物记忆
+  kind: detector
+  input: "他忘记了自己亲笔签过的验收报告。"
+  expect:
+    verdict: FAIL
+    failure_type: MEMORY_ERROR
+  note: 事实记忆一致性（StoryState.facts 对照）。
+
+- id: GC-44
+  title: 世界规则破坏
+  category: 世界规则
+  kind: detector
+  input: "设定里魔法只能白天使用，他却半夜施法成功。"
+  expect:
+    verdict: FAIL
+    failure_type: WCI
+  note: IMMUTABLE 世界规则被破坏。
+
+- id: GC-45
+  title: 伏笔未回收（open loop 超 N 章）
+  category: 伏笔
+  kind: detector
+  input: "第 2 章埋的'神秘来信'，到第 30 章也没再提。"
+  expect:
+    verdict: WARN
+    failure_type: LOOP_LEAK
+  note: open_loops 超阈值未回收。
+
+- id: GC-46
+  title: 知识泄漏（不该知道的人知道）
+  category: 世界规则
+  kind: detector
+  input: "第 3 章刚发生的秘密，第 1 章就有人知道。"
+  expect:
+    verdict: FAIL
+    failure_type: KNOWLEDGE_LEAK
+  note: knowledge_state 与 timeline 对齐。
+
+# ============ 十一、风格压过故事/其他（4） ============
+
+- id: GC-47
+  title: 文笔华丽但因果/人物崩坏
+  category: 风格压过故事
+  kind: detector
+  input: "雨丝如泣如诉地落下，他望着远方，忽然，一切都有了答案。（但前面没有任何铺垫）"
+  expect:
+    verdict: FAIL
+    failure_type: CAUSAL_LEAP
+  note: L0 硬门：风格不救场（禁止加权平均掩盖）。
+
+- id: GC-48
+  title: 润色改变了事实（Style 越权）
+  category: 风格压过故事
+  kind: detector
+  input: "原文'3 号墩复检'，润色后变成'3 号墩已拆除'。"
+  expect:
+    verdict: FAIL
+    failure_type: STYLE_OVERRIDE
+  note: style_firewall：删除/改变事实指纹。
+
+- id: GC-49
+  title: 对话所有人一个腔调
+  category: 其他
+  kind: detector
+  input: "医生、工人、法官都用同样的语气说'这样是不对的'。"
+  expect:
+    verdict: WARN
+    failure_type: DIALOGUE_HOMOGENEOUS
+  note: 对白辨识度（按 Constitution 差异化）。
+
+- id: GC-50
+  title: 无过程顿悟（突然醒悟）
+  category: 其他
+  kind: detector
+  input: "他想了一夜，突然悟了，整个人生都变了。"
+  expect:
+    verdict: FAIL
+    failure_type: UNMOTIVATED_EPIPHANY
+  note: 状态机 S0→S4 跳跃（无 S1/S2 过程）。
+
+

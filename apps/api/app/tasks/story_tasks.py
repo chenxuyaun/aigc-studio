@@ -85,6 +85,7 @@ async def _run_chapter_task(task_id: str) -> dict[str, Any]:
                     model=task.model,
                     instruction=str(params.get("instruction") or ""),
                     tool_loop=bool(params.get("tool_loop")),
+                    draft_mode=bool(params.get("draft_mode")),
                 )
             if "error" in result:
                 task.status = "failed"
@@ -131,6 +132,7 @@ async def _run_serial_tick() -> dict[str, Any]:
         for s in schedules:
             try:
                 # 上一章未完成则跳过本 tick（避免并发重复生成）
+                # review = 创作内核 L0 门未过（HUMAN_REVIEW_REQUIRED）→ 同样跳过等待人工
                 rows = (
                     (
                         await db.execute(
@@ -144,24 +146,36 @@ async def _run_serial_tick() -> dict[str, Any]:
                 )
                 if rows and rows[0].status != "done":
                     skipped += 1
+                    # 创作内核：卡在 review（L0 未过，等人工）连续 3 次 tick → 自动暂停
+                    if rows[0].status == "review":
+                        s.fail_count = int(s.fail_count or 0) + 1
+                        if s.fail_count >= 3:
+                            s.status = "paused"
+                            s.error_message = (
+                                f"连续 {s.fail_count} 次 tick 卡在人工审查（L0 未通过），"
+                                "已自动暂停连载"
+                            )
                     s.next_run_at = now + timedelta(minutes=s.interval_minutes)
                     await db.commit()
                     continue
                 for _ in range(max(1, s.batch_size)):
                     chapter = await story_forge.create_chapter(db, s.user_id, s.project_id)
+                    params: dict[str, object] = {
+                        "project_id": s.project_id,
+                        "chapter_id": chapter.id,
+                        "mode": s.mode,
+                    }
+                    # 创作内核灰度：CREATIVE_ENGINE_ENABLED=1 时连载走 L0 质量门
+                    from app.core.config import settings as _settings
+
+                    if int(getattr(_settings, "CREATIVE_ENGINE_ENABLED", 0) or 0) == 1:
+                        params["draft_mode"] = 1
                     task = GenerationTask(
                         id=str(uuid.uuid4()),
                         task_type="chapter",
                         status="queued",
                         model="",
-                        params=json.dumps(
-                            {
-                                "project_id": s.project_id,
-                                "chapter_id": chapter.id,
-                                "mode": s.mode,
-                            },
-                            ensure_ascii=False,
-                        ),
+                        params=json.dumps(params, ensure_ascii=False),
                         user_id=s.user_id,
                     )
                     db.add(task)
