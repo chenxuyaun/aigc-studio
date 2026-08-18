@@ -409,7 +409,16 @@ export function MusicRoundtablePanel({ onSendToDiscuss, incomingStyle, incomingT
               </div>
 
               {/* 定稿：讨论全部结束后出炉 */}
-              {rtFinal && (
+              {rtFinal && rtFinal.error ? (
+                <div className="mt-2 flex flex-col gap-2 rounded-xl border border-red-500/40 bg-red-500/5 p-4">
+                  <p className="font-bold text-red-500">🎬 定稿失败</p>
+                  <p className="text-sm text-muted-foreground">
+                    {String(rtFinal.error).slice(0, 200)}
+                    {"\n"}请点「开圆桌会议」重试一次；若反复失败，可能是上游模型暂时抖动。
+                  </p>
+                </div>
+              ) : (
+              rtFinal && (
                 <div className="mt-2 flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-bold">
@@ -574,6 +583,7 @@ export function MusicRoundtablePanel({ onSendToDiscuss, incomingStyle, incomingT
                     </Button>
                   </div>
                 </div>
+              )
               )}
             </>
           )}

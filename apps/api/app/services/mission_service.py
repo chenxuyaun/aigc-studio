@@ -402,14 +402,26 @@ async def _agent_role_block(
 async def _execute_music(
     db: AsyncSession, user_id: str, prompt: str, theme_goal: str = "", agent_name: str = ""
 ) -> dict[str, Any]:
-    from app.api.v1.generations.music import MusicComposeRequest, _auto_save_work, compose_song
+    from app.api.v1.generations.music import (
+        MusicComposeRequest,
+        _auto_save_work,
+        _detect_style,
+        compose_song,
+    )
 
     # 角色编排：指派了 Agent 则以其身份视角创作（引擎完整链路保留）
     role_block = await _agent_role_block(db, user_id, agent_name, prompt)
     theme_prompt = f"{role_block}{prompt}" if role_block else prompt
     theme_prompt = theme_prompt[:500]  # MusicComposeRequest.theme 上限 500
+    # 风格检测：主题里写了"民谣/古风/电子"等 → 注入风格专属特征（避免所有歌一个调调）
+    style = _detect_style(prompt)
     req = MusicComposeRequest(
-        theme=theme_prompt, style="", mood="", language="zh", verse_count=2, model=""
+        theme=theme_prompt,
+        style=style,
+        mood="",
+        language="zh",
+        verse_count=2,
+        model="",
     )
     data = await compose_song(req, db, cast(Any, user_id))
     if data.get("error"):
@@ -424,7 +436,7 @@ async def _execute_music(
             db,
             user_id=user_id,
             theme=theme,
-            style=str(data.get("style") or ""),
+            style=style,
             final=data,
             rounds=[],
             source="mission",
@@ -432,7 +444,9 @@ async def _execute_music(
         _spawn_work_backfill(user_id, title, theme, data)
     except Exception:
         pass  # 入库失败不影响 Mission 结果
-    return {"summary": f"《{title}》\n{lyrics}", "ok": True}
+    n_checks = len(data.get("checks") or [])
+    suffix = f"\n（自检 {n_checks} 项警告，已自动修正一轮）" if n_checks else ""
+    return {"summary": f"《{title}》\n{lyrics}{suffix}", "ok": True}
 
 
 # 后台回填任务引用（防 GC；done_callback 丢弃引用，满足 RUF006）
@@ -527,21 +541,24 @@ async def _execute_studio(db: AsyncSession, user_id: str, prompt: str) -> dict[s
 async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> dict[str, Any]:
     """创作圆桌·真讨论版：AI 选角 → 逐轮真实生成（每轮携带前序发言）→ 主理人定稿。
 
-    非流式实现（Mission 同步返回）：内容与 SSE 版一致，只是不推流。
+    非流式实现（Mission 同步返回）：内容与 SSE 版一致，且共用同一套质量闭环
+    （fix_list 结构化采纳 + 自检 + 严重问题自动重写一轮），只是不推流。
     """
 
     from app.api.v1.generations.music import (
         _CAST_PROMPT,
-        _FINAL_PROMPT,
+        _detect_style,
+        _produce_final,
         _speaker_prompt,
     )
     from app.services.provider_resolver import resolve_text_provider
 
     try:
+        style = _detect_style(prompt)  # 主题里写"民谣/古风"等 → 注入风格专属特征
         resolved = await resolve_text_provider(db, "")
         # 第 0 轮：AI 按主题定制会议阵容
         cast_result = await resolved.provider.generate(  # type: ignore[attr-defined]
-            _CAST_PROMPT.format(theme=prompt[:200], style="（自由）"),
+            _CAST_PROMPT.format(theme=prompt[:500], style=style or "（自由）"),
             resolved.model,
             temperature=0.9,
         )
@@ -565,7 +582,7 @@ async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> di
                 opp = rounds[-1]
                 opponent_block = f"{opp['speaker']}：{opp['content']}"
             result = await resolved.provider.generate(  # type: ignore[attr-defined]
-                _speaker_prompt(prompt[:200], "（自由）", task, opponent=opponent_block),
+                _speaker_prompt(prompt[:500], style, task, opponent=opponent_block),
                 resolved.model,
                 temperature=0.95,
             )
@@ -575,29 +592,22 @@ async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> di
                     "content": result_text(result).strip()[:300],
                 }
             )
-        # 定稿：主理人综合讨论落地
+        # 定稿：与 SSE 版同一套把关（裁决去偏见 + fix_list + 自检 + 严重问题自动重写）
         finalizer = next((r for r in roles if r.get("finalizer")), roles[0])
-        transcript = "\n".join(f"{r['speaker']}：{r['content']}" for r in rounds)[:2500]
-        final_prompt = _FINAL_PROMPT.format(
-            name=str(finalizer.get("name") or "主理人"),
-            field=str(finalizer.get("field") or "音乐制作"),
-            theme=prompt[:200],
-            style="（自由）",
-            style_profile="",
-            transcript=transcript,
-            fix_list="（无结构化清单：从讨论记录自行提取评审点名批评过的元素与替代方案，定稿必须落实）",
+        final, checks = await _produce_final(
+            db,
+            theme=prompt[:500],
+            style=style,
+            finalizer=finalizer,
+            rounds=rounds,
+            kb_block="",
         )
-        result = await resolved.provider.generate(  # type: ignore[attr-defined]
-            final_prompt, resolved.model, temperature=0.8
-        )
-        final_data = extract_json(result_text(result))
-        final = final_data.get("final") or final_data  # 兼容两种输出结构
-        title = str(final.get("title") or "未命名")
-        lyrics = str(final.get("lyrics") or "")
     except Exception as exc:
         return {"summary": f"圆桌讨论失败：{str(exc)[:120]}", "ok": False}
-    if not lyrics:
+    if final.get("error") or not str(final.get("lyrics") or ""):
         return {"summary": "圆桌讨论失败（未产出定稿）", "ok": False}
+    title = str(final.get("title") or "未命名")
+    lyrics = str(final.get("lyrics") or "")
     try:
         # 生长闭环：圆桌定稿同样进作品库 + 回填知识库
         from app.api.v1.generations.music import _auto_save_work
@@ -606,7 +616,7 @@ async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> di
             db,
             user_id=user_id,
             theme=prompt[:500],
-            style=str(final.get("style") or "")[:100],
+            style=style,
             final=final,
             rounds=[],
             source="mission_roundtable",
@@ -615,8 +625,10 @@ async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> di
     except Exception:
         pass  # 入库失败不影响结果
     discuss = "；".join(f"{r['speaker']}：{r['content'][:36]}" for r in rounds[:2])
+    severe = any("缺少" in c or "废稿" in c for c in checks)
+    suffix = "（自检未过已自动修正一轮）" if severe else ""
     return {
-        "summary": f"🎯 圆桌真讨论（{len(rounds)} 轮）定稿《{title}》\n{discuss}\n\n{lyrics[:200]}",
+        "summary": f"🎯 圆桌真讨论（{len(rounds)} 轮）定稿《{title}》{suffix}\n{discuss}\n\n{lyrics[:200]}",
         "ok": True,
         "agent": "圆桌",
     }

@@ -35,9 +35,10 @@ cd apps/web && npx tsc --noEmit # 前端类型检查
 cd apps/web && E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test --project=chromium-desktop --grep-invert @heavy --workers=1
 ```
 
-**⚠️ 502 排障（2026-08-11 实战）**：重建 api 容器后 IP 会变，nginx 反代 `api:8000` 可能 DNS 缓存旧 IP → 登录 502（`connect() failed (111) while connecting to upstream`）。
-修复：`docker exec aigc-studio-frontend-1 nginx -s reload`（强制重新解析）即可恢复。
-若 reload 无效且 api 容器出现 `invalid IP` / 网络损坏：`docker compose down && docker compose up -d`（网络彻底重建，volumes 数据保留）。
+**⚠️ 502 排障（2026-08-11 首战 → 2026-08-14 根治）**：登录 502 的根因是**启动竞态**——nginx 先于 uvicorn 起来，首批登录撞上 api 还没监听端口（`connect() failed (111) while connecting to upstream`）。`depends_on: service_healthy` 只在容器「创建」时生效，容器「重启/start/Docker Desktop 重启」会跳过排序，故每次重启都可能复发。
+**已根治**：前端容器 `deploy/nginx/wait-for-api.sh` 在 nginx 启动前轮询 `http://api:8000/api/v1/health/live`，api 就绪才 `exec nginx`（见 `apps/web/Dockerfile` 的 CMD）。重启后登录不再 502，只有 3~4 秒冷启动等待。
+遗留排障：若仍 502 且 api 容器出现 `invalid IP` / 网络损坏 → `docker compose down && docker compose up -d`（网络彻底重建，volumes 数据保留）。
+**502 第三形态（2026-08-17）**：重建 api/worker 容器后 api 容器 IP 变化（如 172.18.0.3→.4），frontend 的 nginx 进程缓存了解析结果（日志 `connect() failed (111) ... upstream: http://172.18.0.3:8000`，而配置是服务名 `api:8000`）→ 登录/刷新 token 502。**重启 api 后必须连带 `docker restart aigc-studio-frontend-1`** 让 nginx 重新解析。
 勿用固定 IP 方案（Docker Desktop WSL2 下 `ipv4_address` 会引发 invalid IP + DNS 失效，已踩坑回滚）。
 
 ## 当前状态（2026-08-07 更新）

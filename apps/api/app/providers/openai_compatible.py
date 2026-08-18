@@ -65,14 +65,28 @@ class OpenAICompatibleTextProvider(TextProvider):
     async def _post_retry(
         self, client: httpx.AsyncClient, url: str, payload: dict[str, object]
     ) -> httpx.Response:
-        """POST 带 429 自动退避重试（上游限流常见，指数退避 + jitter）。"""
+        """POST 带退避重试：429（限流）、5xx（上游抖动）、网络异常（超时/断连）都重试。
+
+        创作圆桌等长链路每次发言都依赖单次调用成功——上游偶发超时/5xx 时
+        重试一次就能救回整轮发言（指数退避 + jitter）。
+        """
         await self._throttle()
+        last_resp: httpx.Response | None = None
         for attempt in range(_MAX_RETRIES):
-            resp = await client.post(url, headers=self._headers(), json=payload)
-            if resp.status_code != 429 or attempt >= _MAX_RETRIES - 1:
-                return resp
-            await asyncio.sleep(2**attempt + random.uniform(0, 1))
-        return resp  # 防御：循环理论上必 return，满足类型检查
+            try:
+                resp = await client.post(url, headers=self._headers(), json=payload)
+                last_resp = resp
+                retryable = resp.status_code in (429, 500, 502, 503, 504)
+                if not retryable or attempt >= _MAX_RETRIES - 1:
+                    return resp
+            except httpx.TransportError:
+                # 超时/连接中断/协议错误：网络层抖动，值得重试
+                if attempt >= _MAX_RETRIES - 1:
+                    raise
+                await asyncio.sleep(1.5 * (attempt + 1) + random.uniform(0, 1))
+                continue
+            await asyncio.sleep(1.5 * (attempt + 1) + random.uniform(0, 1))
+        return last_resp  # 防御：循环理论上必 return，满足类型检查
 
     async def generate(
         self,

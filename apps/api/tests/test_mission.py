@@ -587,7 +587,13 @@ async def test_roundtable_true_discussion_rounds(client):
         {
             "final": {
                 "title": "晨雾",
-                "lyrics": "雾漫过山脊\n" * 30,
+                "lyrics": (
+                    "【主歌1】天没亮，路灯下卖粥的掀开锅盖\n"
+                    "【副歌】雾漫过山脊，我端着碗等天亮\n锅盖响了三声，他说今天多添碗汤\n"
+                    "【主歌2】收摊的时候，他把剩粥倒给流浪猫\n"
+                    "【桥段】他说，明天还来，天总会亮的\n"
+                    "【副歌】雾漫过山脊，我端着碗等天亮\n锅盖响了三声，他说今天多添碗汤"
+                ),
                 "arrangement": "木吉他",
                 "style": "民谣",
             }
@@ -598,12 +604,18 @@ async def test_roundtable_true_discussion_rounds(client):
         type("R", (), {"content": cast_json})(),
         type("R", (), {"content": "阿墨：用意象铺陈晨雾的呼吸感"})(),
         type("R", (), {"content": "毒舌：副歌太绵软，缺少记忆点"})(),
+        # 定稿前「批评→替代」结构化提取（_produce_final 内部一步）
+        type("R", (), {"content": json.dumps({"fixes": []})})(),
         type("R", (), {"content": final_json})(),
     ]
     fake_resolver.model = "mock"
     with (
         patch(
             "app.services.provider_resolver.resolve_text_provider", return_value=fake_resolver
+        ),
+        # _produce_final/_extract_fix_list 用的是 music.py 模块内绑定的名字
+        patch(
+            "app.api.v1.generations.music.resolve_text_provider", return_value=fake_resolver
         ),
         patch("app.api.v1.generations.music._backfill_work_material", new=AsyncMock()),
         patch("app.services.music_works._auto_tags", new=AsyncMock(return_value="民谣")),
@@ -617,7 +629,7 @@ async def test_roundtable_true_discussion_rounds(client):
     assert out["ok"] is True
     assert "圆桌真讨论" in out["summary"], "应标注真讨论版本"
     assert "晨雾" in out["summary"], "应产出定稿标题"
-    assert fake_resolver.provider.generate.await_count == 4, "应为逐轮真实生成（选角+2轮发言+定稿）"
+    assert fake_resolver.provider.generate.await_count == 5, "应为选角+2轮发言+fix清单+定稿"
 
 
 @pytest.mark.asyncio

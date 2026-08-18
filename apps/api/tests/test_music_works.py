@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -393,3 +394,443 @@ def test_validate_lyrics_flags_antithetical_hook():
 车铃擦得发亮，他按三下才放人走"""
     checks2 = _validate_lyrics(lyrics2)
     assert not any("格言" in c for c in checks2), "事件式副歌不应误报"
+
+
+def test_validate_lyrics_flags_self_intro_and_prose():
+    """歌词性第一律：自报家门/散文长句触发自动重写；口语歌词不误报。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    # 郑玉兰式人物卡：自报家门 + 一句塞 4 个并列信息 = 散文
+    prose = """【主歌1】我是郑玉兰，夜班码头，风往东，船晚点四十分钟
+我呵开结霜的玻璃，在第五页圈住最亮那颗星
+【副歌】四点四十，我在第五页圈了颗星，标上最亮
+你接班先看这一页，别问我在天上哪一处
+【主歌2】天亮交班，老赵的保温杯里茶还烫
+【桥段】二十三年，我把最亮的星都圈成同一颗
+【副歌】四点四十，我在第五页圈了颗星，标上最亮
+你接班先看这一页，别问我在天上哪一处"""
+    checks = _validate_lyrics(prose)
+    assert any("自报家门" in c for c in checks), "「我是XX」应被拦截"
+    assert any("散文长句" in c for c in checks), "一句多并列信息应被拦截"
+    assert _severe_checks(checks), "应触发自动重写"
+
+    # 「我是真的」这类口语连用不误报；正常歌词不误报
+    clean = """【主歌1】天没亮透，新华路的梧桐叶铺了一地
+我把叶子码成圈，围住那棵撞歪的槐树
+【副歌】我是真的，想再抱他一下
+我是真的，话到嘴边又咽下
+【主歌2】手抖得先靠扫帚站一会儿
+【桥段】这树跟我一样，腿脚怕冷
+【副歌】我是真的，想再抱他一下
+我是真的，话到嘴边又咽下"""
+    checks2 = _validate_lyrics(clean)
+    assert not any("自报家门" in c for c in checks2), "「我是真的」不应误报自报家门"
+    assert not any("散文长句" in c for c in checks2), "短行歌词不应误报散文长句"
+
+
+def test_validate_lyrics_flags_warm_word_crutch():
+    """暖词复用：情感落点用「热乎/焐软」收尾 → 拦截；具体暖意象不误报。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    warm = """【主歌1】凌晨四点，柴油味往驾驶室挤
+遮阳板上那张错字贴在透明胶里
+【副歌】再跑二十公里，水壶嘴就响
+这一路的热乎，够我跑到天亮
+【主歌2】开水房白汽扑在搪瓷缸盖上
+【桥段】过了乌鞘岭，那张字轻轻跳
+【副歌】再跑二十公里，水壶嘴就响
+这一路的热乎，够我跑到天亮"""
+    checks = _validate_lyrics(warm)
+    assert any("暖词复用" in c for c in checks), "「热乎」收尾应被拦截"
+    assert _severe_checks(checks), "应触发自动重写"
+
+    concrete = """【主歌1】凌晨四点，柴油味往驾驶室挤
+遮阳板上那张错字贴在透明胶里
+【副歌】再跑二十公里，水壶嘴就响
+响在服务区凌晨，惊起檐下麻雀
+【主歌2】开水房白汽扑在搪瓷缸盖上
+【桥段】过了乌鞘岭，那张字轻轻跳
+【副歌】再跑二十公里，水壶嘴就响
+响在服务区凌晨，惊起檐下麻雀"""
+    checks2 = _validate_lyrics(concrete)
+    assert not any("暖词复用" in c for c in checks2), "具体暖意象不应误报"
+
+
+def test_validate_lyrics_ascii_quote_counts_as_dialogue() -> None:
+    """点睛检测：ASCII 双引号（模型常用）里的直接引语应算心口之言，不误报缺点睛。"""
+    from app.api.v1.generations.music import _validate_lyrics
+
+    lyrics = """【主歌1】井口晨雾轻，铁壶在咕噜咕噜冒着热气
+他站在摊前，慢慢加糖搅拌
+【副歌】晨粥暖，暖在心口
+留杯给她的那杯
+【主歌2】上个月她没来等，摊子冷清了些
+他把豆浆盛满一碗，盖上盖子
+【桥段】他低声呢喃，"姑娘，这碗留给你，喝完记得早点回来。"
+【副歌】晨粥暖，暖在心口
+留杯给她的那杯"""
+    checks = _validate_lyrics(lyrics)
+    assert not any("缺点睛" in c for c in checks), "ASCII 引号引语不应误报缺点睛"
+
+
+def test_validate_lyrics_merged_chorus_no_false_rhyme_warning() -> None:
+    """押韵检测：两遍副歌粘连在同一标签下（重复段句尾必相同）不应误报押韵偷懒。"""
+    from app.api.v1.generations.music import _validate_lyrics
+
+    lyrics = """【主歌1】凌晨四点，井口雾气轻
+老李推开木棚的门
+【副歌】老李把豆浆倒进杯
+递到小梅手里边
+她接过暖意在心
+心跳跟着稳了
+老李把豆浆倒进杯
+递到小梅手里边
+她接过暖意在心
+从此夜路不冷
+【主歌2】等了半小时，姑娘没来
+老李又添了柴火
+【桥段】她走近摊子，伸手接过
+小梅，这杯能暖你一宿"""
+    checks = _validate_lyrics(lyrics)
+    assert not any("押韵偷懒" in c for c in checks), "粘连副歌重复不应误报押韵偷懒"
+
+
+def test_repair_lyrics_normalizes_chorus2() -> None:
+    """结构修复：模型用【副歌2】代替第二遍【副歌】→ 归一化为【副歌】。"""
+    from app.api.v1.generations.music import _repair_lyrics
+
+    lyrics = "【主歌1】A\n【副歌】B\n【主歌2】C\n【副歌2】B"
+    fixed = _repair_lyrics(lyrics)
+    assert fixed.count("【副歌】") == 2, "【副歌2】应归一化为【副歌】"
+    assert "【副歌2】" not in fixed
+
+
+def test_severe_checks_flags_missing_chorus_repeat() -> None:
+    """严重性判断：副歌重复次数不足（结构不完整）应触发自动重写。"""
+    from app.api.v1.generations.music import _severe_checks
+
+    assert _severe_checks(["副歌重复次数不足（应至少 2 次）"])
+    assert not _severe_checks(["歌词偏短（120字，建议 260-450）"])
+
+
+def test_validate_lyrics_flags_overlong_line() -> None:
+    """歌词感铁律：单句超 15 汉字（叙事诗式长句）→ 警告并触发自动重写；短句不误报。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    # 桥段 17 字长句（整段都长，段内相对比较查不出 → 绝对阈值必拦）
+    long_line = """【主歌1】凌晨四点她蹲在平江路河沿边看水
+旧伞骨掰正，虎口勒出一道深弯
+【副歌】她把旧伞一把把倒挂在河沿
+不等人，只等这场雨小一点点
+【主歌2】她把白胶布一圈圈地往伞柄上缠
+借伞的人写：今晚要去哪个站呢
+【桥段】雨落在我身上，才晓得女儿那天冷得多难
+扫了十九年，这条河也还没把人还来
+【副歌】她把旧伞一把把倒挂在河沿
+不等人，只等这场雨小一点点"""
+    checks = _validate_lyrics(long_line)
+    assert any("长句" in c for c in checks), "17 字长句应被拦截"
+    assert _severe_checks(checks), "长句应触发自动重写"
+
+    # 全短句（≤12 字为主）不误报
+    short = """【主歌1】凌晨四点，她蹲在河边
+掰正伞骨，虎口勒出弯
+【副歌】她把旧伞，一把把倒挂
+不等人，只等雨小一点
+【主歌2】白胶布缠上伞柄
+借伞的人，写今晚去哪
+【桥段】雨落身上，才知她那天多难
+扫了十九年，河没把人还
+【副歌】她把旧伞，一把把倒挂
+不等人，只等雨小一点"""
+    checks2 = _validate_lyrics(short)
+    assert not any("长句" in c for c in checks2), "短句歌词不应误报长句"
+
+
+def test_validate_lyrics_flags_thin_content() -> None:
+    """信息密度铁律：全短句骨架化（<230 字、段句数不足）→ 拦截触发重写；饱满歌词不误报。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    # 《雨里不卖》式单薄：每段 3-4 句、全 5-8 字短句、细节全丢
+    thin = """【主歌1】
+雨落渡口石阶旁
+我坐最低那一档
+头一朵白兰摘下来
+搪瓷杯里接雨装
+【副歌】
+我留一朵花不卖
+等它烂在雨里
+末班船灯扫过河
+我坐最低阶不起
+【主歌2】
+十年前梅雨天
+找零钱抬头人不见
+她爸到死怪我低头
+搪瓷杯缺了十年
+【桥段】
+雨把石阶洗得发亮
+十年就等一双鞋响
+孩子回来不滑脚
+【副歌】
+我留一朵花不卖
+等它烂在雨里
+那年的跳板空着摆
+我坐最低阶不起"""
+    checks = _validate_lyrics(thin)
+    assert any("单薄" in c for c in checks), "骨架化歌词应被拦截"
+    assert _severe_checks(checks), "单薄应触发自动重写"
+
+    # 饱满：主歌 6 句 + 细节 + 260+ 字
+    rich = """【主歌1】梅雨天，雾漫到桥头
+灰雨衣漾过，认不得是谁
+竹竿上旧伞倒挂，我撑开一把
+指腹湿一线，换根竹削骨
+搪瓷缸沿磕掉一块，白瓷茬在雨里发亮
+她那年就是走这条路，没打伞
+【副歌】留个响，夜里像有人推门
+留个响，夜里不像一个人
+雨把跳板洗得发白，没人下来
+留个响，等一双鞋踩过青石板
+【主歌2】那年梅雨天，胥江翻船
+你在船上，我在桥堍修伞
+船工号子断在半截，我数到七
+伞骨锈在门后，三年没动过
+檐下滴水砸在搪瓷盆，一声一声
+【桥段】修了三十年伞，没补自家三片瓦
+留个响，雨声里等了十年
+雨水顺着伞骨滴下，像没断的线
+【副歌】留个响，夜里像有人推门
+留个响，夜里不像一个人
+雨把跳板洗得发白，没人下来
+留个响，等一双鞋踩过青石板"""
+    checks2 = _validate_lyrics(rich)
+    assert not any("单薄" in c for c in checks2), "细节饱满的歌词不应误报单薄"
+
+
+def test_validate_lyrics_flags_motivation_downgrade() -> None:
+    """人物价值层级铁律：丧亲 + 守/等/留但无职业动作 = 动机降维 → 拦截；劳动细节充分不误报。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    downgrade = """【主歌1】桥墩浇进她的名字
+她走的那年，雨没停
+我守着桥头看江水
+江雾漫上来又散开
+【副歌】我留着她的名字
+等风把桥吹旧
+【主歌2】图纸还压在箱底
+她再没回来过一眼
+桥灯亮着没人走
+【桥段】通车那天我没去
+【副歌】我留着她的名字
+等风把桥吹旧"""
+    checks = _validate_lyrics(downgrade)
+    assert any("动机降维" in c for c in checks), "悲情覆盖价值应被拦截"
+    assert _severe_checks(checks), "降维应触发自动重写"
+
+    # 劳动细节充分：不误报降维
+    labor = """【主歌1】凌晨四点，柴油味往驾驶室挤
+遮阳板上那张错字贴在透明胶里
+我咬开榨菜袋，秦岭隧道风灌进来
+抬手把它按实，舍不得按太紧
+【副歌】再跑二十公里，水壶嘴就响
+响在服务区凌晨，像闺女喊我别着凉
+写岔的远字在遮阳板上晃
+这一路的热乎，够我跑到天亮
+【主歌2】开水房白汽扑在搪瓷缸盖上
+半张加油小票，背面写前头有雨慢些
+方向盘三点钟方向，皮子磨得发亮
+【桥段】过了乌鞘岭，那张字轻轻跳
+二十三年了，她举着本子喊：爸
+【副歌】再跑二十公里，水壶嘴就响
+响在服务区凌晨，像闺女喊我别着凉"""
+    checks2 = _validate_lyrics(labor)
+    assert not any("动机降维" in c for c in checks2), "劳动细节充分不应误报降维"
+
+
+def test_validate_lyrics_flags_symbol_overload() -> None:
+    """反语义收敛铁律：第一联想符号 ≥6 个 = 符号过密 → 拦截触发重写。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    symbols = """【主歌1】烟雨漫过江南的桥
+油纸伞撑在青瓦檐下
+故人走过十年老街
+风把灯吹晃
+【副歌】雨落桥头，伞湿半边
+【主歌2】江南的雨还在下
+旧巷的灯还在亮
+【桥段】雨和伞，桥和灯
+【副歌】雨落桥头，伞湿半边"""
+    checks = _validate_lyrics(symbols)
+    assert any("符号过密" in c for c in checks), "第一联想符号堆砌应被拦截"
+    assert _severe_checks(checks), "符号过密应触发自动重写"
+
+
+def test_validate_lyrics_flags_no_rhyme_by_thirteen_zhe() -> None:
+    """十三辙押韵校验：句尾字全不同辙（言前/人辰/怀来/发花互不押）→ 无韵拦截；同辙不误报。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    # 句尾：山(言前) 门(人辰) 来(怀来) 下(发花) 停(中东) —— 5 字 5 辙全不同
+    no_rhyme = """【主歌1】雨落渡口那座山
+他靠在桥头看水门
+风从江面吹过来
+船桨横在石阶下
+他数着日子等雨停
+【副歌】他坐最低一档
+等末班船过河
+【主歌2】十年过去又一年
+旧伞挂在竹竿边
+【副歌】他坐最低一档
+等末班船过河"""
+    checks = _validate_lyrics(no_rhyme)
+    assert any("无韵" in c for c in checks), "全不同辙句尾应判无韵"
+    assert _severe_checks(checks), "无韵应触发自动重写"
+
+    # 句尾同辙（言前：山/年/边/天）→ 不误报无韵
+    rhymed = """【主歌1】雨落渡口那座山
+他守着江水一年年
+风从桥头吹过来
+船桨横在石阶边
+天没亮水线不断
+像那年女儿走的那天
+【副歌】他坐最低一档
+等末班船过河
+【主歌2】十年过去又一年
+旧伞挂在竹竿边
+【副歌】他坐最低一档
+等末班船过河"""
+    checks2 = _validate_lyrics(rhymed)
+    assert not any("无韵" in c for c in checks2), "同辙押韵不应误报无韵"
+
+
+
+# ---------- 风格检测与写歌质量闭环 ----------
+
+
+def test_detect_style_matches_theme() -> None:
+    """风格检测：主题文本里的风格词 → 规范风格名；未命中返回空串（自由决定）。"""
+    from app.api.v1.generations.music import _detect_style
+
+    assert _detect_style("为矿工清晨写一首叙事民谣") == "民谣"
+    assert _detect_style("古风：写一首江湖侠客的歌") == "古风"
+    assert _detect_style("用电子合成器做一首夜店舞曲") == "电子"
+    assert _detect_style("治愈系轻音乐，抚慰失眠的人") == "治愈系"
+    assert _detect_style("纯场景描写，无风格倾向") == ""
+    # 显式风格优先于主题检测（SSE 版 req.style 非空时不走检测）
+    assert _detect_style("") == ""
+
+
+# 合规歌词样本（260+ 字、段落句数达标、无 severe 问题）——compose 不重写测试用
+_CLEAN_LYRICS = (
+    "【主歌1】天没亮，路灯下卖粥的掀开锅盖\n"
+    "白汽扑上玻璃，糊了半扇窗\n"
+    "他把米汤撇进桶，锅底刮三遍\n"
+    "末班车过站台，灯晃了一下\n"
+    "那年她也坐这班，多看了两眼\n"
+    "粥勺磕在缸沿，响一声数一声\n"
+    "蒸汽顶得锅盖嗒嗒响，像有人敲门\n"
+    "【预副歌】站台灯灭又亮\n"
+    "粥还温着，人还没来\n"
+    "【副歌】雾漫过山脊，我端着碗等天亮\n"
+    "锅盖响了三声，他说多添碗汤\n"
+    "汽笛穿过巷口，她还没回来\n"
+    "他把粥温着，像温着一句话\n"
+    "【主歌2】收摊时剩粥倒给流浪猫\n"
+    "猫不来，粥凉在桶里没人喝\n"
+    "早班车灯扫过，他背过身擦碗\n"
+    "街对过那盏灯，昨晚还亮着\n"
+    "保温杯搁在挡位旁，茶垢一圈圈\n"
+    "他数着日子，像数粥里的米粒\n"
+    "路灯下他蹲着，把粥碗摆正\n"
+    "碗底那圈豁口，他拿胶布缠了三道\n"
+    "【副歌】雾漫过山脊，我端着碗等天亮\n"
+    "锅盖响了三声，他说多添碗汤\n"
+    "汽笛穿过巷口，她还没回来\n"
+    "他把粥温着，像温着一句话\n"
+    "【桥段】他说，明天还来，天总会亮的\n"
+    "抹布搭在缸沿，像个人还在等\n"
+    "那碗粥凉了又热，热了又凉\n"
+    "汽笛远了，他把灯调暗一档\n"
+    "灶台上的钟，走到四点差一刻\n"
+    "【预副歌】天快亮，粥又热了一遍\n"
+    "那句话，他始终没问出口\n"
+    "【主歌3】后半夜翻出那张旧车票\n"
+    "票根折角，写着下夜班\n"
+    "他擦了三遍，又放回信封\n"
+    "天快亮时，粥又煮上一锅\n"
+    "像那年她走时没说的那句话\n"
+    "信封上的邮戳，他看了二十年\n"
+    "【副歌】雾漫过山脊，我端着碗等天亮\n"
+    "锅盖响了三声，他说多添碗汤\n"
+    "汽笛穿过巷口，她还没回来\n"
+    "他把粥温着，像温着一句话"
+)
+async def test_compose_rewrites_on_severe_checks(client, user_token) -> None:
+    """写歌质量闭环：空洞赞颂/作文腔触发自动重写一轮；重写后返回修正稿 + checks。"""
+    import app.api.v1.generations.music as music_mod
+
+    hollow = {
+        "title": "空歌",
+        "style_zh": "流行",
+        "style_en": "pop",
+        "lyrics": (
+            "【主歌1】跟着梦想的脚步，在时代的光芒里前行\n"
+            "我们握紧双手的力量，把希望种进远方\n"
+            "【副歌】呼吸着温热的风，悄悄把梦想点亮\n仿佛一切都美好，灿烂的明天在闪耀\n"
+            "【主歌2】梦想的力量，像星火一样燃烧\n我们把希望，种在灿烂的远方\n"
+            "【桥段】温柔的目光里，藏着美好的救赎\n"
+            "【副歌】呼吸着温热的风，悄悄把梦想点亮\n仿佛一切都美好，灿烂的明天在闪耀"
+        ),
+        "tips": "x",
+    }
+    clean_lyrics = _CLEAN_LYRICS
+    fake_resolver = AsyncMock()
+    fake_resolver.provider.generate.side_effect = [
+        type("R", (), {"content": json.dumps(hollow)})(),
+        type(
+            "R",
+            (),
+            {"content": json.dumps({**hollow, "lyrics": clean_lyrics})},
+        )(),
+    ]
+    fake_resolver.model = "mock"
+    with patch("app.api.v1.generations.music.resolve_text_provider", return_value=fake_resolver):
+        data = await music_mod.compose_song(
+            type("Req", (), {"theme": "歌颂劳动者", "style": "流行", "mood": "激昂",
+                              "language": "中文", "verse_count": 2, "model": ""})(),
+            None,  # type: ignore[arg-type]
+            "u1",  # type: ignore[arg-type]
+        )
+    assert data["rewrote"] is True, "严重问题应触发自动重写"
+    assert "空洞赞颂" not in "\n".join(data["checks"]), "重写后不应再出现空洞赞颂"
+    assert "【主歌1】" in data["lyrics"]
+    assert fake_resolver.provider.generate.await_count == 2
+
+
+async def test_compose_no_rewrite_when_clean(client, user_token) -> None:
+    """写歌质量闭环：合规歌词不触发重写（1 次调用），checks 仅轻提示。"""
+    import app.api.v1.generations.music as music_mod
+
+    clean = {
+        "title": "晨雾",
+        "style_zh": "民谣",
+        "style_en": "folk",
+        "lyrics": _CLEAN_LYRICS,
+        "tips": "x",
+    }
+    fake_resolver = AsyncMock()
+    fake_resolver.provider.generate.return_value = type(
+        "R", (), {"content": json.dumps(clean)}
+    )()
+    fake_resolver.model = "mock"
+    with patch("app.api.v1.generations.music.resolve_text_provider", return_value=fake_resolver):
+        data = await music_mod.compose_song(
+            type("Req", (), {"theme": "晨雾里的粥摊", "style": "民谣", "mood": "温暖",
+                              "language": "中文", "verse_count": 2, "model": ""})(),
+            None,  # type: ignore[arg-type]
+            "u1",  # type: ignore[arg-type]
+        )
+    assert data.get("rewrote") is None or data["rewrote"] is False, "合规歌词不应重写"
+    assert "checks" in data
+    assert fake_resolver.provider.generate.await_count == 1
+
+

@@ -14,5 +14,8 @@ RUN pnpm --filter @aigc/web build
 FROM nginx:alpine
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 COPY deploy/nginx/nginx.conf /etc/nginx/conf.d/default.conf
+# 启动前等 api 就绪，避免 nginx 抢先于 uvicorn → 登录 502（详见 deploy/nginx/wait-for-api.sh）
+COPY deploy/nginx/wait-for-api.sh /wait-for-api.sh
+RUN chmod +x /wait-for-api.sh
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/wait-for-api.sh"]

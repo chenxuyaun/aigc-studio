@@ -234,6 +234,36 @@ def format_material_block(kb_text: str, web_text: str = "") -> str:
     return "\n\n".join(parts)
 
 
+# 词曲专业常驻素材：标题含这些关键词的已确认文档，音乐创作时无条件注入（专业地基）
+_MUSIC_PRO_KEYWORDS = ("创作技法", "歌曲创作", "作曲", "乐理", "和声", "歌词写作", "配器", "编曲", "作词")
+
+
+async def retrieve_music_pro_notes(db: AsyncSession, user_id: str, limit: int = 3) -> str:
+    """词曲专业常驻素材：无论主题，固定注入创作技法类文档。
+
+    通用词曲资料与具体主题（如"烟雨朦胧"）相关度低，主题检索命中不了——
+    单独按标题关键词查已确认文档，拼成固定注入块，让模型"边查边写"。
+    注入多篇覆盖多维度（技法/风格/大师方法论/经典分析）。
+    """
+    try:
+        q = (
+            select(TextDocument)
+            .where(
+                TextDocument.user_id == user_id,
+                TextDocument.status == "confirmed",
+            )
+            .order_by(TextDocument.updated_at.desc())
+            .limit(100)
+        )
+        docs = list((await db.execute(q)).scalars().all())
+        hits = [d for d in docs if any(k in d.title for k in _MUSIC_PRO_KEYWORDS)][:limit]
+        return "\n\n".join(
+            f"【创作技法参考·{d.title}】\n{d.content[:4000]}" for d in hits
+        )
+    except Exception:
+        return ""
+
+
 async def retrieve_creation_materials(
     db: AsyncSession,
     user_id: str,
