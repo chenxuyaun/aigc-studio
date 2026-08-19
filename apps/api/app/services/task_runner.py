@@ -112,21 +112,29 @@ async def _provider_settings(db: AsyncSession, model: str) -> tuple[str, str, st
     图片/视频/语音的真实链路必须走 DB 配置——容器内 env 的
     OPENAI_COMPATIBLE_BASE_URL 指向 127.0.0.1 时会打到 API 自己。
     """
-    from sqlalchemy import func, or_, select
+    from sqlalchemy import select
 
     from app.models.provider_config import ProviderConfig
     from app.security.ownership import open_secret
 
-    stmt = select(ProviderConfig).where(
-        ProviderConfig.is_enabled.is_(True),
-        or_(
-            ProviderConfig.id == model,
-            func.lower(ProviderConfig.name) == model.lower(),
-            func.lower(ProviderConfig.name).contains(model.lower()),
-            ProviderConfig.default_model == model,
+    # 前缀匹配：grok2api 暴露 grok-imagine-image-lite / -pro 等变体，但 DB 行的
+    # default_model 通常配成基础名 grok-imagine-image。用「传入 model 以 DB default_model
+    # 开头」命中，避免每出一个新档位就要改一行配置。
+    ml = (model or "").lower().strip()
+    stmt = select(ProviderConfig).where(ProviderConfig.is_enabled.is_(True))
+    rows = (await db.execute(stmt.order_by(ProviderConfig.priority))).scalars().all()
+    row = next(
+        (
+            r
+            for r in rows
+            if r.id == model
+            or (r.name or "").lower() == ml
+            or ml in (r.name or "").lower()
+            or (r.default_model or "") == model
+            or ml.startswith((r.default_model or "").lower())
         ),
+        None,
     )
-    row = (await db.execute(stmt.order_by(ProviderConfig.priority))).scalars().first()
     if row is None:
         return None
     return (
@@ -196,15 +204,30 @@ async def _load_reference_image(
 
 
 async def _download_media(url: str) -> tuple[bytes, str]:
-    """统一媒体下载：data URL 直接解码；http(s) URL 下载后按 content-type 定 MIME。"""
+    """统一媒体下载：data URL 直接解码；http(s) URL 下载后按 content-type 定 MIME。
+
+    grok 的 assets.grok.com 图片有防盗链（403）：必须带浏览器 UA + Referer，
+    否则真实生图成功但下载失败（"图片下载 403"）。
+    """
     if url.startswith("data:"):
         header, b64 = url.split(",", 1)
         mime = header.split(":")[1].split(";")[0] if ":" in header else "application/octet-stream"
         return base64.b64decode(b64), mime
     import httpx
 
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+        ),
+        "Referer": "https://grok.com/",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Sec-Fetch-Dest": "image",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Site": "cross-site",
+    }
     async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-        resp = await client.get(url)
+        resp = await client.get(url, headers=headers)
         if resp.status_code != 200:
             raise RuntimeError(f"媒体下载 {resp.status_code}: {resp.text[:120]}")
     ctype = (resp.headers.get("content-type") or "application/octet-stream").lower()
