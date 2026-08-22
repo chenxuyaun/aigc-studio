@@ -15,10 +15,18 @@ from app.schemas.provider import (
     ProviderPublicItem,
 )
 from app.security.auth import get_current_user, require_role
-from app.security.ownership import seal_secret, secret_fingerprint
+from app.security.ownership import open_secret, seal_secret, secret_fingerprint
 from app.services.provider_resolver import list_enabled_text_catalog
 
 router = APIRouter()
+
+
+def _gone() -> HTTPException:
+    """P2：供应商写操作已下线，统一 410 指引模型中心。"""
+    return HTTPException(
+        status_code=410,
+        detail="供应商写操作已下线：请使用模型中心（服务器 :8511）管理供应商",
+    )
 
 
 def _to_admin_response(p: ProviderConfig) -> ProviderConfigResponse:
@@ -113,20 +121,7 @@ async def create_provider(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role("admin")),
 ) -> ProviderConfigResponse:
-    provider = ProviderConfig(
-        name=req.name.strip(),
-        provider_type=(req.provider_type or "text").strip() or "text",
-        base_url=(req.base_url or "").strip(),
-        default_model=(req.default_model or "").strip(),
-        is_enabled=req.is_enabled,
-        priority=req.priority,
-        timeout_seconds=req.timeout_seconds,
-        encrypted_api_key=seal_secret(req.api_key) if req.api_key else "",
-    )
-    db.add(provider)
-    await db.commit()
-    await db.refresh(provider)
-    return _to_admin_response(provider)
+    raise _gone()
 
 
 @router.post("/import-env", response_model=ProviderConfigResponse)
@@ -134,42 +129,105 @@ async def import_from_env(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role("admin")),
 ) -> ProviderConfigResponse:
-    """把当前 .env 的 OPENAI_COMPATIBLE_* 导入为一条可编辑配置。"""
-    base = (settings.OPENAI_COMPATIBLE_BASE_URL or "").strip()
-    if not base:
-        raise HTTPException(status_code=400, detail="环境变量未配置 OPENAI_COMPATIBLE_BASE_URL")
-    model = (settings.OPENAI_COMPATIBLE_MODEL or "default").strip()
-    # 已存在同 base+model 则更新 key
-    existing = (
-        await db.execute(
-            select(ProviderConfig).where(
-                ProviderConfig.base_url == base,
-                ProviderConfig.default_model == model,
-            )
-        )
-    ).scalar_one_or_none()
-    key = settings.OPENAI_COMPATIBLE_API_KEY or "none"
-    if existing:
-        existing.encrypted_api_key = seal_secret(key)
-        existing.is_enabled = True
-        existing.name = existing.name or f"Env · {model}"
-        await db.commit()
-        await db.refresh(existing)
-        return _to_admin_response(existing)
+    """P2：已下线（原：把 .env 的 OPENAI_COMPATIBLE_* 导入为一条可编辑配置）。"""
+    raise _gone()
 
-    provider = ProviderConfig(
-        name=f"Env · {model}",
-        provider_type="openai_compatible",
-        base_url=base,
-        default_model=model,
-        is_enabled=True,
-        priority=10,
-        encrypted_api_key=seal_secret(key),
-    )
-    db.add(provider)
-    await db.commit()
-    await db.refresh(provider)
-    return _to_admin_response(provider)
+
+@router.post("/{provider_id}/test")
+async def test_provider(
+    provider_id: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role("admin")),
+) -> dict[str, object]:
+    """从服务器真实探测一个 Provider 的连通性，并返回上游可用的模型列表。
+
+    公益 OpenAI 兼容地址最需要这一步：base_url + key 能不能用、有哪些模型，点一下见分晓。
+    - 优先 GET {base_url}/models（带 key）列模型；
+    - /models 不可用或失败时，回退最小 chat.completions 探测（只回显 echo，不发完整生成）。
+    """
+    result = await db.execute(select(ProviderConfig).where(ProviderConfig.id == provider_id))
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider 不存在")
+    base = (provider.base_url or "").rstrip("/")
+    if not base:
+        return {"ok": False, "message": "base_url 为空，无法测试"}
+
+    key = open_secret(provider.encrypted_api_key or "") or ""
+    headers = {"Authorization": f"Bearer {key}"} if key and key != "none" else {}
+    import httpx
+
+    started = asyncio.get_event_loop().time()
+    timeout = max(int(provider.timeout_seconds or 60), 15)
+
+    # 1) /models 列模型
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.get(base + "/models", headers=headers)
+        latency_ms = int((asyncio.get_event_loop().time() - started) * 1000)
+        if r.status_code < 500:
+            data = r.json() if r.content else {}
+            models: list[str] = []
+            for item in data.get("data") if isinstance(data, dict) else []:
+                if isinstance(item, dict) and isinstance(item.get("id"), str):
+                    models.append(item["id"])
+            if models:
+                return {
+                    "ok": True,
+                    "method": "models",
+                    "latency_ms": latency_ms,
+                    "models": models,
+                    "message": f"连通正常，上游共 {len(models)} 个模型",
+                }
+            # /models 返回 OK 但无 data（部分公益站如此），视为账号/网关可用
+            return {
+                "ok": True,
+                "method": "models",
+                "latency_ms": latency_ms,
+                "models": [],
+                "message": f"网关可达（HTTP {r.status_code}），未返回模型列表",
+            }
+        upstream_err = f"HTTP {r.status_code}: {r.text[:200]}"
+    except Exception as e:  # noqa: BLE001 - 网络探测失败统一归为不可达
+        upstream_err = f"网络不可达: {type(e).__name__} {e}"
+
+    # 2) 回退最小 chat 探测
+    fallback_model = (provider.default_model or "").strip() or "gpt-3.5-turbo"
+    payload = {
+        "model": fallback_model,
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 1,
+        "stream": False,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.post(
+                base + "/chat/completions", json=payload, headers={"Content-Type": "application/json", **headers}
+            )
+        latency_ms = int((asyncio.get_event_loop().time() - started) * 1000)
+        if r.status_code < 500:
+            return {
+                "ok": True,
+                "method": "chat",
+                "latency_ms": latency_ms,
+                "models": [fallback_model],
+                "message": f"聊天探测通过（HTTP {r.status_code}），模型 {fallback_model}",
+            }
+        return {
+            "ok": False,
+            "method": "chat",
+            "latency_ms": latency_ms,
+            "models": [],
+            "message": f"上游返回 HTTP {r.status_code}：{r.text[:200]}",
+        }
+    except Exception as e:  # noqa: BLE001
+        return {
+            "ok": False,
+            "method": "chat",
+            "latency_ms": int((asyncio.get_event_loop().time() - started) * 1000),
+            "models": [],
+            "message": f"网络不可达: {type(e).__name__} {e}（models 探测: {upstream_err}）",
+        }
 
 
 @router.put("/{provider_id}", response_model=ProviderConfigResponse)
@@ -179,54 +237,11 @@ async def update_provider(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_role("admin")),
 ) -> ProviderConfigResponse:
-    result = await db.execute(select(ProviderConfig).where(ProviderConfig.id == provider_id))
-    provider = result.scalar_one_or_none()
-    if not provider:
-        raise HTTPException(status_code=404, detail="Provider 不存在")
-    data = req.model_dump(exclude_unset=True)
-    api_key = data.pop("api_key", None)
-    for field, value in data.items():
-        if isinstance(value, str):
-            value = value.strip()
-        setattr(provider, field, value)
-    if api_key:  # 非空才轮换密钥
-        provider.encrypted_api_key = seal_secret(api_key)
-    await db.commit()
-    await db.refresh(provider)
-    return _to_admin_response(provider)
+    raise _gone()
 
 
 @router.delete("/{provider_id}")
 async def delete_provider(
     provider_id: str, db: AsyncSession = Depends(get_db), _: User = Depends(require_role("admin"))
 ) -> dict[str, object]:
-    result = await db.execute(select(ProviderConfig).where(ProviderConfig.id == provider_id))
-    provider = result.scalar_one_or_none()
-    if not provider:
-        raise HTTPException(status_code=404, detail="Provider 不存在")
-    # 若仍被 generation_tasks 引用，改为停用，避免外键 500
-    from sqlalchemy import func
-
-    from app.models.generation_task import GenerationTask
-
-    ref_count = (
-        await db.execute(
-            select(func.count(GenerationTask.id)).where(GenerationTask.provider_id == provider_id)
-        )
-    ).scalar() or 0
-    if ref_count > 0:
-        provider.is_enabled = False
-        if not provider.name.endswith("（停用）"):
-            provider.name = f"{provider.name}（停用）"
-        await db.commit()
-        return {
-            "success": True,
-            "data": {
-                "soft_deleted": True,
-                "reason": f"仍有 {ref_count} 条任务引用，已停用而非物理删除",
-                "id": provider_id,
-            },
-        }
-    await db.delete(provider)
-    await db.commit()
-    return {"success": True, "data": None}
+    raise _gone()

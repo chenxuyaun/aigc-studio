@@ -53,23 +53,32 @@ async def test_providers_public_requires_login_and_hides_secrets(client, admin_t
     assert bare.status_code == 401
 
     headers = {"Authorization": f"Bearer {admin_token}"}
-    created = await client.post(
-        "/api/v1/providers/",
-        json={
-            "name": "mock-box",
-            "provider_type": "text",
-            "base_url": "http://127.0.0.1:9",
-            "api_key": "super-secret-key",
-            "default_model": "mock",
-        },
-        headers=headers,
-    )
-    assert created.status_code == 200, created.text
-    body = created.json()
-    assert body.get("has_api_key") is True
-    assert "api_key" not in body or not body.get("api_key")
-    assert "encrypted_api_key" not in body
-    assert body.get("api_key_fingerprint")
+    # P2：写 API 已 410 下线；改为直接种库验证脱敏
+    from app.models.provider_config import ProviderConfig
+    from app.security.ownership import seal_secret
+    from tests.conftest import TestingSessionLocal
+
+    async with TestingSessionLocal() as db:
+        db.add(
+            ProviderConfig(
+                name="mock-box",
+                provider_type="text",
+                base_url="http://127.0.0.1:9",
+                default_model="mock",
+                is_enabled=True,
+                priority=5,
+                encrypted_api_key=seal_secret("super-secret-key"),
+            )
+        )
+        await db.commit()
+
+    admin_list = await client.get("/api/v1/providers/admin", headers=headers)
+    assert admin_list.status_code == 200
+    row = next(p for p in admin_list.json() if p["name"] == "mock-box")
+    assert row.get("has_api_key") is True
+    assert not row.get("api_key")
+    assert "encrypted_api_key" not in row
+    assert row.get("api_key_fingerprint")
 
     pub = await client.get("/api/v1/providers/", headers=headers)
     assert pub.status_code == 200

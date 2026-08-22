@@ -14,7 +14,9 @@ import asyncio
 import base64
 import hashlib
 import json
+import os
 import secrets
+import weakref
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -51,6 +53,20 @@ def schedule_media_task(task_id: str) -> None:
 
 async def _delay() -> None:
     await asyncio.sleep(max(settings.MOCK_PROVIDER_DELAY_MIN_MS, 50) / 1000)
+
+
+async def notify_event(event: dict) -> None:
+    """统一通知：生成完成/失败 → 通知服务（失败静默，绝不影响主流程）。"""
+    url = getattr(settings, "NOTIFY_WEBHOOK_URL", "") or os.environ.get("NOTIFY_WEBHOOK_URL", "")
+    if not url or not getattr(settings, "NOTIFY_ENABLED", False):
+        return
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            await client.post(url, json=event)
+    except Exception:
+        pass
 
 
 async def _is_cancelled(db: AsyncSession, task_id: str) -> bool:
@@ -105,13 +121,40 @@ def _upstream_model_id(model: str) -> str:
     return raw
 
 
-async def _provider_settings(db: AsyncSession, model: str) -> tuple[str, str, str] | None:
-    """按 model（id / name 别名 / default_model）解析 DB ProviderConfig。
+_SLOT_BY_TASK: dict[str, str] = {
+    "image": "image",
+    "video": "video",
+    "audio": "audio",
+    "music": "music",
+    "text": "text",
+}
 
-    返回 (base_url, api_key, default_model)；未配置返回 None（走 env 兜底）。
-    图片/视频/语音的真实链路必须走 DB 配置——容器内 env 的
-    OPENAI_COMPATIBLE_BASE_URL 指向 127.0.0.1 时会打到 API 自己。
+
+async def _provider_settings(
+    db: AsyncSession, model: str, task_type: str | None = None
+) -> tuple[str, str, str, str] | None:
+    """按 model（id / name 别名 / default_model）解析 Provider 配置。
+
+    ⚠️ P2 起运行时不再调用（_media_candidates 只走模型中心链）；
+    保留本函数仅供测试与 P3 迁移参考，将随 provider_configs 表一起删除。
     """
+    # 1) 模型中心优先：按任务类型取对应槽位（不可用则回退）
+    try:
+        from app.services.model_hub_client import get_active_config
+
+        slot = _SLOT_BY_TASK.get((task_type or "").lower())
+        hub = await get_active_config(slot=slot)
+        if hub and hub.get("base_url"):
+            return (
+                hub["base_url"],
+                hub.get("api_key") or "",
+                hub.get("default_model") or "",
+                hub.get("provider_type") or "openai_compatible",
+            )
+    except Exception:
+        pass
+
+    # 2) 回退：saiOS 自带 DB ProviderConfig
     from sqlalchemy import select
 
     from app.models.provider_config import ProviderConfig
@@ -141,11 +184,12 @@ async def _provider_settings(db: AsyncSession, model: str) -> tuple[str, str, st
         (row.base_url or "").rstrip("/"),
         open_secret(row.encrypted_api_key or ""),
         row.default_model or "",
+        (row.provider_type or "").lower().strip(),
     )
 
 
 def _provider_kwargs(
-    settings_row: tuple[str, str, str] | None, *, include_default_model: bool = True
+    settings_row: tuple[str, str, str, str] | None, *, include_default_model: bool = True
 ) -> dict[str, Any]:
     """组装 provider 构造参数。图片/视频分支不传 default_model：
     DB 的 default_model 是文本模型（grok-chat-fast），上游图片/视频端点
@@ -153,7 +197,7 @@ def _provider_kwargs(
     """
     if settings_row is None:
         return {}
-    base_url, api_key, default_model = settings_row
+    base_url, api_key, default_model, _provider_type = settings_row
     kwargs = {
         "base_url": base_url,
         "api_key": api_key or "none",
@@ -161,6 +205,51 @@ def _provider_kwargs(
     if include_default_model:
         kwargs["default_model"] = default_model
     return kwargs
+
+
+async def _media_candidates(
+    db: AsyncSession, model: str, task_type: str
+) -> list[tuple[str, str, str, str] | None]:
+    """v3 故障转移候选链：模型中心对应槽位的候选列表（主选在前）。
+
+    P2（deprecation-plan.md）：saiOS DB 单候选回退已下线——
+    链为空/模型中心不可用时返回 [None]（registry 兜底）。
+    元素 None 表示走 ProviderRegistry 解析（与旧行为一致）。
+    """
+    _ = db  # P2 起不再查 DB；参数保留兼容调用方
+    try:
+        from app.services.model_hub_client import get_active_chain
+
+        slot = _SLOT_BY_TASK.get((task_type or "").lower())
+        chain = await get_active_chain(slot) if slot else []
+        confs = [
+            (c["base_url"], c["api_key"], c["default_model"], c["provider_type"])
+            for c in chain
+            if c.get("base_url")
+            or (c.get("provider_type") or "").lower() == "edge_tts"  # 免密钥本地型
+        ]
+        if confs:
+            return confs
+    except Exception:
+        pass
+    return [None]
+
+
+def _build_image_provider(conf: tuple[str, str, str, str] | None) -> Any | None:
+    """按 provider_type 构建图像 provider；conf=None 返回 None（registry 路径）。"""
+    if conf is None:
+        return None
+    if conf[3] == "zarklab":
+        from app.providers.zarklab import ZarklabImageProvider
+
+        return ZarklabImageProvider(**_provider_kwargs(conf, include_default_model=False))
+    if conf[3] == "chat_image":
+        from app.providers.chat_image import ChatCompletionsImageProvider
+
+        return ChatCompletionsImageProvider(**_provider_kwargs(conf))
+    from app.providers.openai_compatible import OpenAICompatibleImageProvider
+
+    return OpenAICompatibleImageProvider(**_provider_kwargs(conf, include_default_model=False))
 
 
 async def _load_reference_image(
@@ -286,27 +375,9 @@ async def _try_real_media(
     失败: (None, reason) — reason 供 result.fallback_reason 展示。
     """
     upstream = _upstream_model_id(model)
-    provider_conf = await _provider_settings(db, model)
-    upstream_base = provider_conf[0] if provider_conf else ""
+    candidates = await _media_candidates(db, model, task_type)
     try:
         if task_type == "image":
-            # DB 配置优先：配置里的 base_url 就是 OpenAI 兼容网关（grok2api/cpa 等），
-            # 直接走 OpenAICompatible，避免 model 名（显示名/配置 id）被 registry
-            # 误路由到 HuggingFace；无配置时才用 registry 按关键字解析。
-            image_provider: Any
-            if provider_conf:
-                from app.providers.openai_compatible import OpenAICompatibleImageProvider
-
-                image_provider = OpenAICompatibleImageProvider(
-                    **_provider_kwargs(provider_conf, include_default_model=False),
-                )
-            else:
-                image_provider = ProviderRegistry.get_image_provider(
-                    model,
-                    **_provider_kwargs(None, include_default_model=False),
-                )
-            if image_provider.__class__.__name__ == "MockImageProvider":
-                return None, "图像 Provider 解析为 Mock，未走真实路径"
             submit_params = dict(params)
             if params.get("reference_photo_id") or params.get("reference_asset_id"):
                 ref_url, ref_err = await _load_reference_image(db, params)
@@ -314,57 +385,151 @@ async def _try_real_media(
                     submit_params["image"] = ref_url
                 elif ref_err:
                     logger.warning("reference_skip", task_id=model, reason=ref_err)
-            result = await image_provider.submit(prompt, model=upstream, **submit_params)
-            poll_result = await image_provider.poll(str(result.get("task_id") or ""))
-            if poll_result.get("status") != "succeeded":
-                err = str(poll_result.get("error") or poll_result.get("status") or "unknown")
-                return None, f"真实图像任务未成功: {err[:160]}"
-            url = str(poll_result.get("image_url") or "")
-            if not url:
-                return None, "真实图像结果缺少图片地址"
-            data, mime = await _download_media(_rewrite_media_url(url, upstream_base))
-            return data, mime, _ext_from_mime(mime, "bin")
+            last_reason = ""
+            for i, conf in enumerate(candidates):
+                try:
+                    if conf is None:
+                        image_provider: Any = ProviderRegistry.get_image_provider(
+                            model,
+                            **_provider_kwargs(None, include_default_model=False),
+                        )
+                    else:
+                        image_provider = _build_image_provider(conf)
+                    if image_provider is None or image_provider.__class__.__name__ == "MockImageProvider":
+                        return None, "图像 Provider 解析为 Mock，未走真实路径"
+                    result = await image_provider.submit(prompt, model=upstream, **submit_params)
+                    poll_result = await image_provider.poll(str(result.get("task_id") or ""))
+                    if poll_result.get("status") != "succeeded":
+                        raise RuntimeError(
+                            str(poll_result.get("error") or poll_result.get("status") or "unknown")
+                        )
+                    url = str(poll_result.get("image_url") or "")
+                    if not url:
+                        raise RuntimeError("真实图像结果缺少图片地址")
+                    data, mime = await _download_media(
+                        _rewrite_media_url(url, conf[0] if conf else "")
+                    )
+                    logger.info(
+                        "media_candidate_used",
+                        task_type=task_type,
+                        candidate=f"{i + 1}/{len(candidates)}",
+                        provider_type=(conf[3] if conf else "registry"),
+                    )
+                    return data, mime, _ext_from_mime(mime, "bin")
+                except Exception as exc:  # noqa: BLE001 — 单候选失败降级到下一个
+                    last_reason = (str(exc).strip() or type(exc).__name__)[:200]
+                    if i < len(candidates) - 1:
+                        logger.warning(
+                            "media_failover_next",
+                            task_type=task_type,
+                            failed_candidate=i + 1,
+                            error=last_reason,
+                            remaining=len(candidates) - i - 1,
+                        )
+                        continue
+            return None, f"真实图像任务未成功: {last_reason[:160]}"
         if task_type == "video":
-            # 与 image 分支一致：DB 配置优先（用户配置的 base_url 即网关）
-            if provider_conf:
-                from app.providers.openai_compatible import OpenAICompatibleVideoProvider
+            last_reason = ""
+            for i, conf in enumerate(candidates):
+                try:
+                    if conf is None:
+                        video_provider: Any = ProviderRegistry.get_video_provider(
+                            model,
+                            **_provider_kwargs(None, include_default_model=False),
+                        )
+                    else:
+                        from app.providers.openai_compatible import OpenAICompatibleVideoProvider
 
-                video_provider: Any = OpenAICompatibleVideoProvider(
-                    **_provider_kwargs(provider_conf, include_default_model=False),
-                )
-            else:
-                video_provider = ProviderRegistry.get_video_provider(
-                    model,
-                    **_provider_kwargs(None, include_default_model=False),
-                )
-            if video_provider.__class__.__name__ == "MockVideoProvider":
-                return None, "视频 Provider 解析为 Mock，未走真实路径"
-            result = await video_provider.submit(prompt, model=upstream, **params)
-            poll_result = await video_provider.poll(str(result.get("task_id") or ""))
-            if poll_result.get("status") != "succeeded":
-                err = str(poll_result.get("error") or poll_result.get("status") or "unknown")
-                return None, f"真实视频任务未成功: {err[:160]}"
-            url = str(poll_result.get("video_url") or "")
-            if not url:
-                return None, "真实视频结果缺少视频地址"
-            data, mime = await _download_media(_rewrite_media_url(url, upstream_base))
-            return data, mime, _ext_from_mime(mime, "mp4")
+                        video_provider = OpenAICompatibleVideoProvider(
+                            **_provider_kwargs(conf, include_default_model=False),
+                        )
+                    if video_provider.__class__.__name__ == "MockVideoProvider":
+                        return None, "视频 Provider 解析为 Mock，未走真实路径"
+                    result = await video_provider.submit(prompt, model=upstream, **params)
+                    poll_result = await video_provider.poll(str(result.get("task_id") or ""))
+                    if poll_result.get("status") != "succeeded":
+                        raise RuntimeError(
+                            str(poll_result.get("error") or poll_result.get("status") or "unknown")
+                        )
+                    url = str(poll_result.get("video_url") or "")
+                    if not url:
+                        raise RuntimeError("真实视频结果缺少视频地址")
+                    data, mime = await _download_media(
+                        _rewrite_media_url(url, conf[0] if conf else "")
+                    )
+                    logger.info(
+                        "media_candidate_used",
+                        task_type=task_type,
+                        candidate=f"{i + 1}/{len(candidates)}",
+                        provider_type=(conf[3] if conf else "registry"),
+                    )
+                    return data, mime, _ext_from_mime(mime, "mp4")
+                except Exception as exc:  # noqa: BLE001
+                    last_reason = (str(exc).strip() or type(exc).__name__)[:200]
+                    if i < len(candidates) - 1:
+                        logger.warning(
+                            "media_failover_next",
+                            task_type=task_type,
+                            failed_candidate=i + 1,
+                            error=last_reason,
+                            remaining=len(candidates) - i - 1,
+                        )
+                        continue
+            return None, f"真实视频任务未成功: {last_reason[:160]}"
         if task_type in ("audio", "music"):
-            speech_provider = ProviderRegistry.get_speech_provider(
-                model, **_provider_kwargs(provider_conf)
-            )
-            if speech_provider.__class__.__name__ == "MockSpeechProvider":
-                return None, "语音 Provider 解析为 Mock，未走真实路径"
-            result = await speech_provider.submit(prompt, model=upstream, **params)
-            poll_result = await speech_provider.poll(str(result.get("task_id") or ""))
-            if poll_result.get("status") != "succeeded":
-                err = str(poll_result.get("error") or poll_result.get("status") or "unknown")
-                return None, f"真实语音任务未成功: {err[:160]}"
-            url = str(poll_result.get("audio_url") or "")
-            if not url:
-                return None, "真实语音结果缺少音频地址"
-            data, mime = await _download_media(_rewrite_media_url(url, upstream_base))
-            return data, mime, _ext_from_mime(mime, "wav")
+            last_reason = ""
+            for i, conf in enumerate(candidates):
+                try:
+                    ptype = (conf[3] if conf else "").lower()
+                    if conf and ptype == "edge_tts":
+                        from app.providers.edge_tts import EdgeTTSSpeechProvider
+
+                        speech_provider = EdgeTTSSpeechProvider()
+                        # hub 的 default_model 存音色（如 zh-CN-XiaoxiaoNeural）；
+                        # 请求 schema 默认 voice="default" 视为未指定
+                        if conf[2] and str(params.get("voice") or "") in ("", "default"):
+                            params = {**params, "voice": str(conf[2])}
+                    else:
+                        # registry 兜底：get_speech_provider 只收 name，
+                        # 不能传 base_url 等构造参数（历史 TypeError 隐患）
+                        speech_provider = ProviderRegistry.get_speech_provider(
+                            upstream or ""
+                        )
+                    if speech_provider.__class__.__name__ == "MockSpeechProvider":
+                        return None, "语音 Provider 解析为 Mock，未走真实路径"
+                    result = await speech_provider.submit(prompt, model=upstream, **params)
+                    poll_result = await speech_provider.poll(str(result.get("task_id") or ""))
+                    if poll_result.get("status") != "succeeded":
+                        raise RuntimeError(
+                            str(poll_result.get("error") or poll_result.get("status") or "unknown")
+                        )
+                    url = str(
+                        poll_result.get("audio_url") or result.get("audio_url") or ""
+                    )
+                    if not url:
+                        raise RuntimeError("真实语音结果缺少音频地址")
+                    data, mime = await _download_media(
+                        _rewrite_media_url(url, conf[0] if conf else "")
+                    )
+                    logger.info(
+                        "media_candidate_used",
+                        task_type=task_type,
+                        candidate=f"{i + 1}/{len(candidates)}",
+                        provider_type=(conf[3] if conf else "registry"),
+                    )
+                    return data, mime, _ext_from_mime(mime, "wav")
+                except Exception as exc:  # noqa: BLE001
+                    last_reason = (str(exc).strip() or type(exc).__name__)[:200]
+                    if i < len(candidates) - 1:
+                        logger.warning(
+                            "media_failover_next",
+                            task_type=task_type,
+                            failed_candidate=i + 1,
+                            error=last_reason,
+                            remaining=len(candidates) - i - 1,
+                        )
+                        continue
+            return None, f"真实语音任务未成功: {last_reason[:160]}"
         return None, f"任务类型 {task_type} 暂无真实 Provider"
     except Exception as exc:
         reason = str(exc).strip()[:200]
@@ -477,15 +642,21 @@ async def _comic_real_media(
 # 背景：测试库为内存 SQLite 单连接（StaticPool），并发写会概率性
 # 「database is locked/连接竞争」导致全量回归随机失败；串行化后
 # 同时只执行一个任务，连接竞争消失。生产走 Celery 队列天然串行，不受影响。
-_media_exec_lock: asyncio.Lock | None = None
+# ⚠️ celery worker 每任务 asyncio.run 新事件循环：锁必须按 loop 隔离
+# （全局单例 Lock 会绑死第一个循环 → "Future attached to a different loop"）。
+_media_exec_locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = (
+    weakref.WeakKeyDictionary()
+)
 
 
 def _media_lock() -> asyncio.Lock:
-    """同 loop 惰性创建（测试/生产均为单事件循环）。"""
-    global _media_exec_lock
-    if _media_exec_lock is None:
-        _media_exec_lock = asyncio.Lock()
-    return _media_exec_lock
+    """按事件循环惰性创建（API 单循环复用一个；worker 每任务循环各一个）。"""
+    loop = asyncio.get_running_loop()
+    lock = _media_exec_locks.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _media_exec_locks[loop] = lock
+    return lock
 
 
 async def run_media_task(task_id: str) -> None:
@@ -759,6 +930,21 @@ async def _run_media_task_locked(task_id: str) -> None:
                 asset_id=asset.id,
                 storage_backend=backend,
             )
+            # 通知：生成完成
+            if task.task_type in ("image", "video", "audio", "music", "comic", "text"):
+                await notify_event({
+                    "source": "saios",
+                    "type": "saios.generation.succeeded",
+                    "severity": "success",
+                    "priority": "low",
+                    "dedup_key": f"saios:task:{task.id}",
+                    "merge_key": f"saios:{task.task_type}",
+                    "title": f"{task.task_type} 生成完成",
+                    "message": f"模型 {model_name if used_real else 'mock'} · asset {asset.id[:8]}",
+                    "payload": {"task_id": task.id, "task_type": task.task_type,
+                                "model": model_name, "is_real": used_real,
+                                "asset_id": asset.id},
+                })
             await log_call(
                 task_id=task_id,
                 task_type=task.task_type,
@@ -777,6 +963,20 @@ async def _run_media_task_locked(task_id: str) -> None:
                 task.error_message = str(exc)[:500]
                 task.completed_at = datetime.now(UTC)
                 await db.commit()
+                # 通知：生成失败
+                if task.task_type in ("image", "video", "audio", "music", "comic", "text"):
+                    await notify_event({
+                        "source": "saios",
+                        "type": "saios.generation.failed",
+                        "severity": "error",
+                        "priority": "normal",
+                        "dedup_key": f"saios:task:{task.id}",
+                        "merge_key": f"saios:{task.task_type}",
+                        "title": f"{task.task_type} 生成失败",
+                        "message": str(exc)[:200],
+                        "payload": {"task_id": task.id, "task_type": task.task_type,
+                                    "error": str(exc)[:200]},
+                    })
             logger.exception("media_task_failed", task_id=task_id)
             await log_call(
                 task_id=task_id,

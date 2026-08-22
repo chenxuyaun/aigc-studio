@@ -1,14 +1,103 @@
-"""resolve_text_provider 语义：空 model 自动选最优真实 provider，无可用时抛错。"""
+"""resolve_text_provider 语义（P2 收敛版）：hub 链优先 → env 兜底 → 抛错。
+
+deprecation-plan.md P2：DB provider_configs 通道已下线，不再参与解析。
+"""
 
 from __future__ import annotations
 
 import pytest
+from app.core.config import settings
 from app.services.provider_resolver import NoTextProviderError, resolve_text_provider
 
 
+def _mock_chain(monkeypatch: pytest.MonkeyPatch, confs: list[dict]) -> None:
+    import app.services.model_hub_client as hub_mod
+
+    async def fake_chain(slot: str):
+        assert slot == "text"
+        return confs
+
+    monkeypatch.setattr(hub_mod, "get_active_chain", fake_chain)
+
+
+def _env_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "OPENAI_COMPATIBLE_BASE_URL", "", raising=False)
+    monkeypatch.setattr(settings, "OPENAI_COMPATIBLE_API_KEY", "", raising=False)
+    monkeypatch.setattr(settings, "OPENAI_COMPATIBLE_MODEL", "", raising=False)
+
+
 @pytest.mark.asyncio
-async def test_empty_model_resolves_to_real_provider(client, admin_token) -> None:
-    """空 model（前端「自动/默认」）必须解析到真实 provider，而不是 mock。"""
+async def test_hub_chain_wins(client, admin_token, monkeypatch) -> None:
+    """模型中心链存在：解析到链首 default_model，source=hub，绝不落 DB/env。"""
+    _mock_chain(
+        monkeypatch,
+        [
+            {"base_url": "http://up-a/v1", "api_key": "k1", "default_model": "model-a", "provider_type": "openai_compatible"},
+            {"base_url": "http://up-b/v1", "api_key": "k2", "default_model": "model-b", "provider_type": "openai_compatible"},
+        ],
+    )
+    from app.providers.failover import FailoverTextProvider
+
+    from tests.conftest import TestingSessionLocal
+
+    async with TestingSessionLocal() as db:
+        r = await resolve_text_provider(db, "")
+        assert r.is_real is True
+        assert r.source == "hub"
+        assert r.model == "model-a"
+        # 多候选 → FailoverTextProvider 包裹
+        assert isinstance(r.provider, FailoverTextProvider)
+
+        # 空字符串 / None / 显式名等价：显式 model 不跨供应商传递
+        for requested in (None, "whatever-model"):
+            r2 = await resolve_text_provider(db, requested)  # type: ignore[arg-type]
+            assert r2.source == "hub"
+
+
+@pytest.mark.asyncio
+async def test_env_fallback_when_hub_down(client, admin_token, monkeypatch) -> None:
+    """hub 不可用且 env 已配置 → env 兜底。"""
+    import app.services.model_hub_client as hub_mod
+
+    async def broken_chain(slot: str):
+        raise RuntimeError("hub down")
+
+    monkeypatch.setattr(hub_mod, "get_active_chain", broken_chain)
+    monkeypatch.setattr(settings, "OPENAI_COMPATIBLE_BASE_URL", "http://127.0.0.1:8000/v1", raising=False)
+    monkeypatch.setattr(settings, "OPENAI_COMPATIBLE_MODEL", "env-model", raising=False)
+
+    from tests.conftest import TestingSessionLocal
+
+    async with TestingSessionLocal() as db:
+        r = await resolve_text_provider(db, "")
+        assert r.is_real is True
+        assert r.source == "env"
+        assert r.model == "env-model"
+
+        # 显式请求非 env-openai 名 → 用请求的 model 名打上游
+        r2 = await resolve_text_provider(db, "custom-name")
+        assert r2.model == "custom-name"
+
+
+@pytest.mark.asyncio
+async def test_no_provider_raises(client, admin_token, monkeypatch) -> None:
+    """hub 不可用 + 无 env → NoTextProviderError（绝不 mock）。"""
+    _mock_chain(monkeypatch, [])
+    _env_off(monkeypatch)
+
+    from tests.conftest import TestingSessionLocal
+
+    async with TestingSessionLocal() as db:
+        with pytest.raises(NoTextProviderError):
+            await resolve_text_provider(db, "")
+
+
+@pytest.mark.asyncio
+async def test_db_rows_are_ignored(client, admin_token, monkeypatch) -> None:
+    """P2 语义验证：DB 里即使有启用配置也不参与解析（无 hub 无 env 时仍抛错）。"""
+    _mock_chain(monkeypatch, [])
+    _env_off(monkeypatch)
+
     from app.models.provider_config import ProviderConfig
     from app.security.ownership import seal_secret
 
@@ -17,86 +106,16 @@ async def test_empty_model_resolves_to_real_provider(client, admin_token) -> Non
     async with TestingSessionLocal() as db:
         db.add(
             ProviderConfig(
-                name="TestLLM",
+                name="LegacyDB",
                 provider_type="openai_compatible",
                 base_url="http://127.0.0.1:8000/v1",
-                default_model="test-llm",
+                default_model="legacy-model",
                 is_enabled=True,
                 priority=0,
-                encrypted_api_key=seal_secret("test-key"),
+                encrypted_api_key=seal_secret("k"),
             )
         )
         await db.commit()
 
-        r = await resolve_text_provider(db, "")
-        assert r.is_real is True
-        assert r.model == "test-llm"
-        assert r.source == "db"
-        assert r.provider_config_id is not None
-
-        # 空字符串 / None 等价
-        r2 = await resolve_text_provider(db, None)  # type: ignore[arg-type]
-        assert r2.is_real is True
-
-        # 显式 "mock" 不再返回离线假数据：解析为真实 provider 或报错，绝不 is_real=False
-        r3 = await resolve_text_provider(db, "mock")
-        assert r3.is_real is True
-
-
-@pytest.mark.asyncio
-async def test_explicit_id_matches_provider(client, admin_token) -> None:
-    """按 ProviderConfig.id 精确匹配。"""
-    from app.models.provider_config import ProviderConfig
-    from app.security.ownership import seal_secret
-
-    from tests.conftest import TestingSessionLocal
-
-    async with TestingSessionLocal() as db:
-        cfg = ProviderConfig(
-            name="Named",
-            provider_type="openai_compatible",
-            base_url="http://127.0.0.1:8000/v1",
-            default_model="named-model",
-            is_enabled=True,
-            priority=5,
-            encrypted_api_key=seal_secret("k"),
-        )
-        db.add(cfg)
-        await db.commit()
-
-        r = await resolve_text_provider(db, cfg.id)
-        assert r.is_real is True
-        assert r.model == "named-model"
-        assert r.provider_config_id == cfg.id
-
-
-@pytest.mark.asyncio
-async def test_disabled_provider_skipped(client, admin_token) -> None:
-    """禁用配置不参与解析。"""
-    from app.models.provider_config import ProviderConfig
-    from app.security.ownership import seal_secret
-
-    from tests.conftest import TestingSessionLocal
-
-    async with TestingSessionLocal() as db:
-        disabled = ProviderConfig(
-            name="DisabledLLM",
-            provider_type="openai_compatible",
-            base_url="http://127.0.0.1:8000/v1",
-            default_model="disabled-model",
-            is_enabled=False,
-            priority=0,
-            encrypted_api_key=seal_secret("k"),
-        )
-        db.add(disabled)
-        await db.commit()
-        await db.refresh(disabled)
-
-        # 禁用配置被跳过：解析到 env/其他启用兜底或抛 NoTextProviderError，
-        # 但绝不可能是被禁用的那个配置
-        try:
-            r = await resolve_text_provider(db, "disabled-model")
-        except NoTextProviderError:
-            return  # 无兜底：符合「无可用 provider 抛错」语义
-        assert r.is_real is True
-        assert r.provider_config_id != disabled.id
+        with pytest.raises(NoTextProviderError):
+            await resolve_text_provider(db, "")

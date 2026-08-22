@@ -1,16 +1,21 @@
-"""从 DB / 环境变量解析文本 Provider。"""
+"""文本 Provider 解析（P2 收敛版：模型中心优先 + env 兜底）。
+
+deprecation-plan.md P2：saiOS DB `provider_configs` 通道已下线——
+解析顺序只剩：
+  0) 模型中心 text 槽位候选链（v3 故障转移）
+  1) env `OPENAI_COMPATIBLE_*` 兜底
+两者皆无 → NoTextProviderError（不产出离线假数据）。
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
-from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.provider_config import ProviderConfig
 from app.providers.openai_compatible import OpenAICompatibleTextProvider
-from app.security.ownership import open_secret
 
 
 class NoTextProviderError(RuntimeError):
@@ -22,45 +27,45 @@ class ResolvedTextProvider:
     provider: object
     model: str
     is_real: bool
-    provider_config_id: str | None = None
-    source: str = "db"  # db | env
+    provider_config_id: str | None = None  # P3 随 provider_configs 表一起移除
+    source: str = "env"  # hub | env
 
 
 async def list_enabled_text_catalog(db: AsyncSession) -> list[dict[str, object]]:
-    """前端模型下拉：启用的 text/openai 兼容配置（不含 mock）。"""
-    rows = (
-        (
-            await db.execute(
-                select(ProviderConfig)
-                .where(
-                    ProviderConfig.is_enabled.is_(True),
-                    or_(
-                        ProviderConfig.provider_type.in_(
-                            ["text", "openai_compatible", "openai", "chat", "llm"]
-                        ),
-                        ProviderConfig.provider_type == "",
-                    ),
-                )
-                .order_by(ProviderConfig.priority.asc(), ProviderConfig.created_at.asc())
-            )
-        )
-        .scalars()
-        .all()
-    )
+    """前端模型下拉目录：模型中心 text 能力供应商；hub 不可用时 env 兜底条目。
+
+    db 参数保留以兼容调用方签名（P2 起不再查 DB）。
+    """
     items: list[dict[str, object]] = []
-    for p in rows:
-        if not (p.base_url or "").strip() and not (p.default_model or "").strip():
-            continue
-        items.append(
-            {
-                "id": p.id,
-                "name": p.name,
-                "provider_type": p.provider_type,
-                "default_model": p.default_model or p.name,
-                "is_enabled": True,
-                "source": "db",
-            }
-        )
+    try:
+        from app.services.model_hub_client import list_providers
+
+        for p in await list_providers():
+            if not p.get("is_enabled", True):
+                continue
+            caps = p.get("capabilities") or {}
+            if isinstance(caps, str):
+                import json as _json
+
+                try:
+                    caps = _json.loads(caps)
+                except Exception:  # noqa: BLE001
+                    caps = {}
+            if isinstance(caps, dict) and not caps.get("text"):
+                continue
+            items.append(
+                {
+                    "id": str(p.get("id") or ""),
+                    "name": str(p.get("name") or ""),
+                    "provider_type": str(p.get("provider_type") or "openai_compatible"),
+                    "default_model": str(p.get("default_model") or p.get("name") or ""),
+                    "is_enabled": True,
+                    "source": "hub",
+                }
+            )
+    except Exception:  # noqa: BLE001 - 模型中心不可用时静默走 env 条目
+        items = []
+
     # 环境变量兜底条目（库中尚无同 base 时展示）
     if settings.OPENAI_COMPATIBLE_BASE_URL and settings.OPENAI_COMPATIBLE_MODEL:
         env_model = settings.OPENAI_COMPATIBLE_MODEL
@@ -81,52 +86,48 @@ async def list_enabled_text_catalog(db: AsyncSession) -> list[dict[str, object]]
 async def resolve_text_provider(db: AsyncSession, requested_model: str) -> ResolvedTextProvider:
     """解析文本 Provider。
 
-    空 model 表示「自动」：选择优先级最高的启用真实 Provider（DB 优先、env 兜底）。
+    0) 模型中心 text 槽位候选链优先（v3 故障转移，主选在前）；
+       空 model 表示「自动」= 用链首 default_model。
+    1) env `OPENAI_COMPATIBLE_*` 兜底。
     系统无任何可用 Provider 时抛 NoTextProviderError（不产出离线假数据）。
     """
     requested = (requested_model or "").strip()
+    _ = requested  # 显式 model 名不再跨供应商传递：链首 default_model 优先
 
-    # 1) 按 id 精确匹配
-    if requested:
-        by_id = (
-            await db.execute(select(ProviderConfig).where(ProviderConfig.id == requested))
-        ).scalar_one_or_none()
-        if by_id and by_id.is_enabled and (by_id.base_url or "").strip():
-            return _from_row(by_id, model_override=by_id.default_model or requested)
+    # 0) 模型中心 text 候选链
+    try:
+        from app.providers.failover import FailoverTextProvider
+        from app.services.model_hub_client import get_active_chain
 
-    rows = (
-        (
-            await db.execute(
-                select(ProviderConfig)
-                .where(ProviderConfig.is_enabled.is_(True))
-                .order_by(ProviderConfig.priority.asc(), ProviderConfig.created_at.asc())
-            )
-        )
-        .scalars()
-        .all()
-    )
+        chain = await get_active_chain("text")
+        confs = [c for c in chain if (c.get("base_url") or "").strip()]
+        if confs:
+            providers = [
+                OpenAICompatibleTextProvider(
+                    base_url=c["base_url"],
+                    api_key=c.get("api_key") or "none",
+                    default_model=c.get("default_model") or "",
+                    timeout=180,
+                )
+                for c in confs
+            ]
+            model_name = confs[0].get("default_model") or ""
+            provider: Any = providers[0]
+            if len(providers) > 1:
+                provider = FailoverTextProvider(providers)
+            return ResolvedTextProvider(provider, model_name, True, source="hub")
+    except NoTextProviderError:
+        raise
+    except Exception:  # noqa: BLE001 - 模型中心不可用 → env 兜底
+        pass
 
-    # 2) 按 default_model / name 匹配启用配置
-    if requested:
-        for p in rows:
-            if not (p.base_url or "").strip():
-                continue
-            if p.is_enabled and (p.default_model == requested or p.name == requested):
-                return _from_row(p, model_override=requested)
-
-    # 3) 任意启用的 text 类：显式请求时用请求 model 名打上游；自动时取最优配置
-    for p in rows:
-        if not (p.base_url or "").strip():
-            continue
-        if p.provider_type in ("text", "openai_compatible", "openai", "chat", "llm", ""):
-            return _from_row(p, model_override=requested or p.default_model or p.name)
-
-    # 4) 环境变量
+    # 1) 环境变量兜底
     if settings.OPENAI_COMPATIBLE_BASE_URL:
-        if requested and requested != "env-openai":
-            use_model = requested
-        else:
-            use_model = settings.OPENAI_COMPATIBLE_MODEL or "grok-4.5"
+        use_model = (
+            requested
+            if requested and requested != "env-openai"
+            else (settings.OPENAI_COMPATIBLE_MODEL or "grok-4.5")
+        )
         return ResolvedTextProvider(
             OpenAICompatibleTextProvider(
                 base_url=settings.OPENAI_COMPATIBLE_BASE_URL,
@@ -139,23 +140,6 @@ async def resolve_text_provider(db: AsyncSession, requested_model: str) -> Resol
             source="env",
         )
 
-    raise NoTextProviderError("未配置可用的文本模型，请在「模型配置」中启用一个 Provider")
-
-
-def _from_row(p: ProviderConfig, *, model_override: str) -> ResolvedTextProvider:
-    key = open_secret(p.encrypted_api_key or "") or "none"
-    actual = model_override or p.default_model or "default"
-    # grok2api 等网关首 token 可能很慢，超时下限 120s
-    timeout = max(int(p.timeout_seconds or 60), 120)
-    return ResolvedTextProvider(
-        OpenAICompatibleTextProvider(
-            base_url=p.base_url,
-            api_key=key,
-            default_model=p.default_model or actual,
-            timeout=timeout,
-        ),
-        actual,
-        True,
-        provider_config_id=p.id,
-        source="db",
+    raise NoTextProviderError(
+        "未配置可用的文本模型：请在模型中心（服务器 :8511）设置 text 槽位，或配置 OPENAI_COMPATIBLE_* 环境变量"
     )
