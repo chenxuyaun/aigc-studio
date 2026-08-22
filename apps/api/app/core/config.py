@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     INITIAL_ADMIN_USERNAME: str = "admin"
     INITIAL_ADMIN_PASSWORD: str = "admin123"
 
+    # 自动登录（个人服务器免登录入口）：
+    # AUTO_LOGIN_USERNAME：目标账号；AUTO_LOGIN_KEY：随机密钥（nginx 注入 X-Auto-Login-Key 头）
+    # 空 AUTO_LOGIN_KEY = 功能关闭。生产务必设置强随机值（openssl rand -hex 32）。
+    AUTO_LOGIN_USERNAME: str = ""
+    AUTO_LOGIN_KEY: str = ""
+
+    # 统一通知（生成完成/失败 → 通知服务）：NOTIFY_WEBHOOK_URL 空 = 关闭
+    NOTIFY_ENABLED: bool = False
+    NOTIFY_WEBHOOK_URL: str = ""
+
     STORAGE_PROVIDER: str = "local"
     # 默认落在 apps/api/storage，避免从 monorepo 根启动时写到仓库根目录
     STORAGE_LOCAL_PATH: str = str(_API_ROOT / "storage")
@@ -79,6 +89,17 @@ class Settings(BaseSettings):
     OPENAI_COMPATIBLE_VIDEO_MODEL: str = ""
     # 同一上游的最小请求间隔（秒，0=关闭）：防密集请求触发上游风控（如 Grok anti-bot）
     OPENAI_COMPATIBLE_MIN_INTERVAL: float = 1.5
+
+    # zarklab.ai 图像 Provider（/v1/complete, tool=image, mode=autonomous）
+    ZARK_API_KEY: str = ""
+    ZARK_BASE_URL: str = "https://api.zarklab.ai"
+    ZARK_DEFAULT_MODEL: str = "zarklab-image"
+    ZARK_MIN_INTERVAL: float = 1.0
+
+    # 模型中心（Model Hub）独立服务：saiOS 动态拉取当前激活 provider 配置
+    MODEL_HUB_BASE_URL: str = "http://127.0.0.1:8511"
+    MODEL_HUB_TIMEOUT: float = 2.0
+    MODEL_HUB_CACHE_SECONDS: float = 10.0
 
     # HuggingFace 免费推理 API（无需 Key 即可使用，有速率限制）
     HUGGINGFACE_TOKEN: str = ""

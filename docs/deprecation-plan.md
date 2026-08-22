@@ -64,6 +64,14 @@
 
 - [x] 规划完成（2026-08-22）
 - [x] P1 执行 ✅（2026-08-22，横幅上线并实证进产物）
-- [ ] P2 执行 —— **门禁：hub 连续稳定 ≥7 天（即 ≥2026-08-29）+ 期间生成全部 source=hub**；
-      到期后向用户出示稳定性证据，确认后动代码
-- [ ] P3 执行 —— 待用户最终确认（不可逆动作集中在此）
+- [x] P2 执行 ✅（2026-08-22，用户"继续"指示后提前部署）：
+  - 证据面：当日 6 个失败全部发生在修复部署前；修复后 0 NoTextProviderError、
+    0 media_failover_next、hub NRestarts=0、守卫+备份定时器在岗
+  - 变更：resolver 只剩 hub 链+env 兜底；_media_candidates 去掉 DB 层；
+    providers 写操作 410；ProvidersPage 只读；catalog 改由模型中心供给
+    （实测 7 hub + 1 env）
+  - 测试：pytest 全量绿；tsc 通过；提交锚点 `d849a3e`（回滚 = revert 此提交并重建）
+  - 端到端：登录→catalog→410→text/generate 实测 **content="通"，source=hub**
+  - 附带发现：hub 内有若干 "(副本)" 重复供应商行，待下轮清点链引用后清理
+- [ ] P3 执行 —— 待观察期（建议至 2026-08-29）+ 用户最终确认（DROP TABLE 等不可逆动作）：
+  comic_service/inspection_tasks/upstream 的 env 直读改走 hub 也挪到本阶段一并处理

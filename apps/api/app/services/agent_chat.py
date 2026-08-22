@@ -62,7 +62,18 @@ async def agent_chat_stream(
                 args = {}
             yield {"type": "tool", "name": name, "status": "running"}
             out = await _call_tool(name, args if isinstance(args, dict) else {})
-            yield {"type": "tool", "name": name, "status": "done", "summary": out[:200]}
+            # 工具终态：summary 供前端展示一行状态；result_data 传完整结构化结果（如生图 asset_url）
+            try:
+                result_data = json.loads(out) if isinstance(out, str) else out
+            except (json.JSONDecodeError, TypeError):
+                result_data = out
+            yield {
+                "type": "tool",
+                "name": name,
+                "status": "done",
+                "summary": out[:200],
+                "result_data": result_data,
+            }
             tool_msgs.append(
                 {
                     "role": "tool",

@@ -4,6 +4,7 @@ import json
 import random
 import time
 import uuid
+import weakref
 from collections.abc import AsyncIterator
 
 import httpx
@@ -19,12 +20,113 @@ from app.providers.base import (
 _MAX_RETRIES = 3  # 上游 429 限流自动退避重试次数
 
 # 按 base_url 分桶的节流状态（防密集请求触发上游风控，如 Grok anti-bot 403）
-_throttle_locks: dict[str, asyncio.Lock] = {}
+# ⚠️ celery worker 每任务新事件循环：锁按 loop 隔离，避免跨循环复用崩溃。
+_throttle_locks: dict[str, "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]"] = {}
 _throttle_last: dict[str, float] = {}
+
+
+def _key_lock(key: str) -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    per_loop = _throttle_locks.setdefault(key, weakref.WeakKeyDictionary())
+    lock = per_loop.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        per_loop[loop] = lock
+    return lock
 
 
 class ProviderError(RuntimeError):
     """真实 Provider 调用失败（连接、鉴权或上游错误），供上层决定是否回退。"""
+
+
+def _parse_sse_json(text: str) -> dict[str, object]:
+    """解析 OpenAI 兼容 SSE 流（data: {...}\n\ndata: {...}）为单个 completion JSON。
+
+    逐条解析 data 行，聚合 delta.content 与 delta.tool_calls（带 index 归位），
+    输出与一次非流式 chat.completion 相同的 {choices:[{message:{content, tool_calls}}]} 结构。
+    """
+    content_parts: list[str] = []
+    tool_calls: dict[int, dict[str, object]] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[5:].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            obj = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        choices = obj.get("choices")
+        if not choices:
+            continue
+        delta = choices[0].get("delta") if isinstance(choices[0], dict) else None
+        if not isinstance(delta, dict):
+            continue
+        c = delta.get("content")
+        if isinstance(c, str) and c:
+            content_parts.append(c)
+        raw_calls = delta.get("tool_calls")
+        if isinstance(raw_calls, list):
+            for tc in raw_calls:
+                if not isinstance(tc, dict):
+                    continue
+                idx = int(tc.get("index", 0))
+                slot = tool_calls.setdefault(
+                    idx,
+                    {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
+                )
+                fn = slot.get("function")
+                if isinstance(fn, dict):
+                    if tc.get("id"):
+                        fn["id"] = tc["id"]
+                    f = tc.get("function")
+                    if isinstance(f, dict):
+                        if f.get("name"):
+                            fn["name"] = f["name"]
+                        if f.get("arguments"):
+                            fn["arguments"] = fn.get("arguments", "") + str(f["arguments"])
+    ordered_tool_calls: list[dict[str, object]] = []
+    for idx in sorted(tool_calls):
+        slot = dict(tool_calls[idx])
+        ordered_tool_calls.append(slot)
+    return {
+        "choices": [
+            {
+                "message": {
+                    "content": "".join(content_parts),
+                    "tool_calls": ordered_tool_calls or None,
+                }
+            }
+        ]
+    }
+
+
+def _extract_sse_error(text):  # -> Optional[str]
+    """从 SSE 响应中提取上游错误（event: error\\ndata: {json error}）。无错误返回 None。
+
+    grok2api 等网关在上游失败（如 403 风控）时返回这类 SSE error 帧，而非 HTTP 错误状态码；
+    提取 error.message 让上层报可读的「上游返回 403: ...」而非笼统的「非 JSON」。
+    """
+    if "event: error" not in text:
+        return None
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("data:"):
+            payload = line[5:].strip()
+            if not payload or payload == "[DONE]":
+                continue
+            try:
+                obj = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            err = obj.get("error") if isinstance(obj, dict) else None
+            if isinstance(err, dict):
+                msg = err.get("message") or ""
+                code = err.get("code") or ""
+                return f"上游错误: {msg} (code={code})"
+    return "上游错误: 未知 SSE 错误帧"
 
 
 class OpenAICompatibleTextProvider(TextProvider):
@@ -48,7 +150,7 @@ class OpenAICompatibleTextProvider(TextProvider):
         if interval <= 0:
             return
         key = self.base_url
-        lock = _throttle_locks.setdefault(key, asyncio.Lock())
+        lock = _key_lock(key)
         async with lock:
             last = _throttle_last.get(key, 0.0)
             wait = last + interval - time.monotonic()
@@ -122,7 +224,18 @@ class OpenAICompatibleTextProvider(TextProvider):
                 resp = await self._post_retry(client, f"{self.base_url}/chat/completions", payload)
                 if resp.status_code != 200:
                     raise ProviderError(f"上游返回 {resp.status_code}: {resp.text[:200]}")
-                data = resp.json()
+                # grok2api/LiteLLM 等网关对带 tools 的请求可能强制返回 SSE 流（data: {...}）
+                # 而非单个 JSON，也可能返回 event: error + data: {json} 的 SSE 错误 → 统一兼容解析。
+                text = resp.text
+                if _extract_sse_error(text) is not None:
+                    raise ProviderError(_extract_sse_error(text))
+                if text.lstrip().startswith("data:"):
+                    data = _parse_sse_json(text)
+                else:
+                    try:
+                        data = json.loads(text)
+                    except json.JSONDecodeError:
+                        raise ProviderError(f"上游返回非 JSON: {text[:200]}")
                 msg = data["choices"][0]["message"]
                 tool_calls: list[dict[str, object]] | None = None
                 raw_calls = msg.get("tool_calls")
@@ -278,7 +391,7 @@ class OpenAICompatibleImageProvider(ImageProvider):
         if interval <= 0:
             return
         key = self.base_url
-        lock = _throttle_locks.setdefault(key, asyncio.Lock())
+        lock = _key_lock(key)
         async with lock:
             last = _throttle_last.get(key, 0.0)
             wait = last + interval - time.monotonic()
@@ -438,7 +551,7 @@ class OpenAICompatibleVideoProvider(VideoProvider):
         if interval <= 0:
             return
         key = self.base_url
-        lock = _throttle_locks.setdefault(key, asyncio.Lock())
+        lock = _key_lock(key)
         async with lock:
             last = _throttle_last.get(key, 0.0)
             wait = last + interval - time.monotonic()

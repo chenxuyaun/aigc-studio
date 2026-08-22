@@ -52,6 +52,12 @@ class ProviderRegistry:
         key = raw.lower()
         if key in {"", "mock"}:
             return MockImageProvider()
+        if key == "zarklab":
+            from app.providers.zarklab import ZarklabImageProvider
+
+            return ZarklabImageProvider(
+                base_url=base_url, api_key=api_key, default_model=default_model
+            )
         if key in {"grok", "grok2api", "openai_compatible"}:
             from app.providers.openai_compatible import OpenAICompatibleImageProvider
 

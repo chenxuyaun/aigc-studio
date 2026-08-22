@@ -9,6 +9,9 @@ import { useHost } from "./hostContext";
 
 // 页面级懒加载：首屏只加载登录/工作台，其余按路由分包（含 WorkflowCanvasEditor 的 xyflow 独立 chunk）
 const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const AssistantHomePage = lazy(() =>
+  import("@/pages/AssistantHomePage").then((m) => ({ default: m.AssistantHomePage })),
+);
 const DashboardPage = lazy(() =>
   import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })),
 );
@@ -131,7 +134,9 @@ export function AppRoutes() {
       <Route path="/share/prompts/:promptId" element={<Page><SharedPromptPage /></Page>} />
       <Route path="/share/music/:workId" element={<Page><SharedMusicPage /></Page>} />
       <Route element={<ProtectedLayout />}>
-      <Route path="/" element={<Page><DashboardPage /></Page>} />
+      <Route path="/" element={<Page><AssistantHomePage /></Page>} />
+      {/* 原工作台（数据统计/功能速览）移至 /dashboard 保留 */}
+      <Route path="/dashboard" element={<Page><DashboardPage /></Page>} />
       {/* AI 创作已与工作台合一（目标框 + 引擎直控）；/create 直达重定向 */}
       <Route path="/create" element={<Navigate to="/" replace />} />
         <Route path="/sillytavern" element={<Page><SillyTavernPage /></Page>} />

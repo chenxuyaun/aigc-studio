@@ -22,7 +22,10 @@ class EdgeTTSSpeechProvider(SpeechProvider):
     ) -> dict[str, object]:
         import edge_tts
 
-        voice = str(kwargs.get("voice") or DEFAULT_VOICE)
+        voice = str(kwargs.get("voice") or "").strip()
+        # 请求 schema 默认 voice="default" 视为未指定（否则 edge-tts 报 Invalid voice）
+        if not voice or voice.lower() == "default":
+            voice = DEFAULT_VOICE
         content = text[:MAX_CHARS]
         buf = io.BytesIO()
         # 宿主线程内跑（edge-tts 的 websocket 与 asyncio 兼容，直接 await 即可）

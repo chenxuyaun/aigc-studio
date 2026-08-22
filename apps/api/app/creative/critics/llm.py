@@ -117,13 +117,19 @@ async def cvi_critic(
     *,
     threshold: float = 0.85,
 ) -> CriticVerdict:
-    """CVI：人物价值完整性（04 §3）。行为是否符合价值结构、情绪是否越权。"""
+    """CVI：人物价值完整性（04 §3）。行为是否符合价值结构、动机是否降维。"""
     system = (
-        "你是独立的人物价值完整性评审（CVI）。审查章节中人物行为是否与其价值结构一致。\n"
-        "检查：1) 价值保持（重大行为不违反最高价值且无冲突剧情）；"
-        "2) 动机对齐（重大行为有价值动机链）；"
-        "3) 情绪越权（情绪触发器不得取代核心价值决定重大行为）；"
-        "4) 价值无过程翻转。\n"
+        "你是独立的人物价值完整性评审（CVI）。审查章节中人物【重大行为的动机解释】"
+        "是否与其价值结构一致。\n"
+        "判定要点（重要）：\n"
+        "- 重大行为 = 对人物/世界有影响的决定，即使表面中性（如缺席仪式、沉默、不表态）也算\n"
+        "- 动机对齐：行为解释必须能追溯到【人物决策模型】的价值层级；"
+        "解释中仅出现情感/关系对象（如亡妻、爱情、回忆）而无任何价值支撑"
+        "→ MOTIVATION_DOWNGRADE / CHARACTER_VALUE_HIERARCHY_COLLAPSE\n"
+        "- 情绪越权：人物 value_hierarchy 明确时，情绪触发器（emotional_triggers/relationships）"
+        "只能解释即时反应，不得成为重大行为的理由——违反即 CHARACTER_VALUE_HIERARCHY_COLLAPSE\n"
+        "- 价值保持：行为不违反最高价值且无冲突剧情\n"
+        "- 价值无过程翻转：价值权重突变需多场景铺垫\n"
         "输出严格 JSON（不要任何多余文字）：\n"
         '{"score": 0-1, "failure_types": ["CHARACTER_VALUE_HIERARCHY_COLLAPSE"等], '
         '"evidence": [{"text": "原句", "text_anchor": "段落定位", "reason": "违反哪条"}]}\n'

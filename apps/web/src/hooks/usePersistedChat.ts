@@ -6,6 +6,10 @@ export interface PersistedChatMessage {
   role: "user" | "assistant";
   content: string;
   mood?: string;
+  /** 工具生成结果（如生图 asset_url），用于对话内图片回显 */
+  image?: string;
+  /** 媒体类型：image | audio | comic（用于多媒体消息渲染） */
+  media?: "image" | "audio" | "comic";
 }
 
 /**

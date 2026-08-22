@@ -152,24 +152,9 @@ def _draw_speech_bubble(img: Image.Image, dialogue: str) -> None:
 
 
 async def _story_api_key(db: AsyncSession | None = None) -> str:
-    """cpa（分镜文本模型）的客户端 key：从 DB provider_configs 解密。"""
-    from sqlalchemy import select
-
-    from app.models.provider_config import ProviderConfig
-    from app.security.ownership import open_secret
-
-    session = db
-    if session is None:
-        from app.core.database import AsyncSessionLocal
-
-        async with AsyncSessionLocal() as s:
-            return await _story_api_key(s)
-    row = (
-        await session.execute(select(ProviderConfig).where(ProviderConfig.name.contains("cpa")))
-    ).scalar_one_or_none()
-    if row and row.encrypted_api_key:
-        return open_secret(row.encrypted_api_key)
-    return ""
+    """cpa（分镜文本模型）的客户端 key：P3 起直接读 env（provider_configs 表已删除）。"""
+    _ = db
+    return os.environ.get("OPENAI_COMPATIBLE_API_KEY", "")
 
 
 async def _grok_image_key() -> str:

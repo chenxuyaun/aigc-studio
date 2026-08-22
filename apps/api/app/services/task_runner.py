@@ -130,64 +130,6 @@ _SLOT_BY_TASK: dict[str, str] = {
 }
 
 
-async def _provider_settings(
-    db: AsyncSession, model: str, task_type: str | None = None
-) -> tuple[str, str, str, str] | None:
-    """按 model（id / name 别名 / default_model）解析 Provider 配置。
-
-    ⚠️ P2 起运行时不再调用（_media_candidates 只走模型中心链）；
-    保留本函数仅供测试与 P3 迁移参考，将随 provider_configs 表一起删除。
-    """
-    # 1) 模型中心优先：按任务类型取对应槽位（不可用则回退）
-    try:
-        from app.services.model_hub_client import get_active_config
-
-        slot = _SLOT_BY_TASK.get((task_type or "").lower())
-        hub = await get_active_config(slot=slot)
-        if hub and hub.get("base_url"):
-            return (
-                hub["base_url"],
-                hub.get("api_key") or "",
-                hub.get("default_model") or "",
-                hub.get("provider_type") or "openai_compatible",
-            )
-    except Exception:
-        pass
-
-    # 2) 回退：saiOS 自带 DB ProviderConfig
-    from sqlalchemy import select
-
-    from app.models.provider_config import ProviderConfig
-    from app.security.ownership import open_secret
-
-    # 前缀匹配：grok2api 暴露 grok-imagine-image-lite / -pro 等变体，但 DB 行的
-    # default_model 通常配成基础名 grok-imagine-image。用「传入 model 以 DB default_model
-    # 开头」命中，避免每出一个新档位就要改一行配置。
-    ml = (model or "").lower().strip()
-    stmt = select(ProviderConfig).where(ProviderConfig.is_enabled.is_(True))
-    rows = (await db.execute(stmt.order_by(ProviderConfig.priority))).scalars().all()
-    row = next(
-        (
-            r
-            for r in rows
-            if r.id == model
-            or (r.name or "").lower() == ml
-            or ml in (r.name or "").lower()
-            or (r.default_model or "") == model
-            or ml.startswith((r.default_model or "").lower())
-        ),
-        None,
-    )
-    if row is None:
-        return None
-    return (
-        (row.base_url or "").rstrip("/"),
-        open_secret(row.encrypted_api_key or ""),
-        row.default_model or "",
-        (row.provider_type or "").lower().strip(),
-    )
-
-
 def _provider_kwargs(
     settings_row: tuple[str, str, str, str] | None, *, include_default_model: bool = True
 ) -> dict[str, Any]:

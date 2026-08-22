@@ -191,7 +191,30 @@ guard: 任何 Prompt / Agent / 模型改动不得使 scenario_b 的 PASS 退化�
 
 ---
 
-## 5. 回归门槛（CI）
+## 5. 真实模型联调记录（2026-08-18）
+
+> 环境：本地 grok2api（:8000，主链路）+ cpa（:8317，备用，gpt-oss-120b-medium）
+> 2026-08-18 主链路 grok2api 因 FlareSolverr 解 CF 挑战失败（`ERR_CONNECTION_CLOSED` / clearance_refresh_failed）
+> 而 502——外部依赖故障；联调改走 cpa 真实模型完成。
+
+| 验证项 | 输入 | 真实模型判定 | 结论 |
+|---|---|---|---|
+| CVI Critic（无 constitution） | scenario_a 亡妻句 | score=0.00 FAIL（GENERIC_CHARACTER） | ✅ 判定方向正确 |
+| CVI Critic（带 constitution） | scenario_a 亡妻句 | score=1.00 **PASS（误判）** | ❌ 暴露 prompt 缺陷 |
+| **修复后** CVI Critic（带 constitution） | scenario_a 亡妻句 | score=0.00 FAIL（**MOTIVATION_DOWNGRADE**），evidence：行为解释仅提及亡妻，未关联任何价值层级 | ✅ 桥的名字识别成功 |
+| **修复后** CVI Critic | scenario_b 价值驱动 | score=1.00 PASS（无证据） | ✅ 不误杀 |
+| Counterfactual | scenario_a | ok=True **downgraded=True**（drop_emotion_object=False） | ✅ 降维识别 |
+| Semantic Explorer | 烟雨朦胧 | 湿地监测 / 玻璃幕墙 / 交通责任（score=0.88 ≥ 0.7） | ✅ 防第一联想（无江南油纸伞） |
+
+**联调发现的 prompt 缺陷（已修复）**：
+原 CVI prompt 检查"行为是否违反价值"→ 模型对中性行为（缺席剪彩）判 PASS。
+修复：明确「重大行为 = 对人物/世界有影响的决定，即使表面中性」+「动机解释仅引用情感/关系对象而无价值支撑
+→ MOTIVATION_DOWNGRADE / CHARACTER_VALUE_HIERARCHY_COLLAPSE」→ 判定正确。
+**教训**：桥的名字检测的是**动机解释的降维**，不是行为本身的违规——prompt 必须精确对准这个判定目标。
+
+---
+
+## 6. 回归门槛（CI）
 
 ```
 GOLDEN_CASE_PASS_RATE >= 0.95     # 50 例中至少 47 例符合期望

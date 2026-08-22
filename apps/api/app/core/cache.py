@@ -7,9 +7,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
+import weakref
 from typing import Any
 
 from app.core.config import settings
@@ -17,21 +19,41 @@ from app.core.config import settings
 logger = logging.getLogger("aigc.cache")
 
 _client: Any = None
+# celery worker 每任务 asyncio.run 新事件循环：redis 异步客户端的连接池
+# 同样不能跨 loop 复用（"Future attached to a different loop"）。
+# API 进程单循环 → 惰性建一个共享客户端（行为不变）；worker 每循环各一个。
+_loop_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, Any]" = (
+    weakref.WeakKeyDictionary()
+)
 _disabled = False
+
+
+def _new_client() -> Any:
+    import redis.asyncio as aioredis
+
+    return aioredis.from_url(  # type: ignore[no-untyped-call]
+        settings.REDIS_URL,
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+    )
 
 
 def _redis() -> Any:
     global _client
-    if _client is None:
-        import redis.asyncio as aioredis
-
-        _client = aioredis.from_url(  # type: ignore[no-untyped-call]
-            settings.REDIS_URL,
-            decode_responses=True,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-        )
-    return _client
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is None:
+        if _client is None:
+            _client = _new_client()
+        return _client
+    client = _loop_clients.get(loop)
+    if client is None:
+        client = _new_client()
+        _loop_clients[loop] = client
+    return client
 
 
 async def cache_get(key: str) -> str | None:

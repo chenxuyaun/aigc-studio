@@ -13,6 +13,7 @@ draft_mode=False 走 legacy（完全不变）。
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +33,62 @@ from app.creative.schemas import (
 )
 from app.creative.store import constitution_to_bible_block, get_constitution
 
+
+async def deterministic_quality_report(
+    db: AsyncSession,
+    project: Any,
+    content: str,
+    chapter: Any,
+) -> dict[str, Any] | None:
+    """确定性质量预检（P3-5，零 LLM）：情绪捷径 + CVI 启发式 → 轻量 QualityReport。
+
+    供流式生成端点调用（流式场景不跑 LLM Critic，仅确定性指标）；
+    结果存 chapter.notes["quality_report"] 并返回 dict。
+    """
+    issues: list[QualityIssue] = []
+    shortcut = detect_shortcuts(content)
+    if shortcut.level >= 2:
+        issues.append(QualityIssue(level="major", text=f"情绪捷径：{shortcut.detail}"))
+    try:
+        constitutions = await _load_constitutions(db, project)
+    except Exception:
+        constitutions = {}
+    for name, c in constitutions.items():
+        for behavior in _extract_behaviors(content):
+            pre = assess_behavior_motivation(behavior, c)
+            if not pre.ok and pre.failure_type is not None:
+                issues.append(
+                    QualityIssue(
+                        level="critical",
+                        text=f"【{name}】{pre.detail}（行为：{behavior[:50]}）",
+                    )
+                )
+                break  # 每人最多一条
+    has_critical = any(i.level == "critical" for i in issues)
+    report = CreativeQualityReport(
+        character_value_integrity=0.0, character_agency=0.0,
+        causal_integrity=0.0, world_consistency=0.0,
+        semantic_diversity=0.0, narrative_diversity=0.0,
+        emotional_authenticity=0.0, theme_emergence=0.0,
+        cliche_risk=min(1.0, shortcut.level / 3.0), style_risk=0.0,
+        critical_issues=[i for i in issues if i.level == "critical"],
+        major_issues=[i for i in issues if i.level == "major"],
+        minor_issues=[i for i in issues if i.level == "minor"],
+        final_status=(
+            GateVerdict.REVIEW_REQUIRED if has_critical else GateVerdict.PASS
+        ),
+    )
+    payload = report.model_dump()
+    try:
+        notes = (
+            json.loads(chapter.notes) if isinstance(chapter.notes, str) and chapter.notes else {}
+        )
+        notes["quality_report"] = payload
+        chapter.notes = json.dumps(notes, ensure_ascii=False)
+    except Exception:
+        pass
+    return payload
+
 # 确定性预检的"重大行为"提取：含行为动词的句子（简化启发式）
 _BEHAVIOR_MARKERS = ("他", "她", "决定", "选择", "拒绝", "离开", "放弃", "没有", "答应", "承诺")
 
@@ -39,14 +96,16 @@ _BEHAVIOR_MARKERS = ("他", "她", "决定", "选择", "拒绝", "离开", "放�
 async def _load_constitutions(
     db: AsyncSession, project: Any
 ) -> dict[str, CharacterConstitution]:
-    """加载项目角色实例的 Constitution（未建模 → 跳过）。"""
+    """加载项目角色实例的 Constitution（未建模 → 跳过）。
+
+    以 constitution 是否已建模为准（不依赖 character_asset_id——
+    纯文字占位角色也可有决策模型）。
+    """
     from app.services.story_forge import list_story_characters
 
     out: dict[str, CharacterConstitution] = {}
     chars = await list_story_characters(db, str(project.user_id), str(project.id))
     for s in chars:
-        if not s.get("character_asset_id"):
-            continue
         c = await get_constitution(db, str(s["id"]))
         if c is not None:
             out[str(s["name"])] = c
@@ -54,14 +113,19 @@ async def _load_constitutions(
 
 
 def _extract_behaviors(text: str, max_items: int = 5) -> list[str]:
-    """从正文提取疑似重大行为句（启发式：含人物指代 + 行为标记）。"""
+    """从正文提取疑似重大行为句（启发式：含人物指代 + 行为标记）。
+
+    行为句携带其后一句上下文——动机解释（价值/情境）常在行为句之后，
+    单独评估行为句会漏掉价值信号（如「他没去剪彩。复检数据出来了」）。
+    """
+    sentences = [s.strip() for s in (text or "").split("。") if s.strip()]
     out: list[str] = []
-    for line in (text or "").split("。"):
-        line = line.strip()
-        if not line:
-            continue
+    for i, line in enumerate(sentences):
         if any(m in line for m in _BEHAVIOR_MARKERS):
-            out.append(line[:200])
+            merged = line
+            if i + 1 < len(sentences):
+                merged += "。" + sentences[i + 1]
+            out.append(merged[:300])
         if len(out) >= max_items:
             break
     return out

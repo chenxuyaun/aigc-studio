@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.generation_task import GenerationTask
 from app.models.user import User
@@ -56,48 +57,31 @@ def _register_internal_key() -> str:
 
 
 async def _grok_account_pool() -> dict[str, object]:
-    """grok2api 账号池统计（管理 API，凭据走注册机 config.json fallback）。"""
-    import json as _json
+    """grok2api 账号池统计（管理 API，Bearer app_key 直连 /admin/api/tokens）。
 
-    user = os.environ.get("GROK2API_ADMIN_USERNAME", "")
-    password = os.environ.get("GROK2API_ADMIN_PASSWORD", "")
-    if not user or not password:
-        cfg = os.environ.get(
-            "GROK_REGISTER_CONFIG",
-            r"C:\Users\yuesh\.meituan-catpaw\5667331509\desk_default_workspace"
-            r"\grok-register\GrokRegisterAgent\register\config.json",
-        )
-        try:
-            with open(cfg, encoding="utf-8") as f:  # noqa: ASYNC230 - 启动期小文件
-                c = _json.load(f)
-            user = str(c.get("grok2api_username") or "")
-            password = str(c.get("grok2api_password") or "")
-        except Exception:
-            pass
-    if not user or not password:
-        return {"total": 0, "active": 0, "error": "未配置 grok2api 管理凭据"}
+    grok2api 管理后台认证 = Bearer app_key（config.defaults.toml 的 app_key，默认 grok2api），
+    不是账号密码登录 —— 早期代码用 /api/admin/v1/auth/login（账号密码）是错的路径（404）。
+    """
+    # grok2api 管理后台认证 = Bearer app_key（config.defaults.toml 的 app_key，默认 grok2api）
+    # GROK2API_ADMIN_KEY 专用于管理 API；GROK2API_ADMIN_PASSWORD 是客户端 API key（别混淆）
+    password = os.environ.get("GROK2API_ADMIN_KEY", "") or os.environ.get("GROK2API_ADMIN_PASSWORD", "")
+    if not password:
+        return {"total": 0, "active": 0, "error": "未配置 GROK2API_ADMIN_KEY"}
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.post(
-                f"{GROK_ADMIN}/api/admin/v1/auth/login",
-                json={"username": user, "password": password},
+                f"{GROK_ADMIN}/admin/api/tokens",
+                headers={"Authorization": f"Bearer {password}"},
+                json={},
                 timeout=20,
             )
             if r.status_code != 200:
-                return {"total": 0, "active": 0, "error": f"登录失败 {r.status_code}"}
-            token = r.json()["data"]["tokens"]["accessToken"]
-            r2 = await client.get(
-                f"{GROK_ADMIN}/api/admin/v1/accounts",
-                params={"page": 1, "pageSize": 1},
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=20,
-            )
-            total = int(r2.json()["data"].get("total") or 0)
+                return {"total": 0, "active": 0, "error": f"HTTP {r.status_code}"}
+            data = r.json()
+            total = int(data.get("total") or len(data.get("tokens") or []))
             return {"total": total, "active": total, "error": ""}
     except Exception as exc:
         return {"total": 0, "active": 0, "error": str(exc)[:120]}
-
-
 async def _grok_image_probe(force: bool = False) -> dict[str, object]:
     """grok 图片可用性探测（10 分钟缓存）。"""
     now = time.time()
@@ -152,21 +136,9 @@ async def _register_status() -> dict[str, object]:
 
 
 async def _cpa_status(db: AsyncSession) -> dict[str, object]:
-    """cpa 探活（带 DB 里的解密 key）。"""
-    from sqlalchemy import select
-
-    from app.models.provider_config import ProviderConfig
-    from app.security.ownership import open_secret
-
-    key = ""
-    try:
-        row = (
-            await db.execute(select(ProviderConfig).where(ProviderConfig.name.contains("cpa")))
-        ).scalar_one_or_none()
-        if row and row.encrypted_api_key:
-            key = open_secret(row.encrypted_api_key)
-    except Exception as exc:
-        logger.warning("cpa_probe_key_failed", error=str(exc)[:150])
+    """cpa 探活（key 来自 .env 的 OPENAI_COMPATIBLE_API_KEY；P3 起不再读 DB）。"""
+    _ = db  # P3：provider_configs 表已删除；参数保留兼容调用方
+    key = settings.OPENAI_COMPATIBLE_API_KEY or os.environ.get("OPENAI_COMPATIBLE_API_KEY", "")
     try:
         headers = {"Authorization": f"Bearer {key}"} if key else {}
         async with httpx.AsyncClient(timeout=8) as client:

@@ -21,6 +21,7 @@ celery_app = Celery(
         "app.tasks.inspection_tasks",
         "app.tasks.backup_tasks",
         "app.tasks.distill_tasks",
+        "app.tasks.schedule_tasks",
     ],
 )
 celery_app.conf.update(
@@ -47,6 +48,7 @@ celery_app.conf.update(
         "register_batch": {"queue": "maintenance"},
         "generate_chapter_task": {"queue": "text"},
         "serial_tick": {"queue": "maintenance"},
+        "scheduled_creation_tick": {"queue": "maintenance"},
     },
     beat_schedule={
         # grok2api 账号健康度巡检：每 30 分钟自动禁用废号（避免路由反复撞废号）
@@ -76,6 +78,12 @@ celery_app.conf.update(
         # Story Forge 连载 tick：每分钟扫描到期调度，创建章节生成任务
         "story-serial-tick": {
             "task": "serial_tick",
+            "schedule": 60.0,
+            "options": {"ignore_result": True},
+        },
+        # 定时创作 tick：每分钟扫描到期调度，入队生成任务
+        "scheduled-creation-tick": {
+            "task": "scheduled_creation_tick",
             "schedule": 60.0,
             "options": {"ignore_result": True},
         },

@@ -11,6 +11,9 @@ import "./styles/index.css";
 installSwReloadHandler();
 
 // Standalone 独立模式入口：无 Host props，App 内部使用自身 Router。
+// basename="/saios"：saiOS 是子应用，挂载在 /saios 前缀下（根 / 留给总台/备案页）。
+// React Router 的 navigate/Link/Navigate 会自动加 basename；API(/api/v1) 与静态资源(/static)
+// 是根绝对路径，不受影响（由 nginx 转发）。
 const container = document.getElementById("root");
 if (!container) {
   throw new Error("根节点 #root 不存在");
@@ -18,6 +21,6 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <App basename="/saios" />
   </StrictMode>,
 );

@@ -15,7 +15,7 @@ const ORDER: ThemeMode[] = ["light", "dark", "system"];
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      mode: "light",
+      mode: "dark",
       setMode: (mode) => set({ mode }),
       cycle: () => {
         const idx = ORDER.indexOf(get().mode);

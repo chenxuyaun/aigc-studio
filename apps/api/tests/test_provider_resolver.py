@@ -90,32 +90,3 @@ async def test_no_provider_raises(client, admin_token, monkeypatch) -> None:
     async with TestingSessionLocal() as db:
         with pytest.raises(NoTextProviderError):
             await resolve_text_provider(db, "")
-
-
-@pytest.mark.asyncio
-async def test_db_rows_are_ignored(client, admin_token, monkeypatch) -> None:
-    """P2 语义验证：DB 里即使有启用配置也不参与解析（无 hub 无 env 时仍抛错）。"""
-    _mock_chain(monkeypatch, [])
-    _env_off(monkeypatch)
-
-    from app.models.provider_config import ProviderConfig
-    from app.security.ownership import seal_secret
-
-    from tests.conftest import TestingSessionLocal
-
-    async with TestingSessionLocal() as db:
-        db.add(
-            ProviderConfig(
-                name="LegacyDB",
-                provider_type="openai_compatible",
-                base_url="http://127.0.0.1:8000/v1",
-                default_model="legacy-model",
-                is_enabled=True,
-                priority=0,
-                encrypted_api_key=seal_secret("k"),
-            )
-        )
-        await db.commit()
-
-        with pytest.raises(NoTextProviderError):
-            await resolve_text_provider(db, "")

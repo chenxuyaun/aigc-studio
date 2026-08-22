@@ -23,7 +23,7 @@ async def test_generate_with_tools_parses_tool_calls(monkeypatch: pytest.MonkeyP
     class _FakeResp:
         status_code = 200
 
-        def json(self) -> dict:
+        def _data(self) -> dict:
             return {
                 "choices": [
                     {
@@ -43,6 +43,14 @@ async def test_generate_with_tools_parses_tool_calls(monkeypatch: pytest.MonkeyP
                     }
                 ]
             }
+
+        @property
+        def text(self) -> str:
+            # 生产代码走 resp.text（SSE/JSON 统一文本解析）
+            return json.dumps(self._data())
+
+        def json(self) -> dict:
+            return self._data()
 
     class _FakeClient:
         def __init__(self, **kwargs: object) -> None:
@@ -80,6 +88,10 @@ async def test_generate_without_tools_no_tool_calls(monkeypatch: pytest.MonkeyPa
 
     class _FakeResp:
         status_code = 200
+
+        @property
+        def text(self) -> str:
+            return json.dumps({"choices": [{"message": {"content": "你好", "tool_calls": None}}]})
 
         def json(self) -> dict:
             return {"choices": [{"message": {"content": "你好", "tool_calls": None}}]}

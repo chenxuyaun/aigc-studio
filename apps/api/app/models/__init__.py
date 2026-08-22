@@ -7,6 +7,7 @@ from app.models.asmr_favorite import AsmrFavorite
 from app.models.asmr_netdisk_item import AsmrNetdiskItem
 from app.models.asmr_work import AsmrWork
 from app.models.asset import Asset
+from app.models.creation_goal import CreationGoal
 from app.models.creative_models import (
     CreativePrompt,
     CreativeRun,
@@ -14,6 +15,7 @@ from app.models.creative_models import (
     StoryStateSnapshot,
 )
 from app.models.generation_task import GenerationTask
+from app.models.scheduled_creation import ScheduledCreation
 from app.models.inspection_report import InspectionReport
 from app.models.mission_lesson import MissionLesson
 from app.models.mission_run import MissionRun
@@ -27,7 +29,6 @@ from app.models.prompt_favorite import PromptFavorite
 from app.models.prompt_source import PromptSource
 from app.models.prompt_tag import PromptTag
 from app.models.prompt_tag_relation import PromptTagRelation
-from app.models.provider_config import ProviderConfig
 from app.models.quick_reply import QuickReply
 from app.models.refresh_token import RefreshToken
 from app.models.regex_script import RegexScript
@@ -61,6 +62,7 @@ __all__ = [
     "Asset",
     "CreativePrompt",
     "CreativeRun",
+    "CreationGoal",
     "GenerationTask",
     "InspectionReport",
     "MissionLesson",
@@ -75,7 +77,6 @@ __all__ = [
     "PromptSource",
     "PromptTag",
     "PromptTagRelation",
-    "ProviderConfig",
     "QuickReply",
     "RefreshToken",
     "RegexScript",
@@ -83,6 +84,7 @@ __all__ = [
     "RoleplayChat",
     "RoleplayLoreEntry",
     "RoleplayPersona",
+    "ScheduledCreation",
     "SerialSchedule",
     "Skill",
     "StoryChapter",

@@ -10,6 +10,7 @@ from app.api.v1 import (
     character_cards,
     creation,
     dashboard,
+    goals,
     health,
     knowledge,
     logs,
@@ -21,6 +22,7 @@ from app.api.v1 import (
     providers,
     roleplay,
     roundtable,
+    schedules,
     search,
     skills,
     story,
@@ -34,12 +36,15 @@ from app.api.v1.generations import comic as gen_comic
 from app.api.v1.generations import image as gen_image
 from app.api.v1.generations import music as gen_music
 from app.api.v1.generations import prompt_tools as gen_prompt
+from app.api.v1.generations import recent as gen_recent
 from app.api.v1.generations import text as gen_text
 from app.api.v1.generations import video as gen_video
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
 router.include_router(creation.router, prefix="/creation", tags=["creation"])
+router.include_router(goals.router, prefix="/goals", tags=["goals"])
+router.include_router(schedules.router, prefix="/schedules", tags=["schedules"])
 router.include_router(users.router, prefix="/users", tags=["users"])
 router.include_router(prompts.router, prefix="/prompts", tags=["prompts"])
 router.include_router(projects.router, prefix="/projects", tags=["projects"])
@@ -53,6 +58,7 @@ router.include_router(gen_video.router, prefix="/generations/video", tags=["gene
 router.include_router(gen_audio.router, prefix="/generations/audio", tags=["generations"])
 router.include_router(gen_music.router, prefix="/generations/music", tags=["generations"])
 router.include_router(gen_comic.router, prefix="/generations/comic", tags=["generations"])
+router.include_router(gen_recent.router, prefix="/generations", tags=["generations"])
 router.include_router(gen_prompt.router, prefix="/generations/prompt", tags=["generations"])
 router.include_router(knowledge.router, prefix="/knowledge", tags=["knowledge"])
 router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])

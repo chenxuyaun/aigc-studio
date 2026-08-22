@@ -703,6 +703,36 @@ def test_validate_lyrics_flags_no_rhyme_by_thirteen_zhe() -> None:
 
 
 
+def test_validate_lyrics_flags_abstract_personification() -> None:
+    """抽象赋义检测：自然物+心理动词（草认得/山记得）→ 作者赋义拦截；可感拟人不误报。"""
+    from app.api.v1.generations.music import _severe_checks, _validate_lyrics
+
+    abstract = """【主歌1】天没亮 套鞋踩响碎石
+帆布邮包压着右肩
+草认得她的脚
+山记得那年的事
+【副歌】公路一修到村口
+山路就开始长草
+【主歌2】她走了四十年
+草认得她的脚"""
+    checks = _validate_lyrics(abstract)
+    assert any("抽象赋义" in c for c in checks), "概念化拟人（草认得）应被拦截"
+    assert _severe_checks(checks), "抽象赋义应触发自动重写"
+
+    # 可感拟人：草弯腰 / 风把信纸吹到门槛（有画面）不误报
+    concrete = """【主歌1】天没亮 套鞋踩响碎石
+风一上坡 草就弯腰
+露水打湿她的裤脚
+她数着石阶 一级一级
+【副歌】公路修到村口
+山路开始长草
+【主歌2】风把信纸吹到门槛
+她蹲下来 捡起又放回"""
+    checks2 = _validate_lyrics(concrete)
+    assert not any("抽象赋义" in c for c in checks2), "可感拟人不应误报抽象赋义"
+
+
+
 # ---------- 风格检测与写歌质量闭环 ----------
 
 

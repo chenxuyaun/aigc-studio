@@ -7,7 +7,6 @@ import {
   Clapperboard,
   FolderOpen,
   Headphones,
-  LayoutDashboard,
   Library,
   ListChecks,
   LogOut,
@@ -20,8 +19,10 @@ import {
   Sun,
   Users,
   MessageCircle,
+  Sparkles,
+  BarChart3,
 } from "lucide-react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { useHost } from "@/microfrontend/hostContext";
 import { cn } from "@/lib/cn";
@@ -45,7 +46,8 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "创作",
     items: [
-      { to: "/", label: "工作台", short: "首页", icon: LayoutDashboard, mobile: true },
+      { to: "/", label: "AI 助手", short: "助手", icon: Sparkles, mobile: true },
+      { to: "/dashboard", label: "数据看板", short: "看板", icon: BarChart3, mobile: false },
       { to: "/works", label: "我的创作", short: "我的", icon: Clapperboard, mobile: true },
     ],
   },
@@ -156,6 +158,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const debounceRef = useRef<number | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const location = useLocation();
+  // 收敛：默认折叠「资源/角色/系统」组，只展开「创作」主入口（点组标题展开，功能不删只收纳）
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>(() =>
+    NAV_GROUPS.filter((g) => g.label !== "创作").map((g) => g.label),
+  );
   const visibleNav = NAV.filter((n) => !n.adminOnly || user?.role === "admin");
   const mobileNav = visibleNav.filter((n) => n.mobile);
   // 底部导航：前 5 项 + 「更多」抽屉（含其余移动项 + 桌面项 + 管理项）
@@ -260,29 +267,45 @@ export function AppShell({ children }: { children: ReactNode }) {
             {NAV_GROUPS.map((group) => {
               const items = group.items.filter((n) => !n.adminOnly || user?.role === "admin");
               if (items.length === 0) return null;
+              const isCollapsed = collapsedGroups.includes(group.label);
+              // 组内有当前激活项时强制展开（保证用户不会迷路）
+              const activeInGroup = items.some((it) => it.to === location.pathname);
+              const showItems = !isCollapsed || activeInGroup;
               return (
                 <div key={group.label} className="mb-3">
-                  <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                    {group.label}
-                  </p>
-                  {items.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      end={item.to === "/"}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
-                          isActive
-                            ? "bg-primary/12 font-semibold text-primary-text"
-                            : "font-medium text-muted-foreground hover:bg-secondary hover:text-foreground",
-                        )
-                      }
-                    >
-                      <item.icon className="h-[18px] w-[18px]" aria-hidden />
-                      {item.label}
-                    </NavLink>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCollapsedGroups((prev) =>
+                        prev.includes(group.label)
+                          ? prev.filter((g) => g !== group.label)
+                          : [...prev, group.label],
+                      )
+                    }
+                    className="mb-1 flex w-full items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 hover:text-foreground"
+                  >
+                    <span>{group.label}</span>
+                    <span className="text-[9px]">{showItems ? "▾" : "▸"}</span>
+                  </button>
+                  {showItems &&
+                    items.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        end={item.to === "/"}
+                        className={({ isActive }) =>
+                          cn(
+                            "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                            isActive
+                              ? "bg-primary/12 font-semibold text-primary-text"
+                              : "font-medium text-muted-foreground hover:bg-secondary hover:text-foreground",
+                          )
+                        }
+                      >
+                        <item.icon className="h-[18px] w-[18px]" aria-hidden />
+                        {item.label}
+                      </NavLink>
+                    ))}
                 </div>
               );
             })}
@@ -379,7 +402,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
         )}
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-0">{children}</main>
+        <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pb-20 md:pb-0">
+          {children}
+        </main>
         {newVersion && (
           <div className="fixed bottom-20 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-3 rounded-full border border-border-strong bg-surface-raised px-4 py-2.5 shadow-2xl md:bottom-6">
             <span className="text-sm text-foreground">新版本已就绪</span>

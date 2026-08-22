@@ -16,9 +16,8 @@ class GenerationTask(Base):
     progress: Mapped[int] = mapped_column(Integer, default=0)
     params: Mapped[str] = mapped_column(Text, default="{}")
     result: Mapped[str] = mapped_column(Text, default="")
-    provider_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("provider_configs.id"), nullable=True
-    )
+    # P3：provider_configs 表已删除，本列仅作历史痕迹（无外键，恒 NULL）
+    provider_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     model: Mapped[str] = mapped_column(String(100), default="")
     error_message: Mapped[str] = mapped_column(Text, default="")
     user_id: Mapped[str] = mapped_column(

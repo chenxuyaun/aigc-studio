@@ -3,16 +3,16 @@ import { persist } from "zustand/middleware";
 
 import type { User } from "@aigc/shared-types";
 
-// 安全策略（审计 S6 修复）：
+// 安全策略（审计 S6 修复 + 2026-08 个人服务器免登录调整）：
 // - access token 仅存内存，不落盘
-// - refresh token 存 sessionStorage（标签页关闭即失效，且每次刷新轮换），
-//   页面刷新后用于静默换新 access，登录态不中断
-// - localStorage 只持久化 user 信息（无任何 token）
+// - refresh token 存 localStorage（个人服务器开启 AUTO_LOGIN 时跨标签页/重启持久；
+//   默认生产环境会话语义由 AUTO_LOGIN_KEY 开关控制，未开启时仍为会话级体验）
+// - localStorage 只持久化 user 信息（无 access token）
 const REFRESH_KEY = "aigc-refresh-token";
 
 function readStoredRefresh(): string | null {
   try {
-    return sessionStorage.getItem(REFRESH_KEY);
+    return localStorage.getItem(REFRESH_KEY);
   } catch {
     return null;
   }
@@ -20,8 +20,8 @@ function readStoredRefresh(): string | null {
 
 function storeRefresh(refresh: string | null): void {
   try {
-    if (refresh) sessionStorage.setItem(REFRESH_KEY, refresh);
-    else sessionStorage.removeItem(REFRESH_KEY);
+    if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
+    else localStorage.removeItem(REFRESH_KEY);
   } catch {
     /* 隐私模式等场景忽略 */
   }

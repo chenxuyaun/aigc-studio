@@ -106,6 +106,42 @@ async def logout(
     return {"success": True, "data": None}
 
 
+@router.post("/auto-login", response_model=TokenResponse)
+async def auto_login(request: Request, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    """个人服务器免登录入口：nginx 注入 X-Auto-Login-Key 头校验通过后，
+    直接为 AUTO_LOGIN_USERNAME 签发 token（无需密码）。
+
+    安全边界：
+    - AUTO_LOGIN_KEY 为空 → 功能关闭（默认）
+    - 密钥只存在于服务器 .env + nginx 配置，公网请求无法伪造该头
+    - 仅信任 nginx 反代路径；直连容器端口（内网）也能用，但密钥仍不可见
+    """
+    if not settings.AUTO_LOGIN_KEY:
+        raise HTTPException(status_code=404, detail="自动登录未启用")
+    supplied = request.headers.get("x-auto-login-key", "")
+    if not supplied or supplied != settings.AUTO_LOGIN_KEY:
+        raise HTTPException(status_code=403, detail="自动登录密钥无效")
+    if not settings.AUTO_LOGIN_USERNAME:
+        raise HTTPException(status_code=403, detail="未配置自动登录账号")
+    user = (
+        await db.execute(select(User).where(User.username == settings.AUTO_LOGIN_USERNAME))
+    ).scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=403, detail="自动登录账号不存在或已禁用")
+    access_token = create_access_token({"sub": user.id, "role": user.role})
+    refresh_token = create_refresh_token({"sub": user.id})
+    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+    rt = RefreshToken(
+        user_id=user.id,
+        token_hash=token_hash,
+        expires_at=datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_DAYS),
+    )
+    db.add(rt)
+    await _cleanup_expired_tokens(db)
+    await db.commit()
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
 @router.get("/me", response_model=UserResponse)
 async def me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
