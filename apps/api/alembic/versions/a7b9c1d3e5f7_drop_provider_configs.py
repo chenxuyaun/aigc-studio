@@ -7,7 +7,7 @@ deprecation-plan.md P3：
   （部署前备份：server ~/backups-pre-p3/provider_configs.sql）
 
 revision = "a7b9c1d3e5f7"
-down_revision = "f9e2d4c6b8a1"
+down_revision = "d0a1b2c3d4e5"
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "a7b9c1d3e5f7"
-down_revision = "f9e2d4c6b8a1"
+down_revision = "d0a1b2c3d4e5"
 branch_labels = None
 depends_on = None
 
