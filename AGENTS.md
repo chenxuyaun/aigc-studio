@@ -631,27 +631,7 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 
 **P2-5+ 待办**：`@`资源引用、会话分组/归档/搜索、生成画廊时间线、目标模式、定时创作。
 
-**P2-5 已完成并上线（2026-08-20）：会话摘要条**。
-- `AssistantHomePage.tsx`：非空会话顶部加 sticky 摘要条——显示「💬 提问数」「🎨 产出数（图/音频）」+「⚡ 模型 gpt-oss」+「清空对话」入口（confirm 后删当前会话新建）。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-C2lWuVnU.js`，全服务 healthy、公网 200。
-
-**P2-6+ 待办**：`@`资源引用、会话自定义分组/归档/搜索、生成画廊时间线、目标模式、定时创作。
-
-**P2-6 已完成并上线（2026-08-20）：会话时间分组**。
-- `AssistantHomePage.tsx`：侧栏会话列表按 `updatedAt` 分「今天/昨天/近 7 天/更早」四组，长列表可扫读。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-ChxGx2wc.js`，全服务 healthy、公网 200。
-
-**P2-7+ 待办**：`@`资源引用、会话自定义分组/归档、生成画廊时间线、目标模式、定时创作。
-
-**P2-7 已完成并上线（2026-08-20）：会话搜索**。
-- `AssistantHomePage.tsx`：侧栏加「搜索会话」输入框，按会话名实时过滤 + 时间分组；无结果/无会话显示空态。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-C_CmbzNZ.js`，全服务 healthy、公网 200。
-
-**P2-8+ 待办**：`@`资源引用、会话自定义分组/归档、目标模式、定时创作。
-
-**P2-8 已完成并上线（2026-08-20）：生成画廊**。
-- `AssistantHomePage.tsx`：会话摘要条加「🖼️ 查看产出」按钮 → 覆盖式画廊网格（网格 2/3 列）列出本会话所有生成媒体（图片/漫画缩略 + 音频播放器），点击外部或 ✕ 关闭。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-CaccbI9k.js`，全服务 healthy、公网 200。
+**P2-5~P2-8 已完成并上线（2026-08-20）**：会话摘要条/时间分组/搜索/生成画廊（均 AssistantHomePage.tsx 迭代，细节略）。
 
 **P2-9+ 待办**：`@`资源引用、会话自定义分组/归档、目标模式、定时创作。
 
@@ -686,6 +666,10 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
   （@引用不进 prompt、画布 setTimeout 假执行、发音人假选项、Music 只产 Suno 粘贴包）
   ④双首页撞车 + 深浅主题两套品牌色。
 - **⚠️ Python 版本坑（PEP 758）**：api 容器跑 Python 3.14，无括号多异常捕获 `except A, B:` 合法；
-  本地/CI 老解释器报 SyntaxError。已全仓统一为 `except (A, B):`（17 处，b9ea75c 引入、躺了 13 天）。
-  **审计工具判"全站起不来"前先确认目标运行时版本**——子代理曾因此误报事故级发现。
-- 待用户决策：视觉方向 A（暖金驾驶舱）/ B（全面 Cyber）；批准后按 P0 信息架构建复 → P1 双模 → P2 Studio → P3 资产闭环 动工。
+  本地/CI 老解释器报 SyntaxError。已全仓统一为 `except (A, B):` 兼容写法（commit b9ea75c 引入躺 13 天后修复）。
+
+## saiOS v2 落地进度（2026-08-24）
+
+- **P0 完成（371b178）**：七大类导航（38 路由全露出）/catalog 裸数组兼容/Comic 模型改 gemini-3.1-flash-image/真 Edge-TTS 音色表/ST 页环境自适应 URL+token 掩码。
+- **⚠️ 公网入口**：nginx 根 `/` 是备案页；saiOS 实际入口 = **`/saios` 前缀**（验收必须打 /saios，打根路径得备案页曾致全 false 误判）。与上文「saiOS 占根」旧记录相反，以现状为准。
+- **P1 完成（本轮）**：调度大厅六硬伤——①会话上云 chat_sessions 表（迁移 b1c2d3e4f5a6，down=a7b9c1d3e5f7）+/api/v1/chat/sessions CRUD+useChatSessions 写穿（防抖 PUT+visibilitychange flush+cloudReady 门控 ensureSession）；②@引用真注入 context_blocks→agent_chat 系统级上下文（knowledge/prompts 拉原文）；③斜杠 /image|music|tts|comic→派发卡推送引擎带参；④模型选择器直连 catalog（option value=default_model 非 uuid）；⑤去黑话文案；⑥Magic Polish 按钮（POST /generations/text/generate）。Dashboard 移除「交给任务总控」。坑：chat_sessions router 自带 prefix 又挂载 prefix=/chat→双前缀 404。

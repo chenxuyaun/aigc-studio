@@ -25,16 +25,40 @@ async def agent_chat_stream(
     model: str,
     db: AsyncSession,
     tools: list[str] | None = None,
+    context_blocks: list[dict[str, Any]] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """工具循环 + 最终回复，产出 SSE 事件：
 
     - {"type": "tool", "name", "status": "running"|"done", "summary"?}
     - {"type": "chunk", "content"}
+
+    context_blocks（saiOS v2 P1 @ 引用真注入）：[{type,title,content}]，
+    会被结构化注入提示词头部，模型可实际读到引用资源的内容。
     """
     provider, resolved_model = await _resolve_provider(db, model)
     all_tools = _openai_tools()
     if tools:
         all_tools = [t for t in all_tools if t["function"]["name"] in set(tools)]
+
+    # @引用内容 → 系统级上下文块（放在对话消息之前，明确标注来源）
+    if context_blocks:
+        ref_parts = [
+            f"【引用·{str(b.get('type') or '资料')}】{str(b.get('title') or '').strip()}\n"
+            + str(b.get("content") or "").strip()[:6000]
+            for b in context_blocks[:10]
+        ]
+        ref_text = "\n\n".join(p for p in ref_parts if p.strip())
+        if ref_text:
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "以下是用户在输入框中 @ 引用的资料原文，回答时优先依据这些内容：\n\n"
+                        + ref_text
+                    ),
+                },
+                *messages,
+            ]
 
     for _ in range(_MAX_ROUNDS):
         prompt = _messages_to_prompt(messages)

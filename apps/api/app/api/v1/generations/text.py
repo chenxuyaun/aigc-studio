@@ -185,7 +185,9 @@ async def agent_chat(
     from app.services.agent_chat import agent_chat_stream
 
     async def gen() -> AsyncIterator[str]:
-        async for ev in agent_chat_stream(req.messages, req.model, db, req.tools):
+        async for ev in agent_chat_stream(
+            req.messages, req.model, db, req.tools, req.context_blocks
+        ):
             yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream")

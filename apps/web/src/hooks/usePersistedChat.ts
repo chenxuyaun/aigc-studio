@@ -10,6 +10,8 @@ export interface PersistedChatMessage {
   image?: string;
   /** 媒体类型：image | audio | comic（用于多媒体消息渲染） */
   media?: "image" | "audio" | "comic";
+  /** v2 P1 结构化命令卡：/image /music 等解析结果，可推送 Studio 带参执行 */
+  dispatch?: { kind: "image" | "music" | "tts" | "comic"; args: string; target: string };
 }
 
 /**

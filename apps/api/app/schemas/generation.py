@@ -20,11 +20,13 @@ class TextGenerationRequest(BaseModel):
 
 
 class AgentChatRequest(BaseModel):
-    """智能体对话（工具调用）：结构化 messages + 可选工具白名单。"""
+    """智能体对话（工具调用）：结构化 messages + 可选工具白名单 + @引用上下文块。"""
 
     model: str = Field(default_factory=lambda: settings.DEFAULT_TEXT_PROVIDER)
     messages: list[dict[str, object]] = Field(max_length=200)
     tools: list[str] | None = Field(default=None, max_length=50)  # 省略 = 全部工具
+    # saiOS v2 P1：@ 引用真注入——[{type: "knowledge"|"prompt"|..., title, content}]
+    context_blocks: list[dict[str, object]] | None = Field(default=None, max_length=10)
 
 
 class ImageGenerationRequest(BaseModel):

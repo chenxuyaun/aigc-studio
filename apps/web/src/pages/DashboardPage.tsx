@@ -551,15 +551,11 @@ export function DashboardPage() {
               <Sparkles className="h-4 w-4" aria-hidden />
               开始创作
             </button>
-            <button
-              onClick={() => void runMission()}
-              disabled={missionBusy || !idea.trim()}
-              title="交给任务总控：先拆解计划给你确认，可调整后执行"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary-text transition-all duration-200 hover:-translate-y-px hover:border-primary disabled:opacity-50"
-            >
-              🎯 {missionBusy ? "拆解计划中…" : "交给任务总控"}
-            </button>
           </div>
+          {/* v2 P1：Mission「交给任务总控」入口已收敛至 AI 调度大厅（/），Dashboard 回归纯统计+轻创作 */}
+          <p className="mt-2 text-right text-[11px] text-muted-foreground">
+            🎯 多步任务总控已移至「AI 调度大厅」，这里保留一句话轻创作。
+          </p>
         </div>
 
         {/* 计划预览（Human-in-the-loop）：AI 拆解 → 人工调整 → 执行 */}

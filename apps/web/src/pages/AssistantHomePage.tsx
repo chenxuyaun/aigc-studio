@@ -37,6 +37,7 @@ import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { useChatSessions } from "@/hooks/useChatSessions";
 import { AppError, apiClient, streamSse } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
+import { useNavigate } from "react-router-dom";
 
 /**
  * 对话中枢首页 —— AI 助手
@@ -138,6 +139,7 @@ const AT_SCOPE_LABEL: Record<string, string> = {
 };
 
 export function AssistantHomePage() {
+  const navigate = useNavigate();
   const [input, setInput] = useState("");
   const {
     sessions,
@@ -148,6 +150,7 @@ export function AssistantHomePage() {
     deleteSession,
     updateCurrentMessages,
     ensureSession,
+    cloudReady,
     // 自定义分组 + 归档
     sessionGroupNames,
     setSessionGroup,
@@ -166,6 +169,15 @@ export function AssistantHomePage() {
   // /search 动态搜索结果
   const [atResults, setAtResults] = useState<AtSearchItem[]>([]);
   const [atBusy, setAtBusy] = useState(false);
+  // v2 P1：@ 引用真注入——已挂载的引用实体（发送时拉取内容进 context_blocks）
+  const [atRefs, setAtRefs] = useState<AtSearchItem[]>([]);
+  // Prompt Magic Polish 进行中
+  const [polishing, setPolishing] = useState(false);
+  // v2 P1：模型选择器（catalog 直连，替代硬编码）
+  const [chatModel, setChatModel] = useState(
+    () => localStorage.getItem("aigc-chat-model") || "gpt-oss-120b-medium",
+  );
+  const [modelList, setModelList] = useState<{ id: string; label: string; healthy?: boolean }[]>([]);
   // 工具调用过程日志（流式中展示 AI 正在干什么）
   const [toolLog, setToolLog] = useState<{ name: string; status: "running" | "done" }[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -281,26 +293,112 @@ export function AssistantHomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 会话就绪：等云端首拉完成再 ensureSession（否则刷新时会先误建新空会话、丢失当前会话指向）
   useEffect(() => {
+    if (!cloudReady) return;
     ensureSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudReady]);
+
+  // v2 P1：模型列表直连 catalog（裸数组），选中值持久化
+  useEffect(() => {
+    let alive = true;
+    apiClient
+      .get<
+        { id: string; name?: string; default_model?: string; healthy?: boolean }[] | { items?: { id: string; name?: string; default_model?: string; healthy?: boolean }[] }
+      >(
+        "/providers/catalog",
+      )
+      .then((r) => {
+        if (!alive) return;
+        const raw = Array.isArray(r) ? r : (r.items ?? []);
+        // catalog 条目：{id: uuid, name: "cpa·GPT-OSS", default_model: "gpt-oss-120b-medium"}
+        const list = raw
+          .filter((p) => (p.default_model || p.id) && p.id !== "mock")
+          .map((p) => ({ id: p.default_model || p.id, label: p.name || p.default_model || p.id, healthy: p.healthy ?? true }));
+        setModelList(list);
+        // 当前选择不在列表中 → 自动切到第一个可用模型
+        setChatModel((cur) => {
+          const valid = list.some((p) => p.id === cur);
+          const next = valid ? cur : (list[0]?.id ?? cur);
+          localStorage.setItem("aigc-chat-model", next);
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, toolLog]);
 
+  /** v2 P1 结构化斜杠命令：/image /music /tts /comic <参数> → 派发卡（推送 Studio）。 */
+  const SLASH_RE = /^\/(image|music|tts|comic)\s+(.{2,})$/i;
+  const SLASH_TARGET: Record<string, { kind: "image" | "music" | "tts" | "comic"; target: string; label: string }> = {
+    image: { kind: "image", target: "/create/image", label: "图像引擎" },
+    comic: { kind: "comic", target: "/create/comic", label: "漫画引擎" },
+    music: { kind: "music", target: "/create/music", label: "音乐引擎" },
+    tts: { kind: "tts", target: "/create/audio", label: "语音引擎" },
+  };
+
   async function send(textOverride?: string, editIdx?: number) {
     const text = (textOverride ?? input).trim();
     if (!text || streaming) return;
-    // 发送时关闭所有建议面板（@ 引用 / 斜杠命令按普通文本随 prompt 发出）
+    // 发送时关闭所有建议面板
     setShowAt(false);
     setAtQuery("");
     setShowCmds(false);
     setError(null);
+
+    // ── 结构化斜杠命令：不进 LLM，直接生成派发卡 ──
+    const slash = text.match(SLASH_RE);
+    if (slash && !editIdx) {
+      const meta = SLASH_TARGET[slash[1]!.toLowerCase()]!;
+      const args = slash[2]!.trim();
+      setInput("");
+      updateCurrentMessages((prev) => [
+        ...prev,
+        { role: "user", content: text },
+        { role: "assistant", content: "", dispatch: { kind: meta.kind, args, target: meta.target } },
+      ]);
+      return;
+    }
+
     // 编辑重发：history 只保留到该条用户消息之前的上下文（不含它），新 text 作为新的最后 user
     const history =
       editIdx !== undefined ? messages.slice(0, editIdx) : messages;
+
+    // v2 P1 @ 引用真注入：收集本条消息中实际 @ 到的实体，拉取内容组装 context_blocks
+    const usedRefs = atRefs.filter((r) => text.includes(`@${r.title}`));
+    let contextBlocks: { type: string; title: string; content: string }[] | undefined;
+    if (usedRefs.length > 0) {
+      const blocks = await Promise.all(
+        usedRefs.map(async (r): Promise<{ type: string; title: string; content: string }> => {
+          try {
+            if (r.scope === "knowledge") {
+              const d = await apiClient.get<{ title?: string; content?: string }>(
+                `/knowledge/documents/${r.id}`,
+              );
+              return { type: "知识库", title: r.title, content: (d.content ?? "").slice(0, 6000) };
+            }
+            if (r.scope === "prompts") {
+              const p = await apiClient.get<{ title?: string; content?: string }>(`/prompts/${r.id}`);
+              return { type: "提示词", title: r.title, content: (p.content ?? "").slice(0, 3000) };
+            }
+          } catch {
+            /* 引用内容取不到时降级为描述块 */
+          }
+          return { type: AT_SCOPE_LABEL[r.scope] ?? r.scope, title: r.title, content: r.snippet };
+        }),
+      );
+      contextBlocks = blocks;
+      // 已使用的引用发送后清掉；未使用的保留
+      setAtRefs((prev) => prev.filter((r) => !text.includes(`@${r.title}`)));
+    }
+
     if (editIdx !== undefined) {
       updateCurrentMessages((prev) => {
         const before = prev.slice(0, editIdx);
@@ -318,9 +416,9 @@ export function AssistantHomePage() {
     setToolLog([]);
     updateCurrentMessages((prev) => [...prev, { role: "assistant", content: "" }]);
     try {
-      const payload = {
-        // 明确指定文本模型走 cpa(GPT-OSS)，避免空 model 自动选中被 grok.com 403 风控的 grok2api
-        model: "gpt-oss-120b-medium",
+      const payload: Record<string, unknown> = {
+        // v2 P1：模型来自 catalog 选择器（默认仍 gpt-oss-120b-medium，走 cpa 链）
+        model: chatModel,
         messages: [
           {
             role: "system" as const,
@@ -332,6 +430,7 @@ export function AssistantHomePage() {
           ...history.map((m) => ({ role: m.role, content: m.content })),
           { role: "user" as const, content: text },
         ],
+        ...(contextBlocks ? { context_blocks: contextBlocks } : {}),
       };
       await streamSse(
         "/generations/text/agent/chat",
@@ -405,6 +504,33 @@ export function AssistantHomePage() {
     setStreaming(false);
   }
 
+  /** v2 P1 Prompt Magic Polish：AI 把输入框里的创作需求改写得更清晰具体。 */
+  async function polishInput() {
+    const t = input.trim();
+    if (!t || polishing || streaming) return;
+    setPolishing(true);
+    setError(null);
+    try {
+      const r = await apiClient.post<{ data?: { content?: string } }>(
+        "/generations/text/generate",
+        {
+          prompt:
+            "你是提示词润色助手。请把下面这段创作需求改写成清晰、具体、有画面感的中文提示词：保留原意，补全风格、构图、光影、氛围等要素，但不新增无关主题。直接输出改写结果，不要任何解释或前后缀。\n\n原文：" +
+            t,
+          model: chatModel,
+          stream: false,
+        },
+      );
+      const out = r?.data?.content?.trim();
+      if (out) setInput(out);
+      else setError("润色结果为空，请重试");
+    } catch (e) {
+      setError(e instanceof AppError ? e.message : "润色失败，请重试");
+    } finally {
+      setPolishing(false);
+    }
+  }
+
   function newChat() {
     abortRef.current?.abort();
     setError(null);
@@ -423,8 +549,24 @@ export function AssistantHomePage() {
     setShowCmds(false);
   }
 
-  /** @ 资源引用：把 `@资源名 ` 插入输入框光标处（取不到光标则追加末尾），随后关闭面板。 */
-  function insertAt(name: string) {
+  /** 纯文本 @token 插入（常用分类入口用——无具体实体，不登记引用）。 */
+  function insertToken(name: string) {
+    const ta = inputWrapRef.current?.querySelector<HTMLTextAreaElement>("textarea");
+    const start = ta ? ta.selectionStart ?? input.length : input.length;
+    const end = ta ? ta.selectionEnd ?? start : start;
+    const token = `@${name} `;
+    setInput(input.slice(0, start) + token + input.slice(end));
+    setShowAt(false);
+    setAtQuery("");
+  }
+
+  /**
+   * @ 资源引用（v2 P1 真注入）：把 `@资源名 ` 插入输入框光标处，同时登记引用实体。
+   * 发送时按实体类型拉取原文，结构化注入 context_blocks——模型能真正读到内容。
+   */
+  function insertAt(item: AtSearchItem) {
+    setAtRefs((prev) => (prev.some((r) => r.id === item.id) ? prev : [...prev, item]));
+    const name = item.title;
     const ta = inputWrapRef.current?.querySelector<HTMLTextAreaElement>("textarea");
     const start = ta ? ta.selectionStart ?? input.length : input.length;
     const end = ta ? ta.selectionEnd ?? start : start;
@@ -437,8 +579,8 @@ export function AssistantHomePage() {
     requestAnimationFrame(() => {
       const el = inputWrapRef.current?.querySelector<HTMLTextAreaElement>("textarea");
       if (el) {
-        const caret = start + token.length;
         el.focus();
+        const caret = Math.min(start + token.length, next.length);
         el.setSelectionRange(caret, caret);
       }
     });
@@ -923,11 +1065,27 @@ export function AssistantHomePage() {
         {/* 顶部系统栏 */}
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-slate-950/60 px-4 text-xs backdrop-blur">
           <div className="flex items-center gap-3">
-            {/* 当前模型（只读 chip，真实固定 gpt-oss） */}
-            <div className="flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-slate-900 px-3 py-1.5 text-cyan-300">
+            {/* v2 P1：模型选择器（catalog 直连，全局生效） */}
+            <div className="flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-slate-900 px-2.5 py-1 text-cyan-300">
               <Wrench className="h-3.5 w-3.5 text-cyan-400" aria-hidden />
-              <span className="font-medium">当前模型:</span>
-              <span className="font-mono font-semibold text-white">gpt-oss-120b</span>
+              <span className="hidden font-medium sm:inline">模型:</span>
+              <select
+                value={chatModel}
+                onChange={(e) => {
+                  setChatModel(e.target.value);
+                  localStorage.setItem("aigc-chat-model", e.target.value);
+                }}
+                className="max-w-[180px] cursor-pointer truncate bg-transparent font-mono text-[11px] font-semibold text-white outline-none [&>option]:bg-slate-900"
+                title="切换对话模型（来自模型中心 catalog）"
+              >
+                {modelList.length === 0 && <option value={chatModel}>{chatModel}</option>}
+                {modelList.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                    {m.healthy === false ? "（不可用）" : ""}
+                  </option>
+                ))}
+              </select>
             </div>
             {/* 显示工具调用开关（真实控制） */}
             <div className="hidden items-center gap-2 sm:flex">
@@ -974,7 +1132,7 @@ export function AssistantHomePage() {
               </button>
             )}
             <a
-              href="/saios/login"
+              href={`${window.location.pathname.startsWith("/saios") ? "/saios" : ""}/login`}
               title="返回首页"
               className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300"
             >
@@ -995,13 +1153,13 @@ export function AssistantHomePage() {
                 </div>
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-bold text-white">SAIOS 神经网络交互矩阵已启动</span>
+                    <span className="text-sm font-bold text-white">AI 调度大厅已就绪</span>
                     <span className="rounded bg-cyan-500/20 px-2 py-0.5 font-mono text-[10px] text-cyan-300">
-                      Agentic Workflow Enabled
+                      工具调用 · 已启用
                     </span>
                   </div>
                   <p className="leading-relaxed text-slate-400">
-                    已开启深度推理思考链与多模态 Agent 工具感知功能。输入指令即可调用绘画、写作、故事与音乐合成。
+                    直接输入想法派活；用 / 调命令、@ 引用资料。我可以帮你生图、写文、配音与创作故事。
                   </p>
                 </div>
               </div>
@@ -1048,7 +1206,7 @@ export function AssistantHomePage() {
                 <div className="ai-glass space-y-3 rounded-2xl border border-white/10 p-4">
                   <div className="flex items-center justify-between text-xs">
                     <span className="flex items-center gap-1.5 font-bold text-white">
-                      <Sparkles className="h-3.5 w-3.5 text-cyan-400" aria-hidden /> 最近神经算力渲染画廊
+                      <Sparkles className="h-3.5 w-3.5 text-cyan-400" aria-hidden /> 最近生成
                     </span>
                   </div>
                   <div className="grid grid-cols-4 gap-2.5">
@@ -1141,6 +1299,32 @@ export function AssistantHomePage() {
                             取消
                           </button>
                         </div>
+                      </div>
+                    ) : m.dispatch ? (
+                      <div className="w-full max-w-md rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+                        <p className="flex items-center gap-2 text-xs font-bold text-cyan-300">
+                          ⚡ 已解析派发指令 ·{" "}
+                          {m.dispatch.kind === "image"
+                            ? "图像引擎"
+                            : m.dispatch.kind === "comic"
+                              ? "漫画引擎"
+                              : m.dispatch.kind === "music"
+                                ? "音乐引擎"
+                                : "语音引擎"}
+                        </p>
+                        <p className="mt-2 rounded-lg bg-slate-950/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-slate-200">
+                          {m.dispatch.args}
+                        </p>
+                        <button
+                          onClick={() =>
+                            navigate(
+                              `${window.location.pathname.startsWith("/saios") ? "/saios" : ""}${m.dispatch!.target}?prompt=${encodeURIComponent(m.dispatch!.args)}`,
+                            )
+                          }
+                          className="mt-3 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 py-2 text-xs font-bold text-slate-950 transition-transform hover:scale-[1.02] active:scale-95"
+                        >
+                          🚀 推送到引擎渲染
+                        </button>
                       </div>
                     ) : m.image ? (
                       m.media === "audio" ? (
@@ -1333,7 +1517,7 @@ export function AssistantHomePage() {
                       <button
                         key={`${r.scope}-${r.id}`}
                         type="button"
-                        onClick={() => insertAt(r.title)}
+                        onClick={() => insertAt(r)}
                         className="flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-cyan-500/10"
                       >
                         <span className="mt-0.5 shrink-0 rounded bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] text-cyan-300">
@@ -1361,7 +1545,7 @@ export function AssistantHomePage() {
                       <button
                         key={r.kind}
                         type="button"
-                        onClick={() => insertAt(r.label)}
+                        onClick={() => insertToken(r.label)}
                         className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-cyan-500/10"
                       >
                         <span className="text-base">{r.icon}</span>
@@ -1373,6 +1557,30 @@ export function AssistantHomePage() {
                           {r.to ? "🔗" : "@ 引用"}
                         </span>
                       </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* v2 P1：已挂载的 @ 引用 chips（发送时内容真注入 context_blocks，可移除） */}
+                {atRefs.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 px-2 pb-1.5 pt-1">
+                    {atRefs.map((r) => (
+                      <span
+                        key={`${r.scope}-${r.id}`}
+                        className="flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200"
+                        title={r.snippet}
+                      >
+                        <span className="opacity-70">{AT_SCOPE_LABEL[r.scope] ?? r.scope}</span>
+                        <span className="max-w-[120px] truncate font-medium">@{r.title}</span>
+                        <button
+                          type="button"
+                          aria-label={`移除引用 ${r.title}`}
+                          onClick={() => setAtRefs((prev) => prev.filter((x) => x.id !== r.id))}
+                          className="ml-0.5 text-cyan-400 hover:text-white"
+                        >
+                          ×
+                        </button>
+                      </span>
                     ))}
                   </div>
                 )}
@@ -1416,14 +1624,26 @@ export function AssistantHomePage() {
                   <Square className="h-4 w-4" aria-hidden />
                 </button>
               ) : (
-                <button
-                  onClick={() => void send()}
-                  disabled={!input.trim()}
-                  aria-label="发送"
-                  className="ai-send-btn flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-950 transition-all hover:-translate-y-0.5 hover:shadow-[0_0_25px_rgba(0,242,254,0.5)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                >
-                  <Send className="h-4 w-4" aria-hidden />
-                </button>
+                <>
+                  {/* v2 P1：Prompt Magic Polish——AI 润色输入框中的创作需求 */}
+                  <button
+                    onClick={() => void polishInput()}
+                    disabled={!input.trim() || polishing}
+                    aria-label="AI 润色"
+                    title="AI 润色：把当前输入改写得更清晰具体"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-300 transition-all hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-35"
+                  >
+                    <Wand2 className={cn("h-4 w-4", polishing && "animate-spin")} aria-hidden />
+                  </button>
+                  <button
+                    onClick={() => void send()}
+                    disabled={!input.trim()}
+                    aria-label="发送"
+                    className="ai-send-btn flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-950 transition-all hover:-translate-y-0.5 hover:shadow-[0_0_25px_rgba(0,242,254,0.5)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  >
+                    <Send className="h-4 w-4" aria-hidden />
+                  </button>
+                </>
               )}
             </div>
 

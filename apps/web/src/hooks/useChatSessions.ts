@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { apiClient } from "@/lib/apiClient";
 import type { PersistedChatMessage } from "./usePersistedChat";
 
 export interface ChatSession {
@@ -13,10 +14,21 @@ export interface ChatSession {
   archived?: boolean;
 }
 
+interface CloudSession {
+  id: string;
+  name: string;
+  messages: PersistedChatMessage[];
+  group?: string | null;
+  archived?: boolean;
+  updated_at?: number;
+}
+
 const STORAGE_KEY = "aigc-chat-sessions-v1";
 /** 自定义分组名列表（与会话本体分开存储，独立管理）。 */
 const GROUP_NAMES_KEY = "aigc-chat-group-names-v1";
 const MAX_SESSIONS = 30;
+/** 云端写穿透防抖窗口（ms）。流式期间高频更新被合并成一次 PUT。 */
+const SYNC_DEBOUNCE_MS = 1500;
 
 function newId(): string {
   return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -29,30 +41,32 @@ function sessionName(messages: PersistedChatMessage[]): string {
   return text.length > 20 ? `${text.slice(0, 20)}…` : text || "新会话";
 }
 
+function readLocal(): ChatSession[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (s): s is ChatSession =>
+        !!s &&
+        typeof s === "object" &&
+        typeof (s as ChatSession).id === "string" &&
+        Array.isArray((s as ChatSession).messages),
+    );
+  } catch {
+    return [];
+  }
+}
+
 /**
- * 多会话管理（localStorage）：新建/切换/删除/自动命名/自动保存。
- * 单个会话上限 30 个，超出丢弃最旧。
+ * 多会话管理（v2 P1：localStorage 即时层 + 云端写穿同步）。
+ * - 新建/切换/删除/自动命名/自动保存（行为与 v1 完全一致）
+ * - 挂载时拉取云端会话合并（updatedAt 新者胜）；此后变更防抖 PUT 上行
+ * - 单设备离线照常工作（localStorage 兜底），恢复联网后下次打开补同步
  */
 export function useChatSessions() {
-  const [sessions, setSessions] = useState<ChatSession[]>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-      const parsed: unknown = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .filter(
-          (s): s is ChatSession =>
-            !!s &&
-            typeof s === "object" &&
-            typeof (s as ChatSession).id === "string" &&
-            Array.isArray((s as ChatSession).messages),
-        )
-        .slice(-MAX_SESSIONS);
-    } catch {
-      return [];
-    }
-  });
+  const [sessions, setSessions] = useState<ChatSession[]>(readLocal);
   const [currentId, setCurrentId] = useState<string | null>(null);
 
   // 自定义分组名列表（独立 localStorage key，与会话解耦）
@@ -62,13 +76,109 @@ export function useChatSessions() {
       if (!raw) return [];
       const parsed: unknown = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
-      return parsed
-        .filter((n): n is string => typeof n === "string" && n.trim().length > 0)
-        .slice(-50);
+      return parsed.filter((n): n is string => typeof n === "string" && n.trim().length > 0).slice(-50);
     } catch {
       return [];
     }
   });
+
+  // ── 云同步状态机 ────────────────────────────────
+  const cloudLoadedRef = useRef(false); // 云端首拉完成前不写穿（防止空数据覆盖）
+  const [cloudReady, setCloudReady] = useState(false); // 供调用方延迟 ensureSession（避免首拉前误建新会话）
+  const dirtyRef = useRef<Set<string>>(new Set()); // 待上行会话 id
+  const deletedRef = useRef<Set<string>>(new Set()); // 待删除会话 id
+  const timerRef = useRef<number | null>(null);
+  const sessionsRef = useRef<ChatSession[]>(sessions);
+  sessionsRef.current = sessions;
+
+  const flushSync = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    const ids = [...dirtyRef.current];
+    dirtyRef.current.clear();
+    const dels = [...deletedRef.current];
+    deletedRef.current.clear();
+    if (ids.length === 0 && dels.length === 0) return;
+    const byId = new Map(sessionsRef.current.map((x) => [x.id, x]));
+    for (const id of ids) {
+      if (dels.includes(id)) continue;
+      const s = byId.get(id);
+      if (!s) continue; // 已被删除（DELETE 分支处理）
+      void apiClient
+        .put(`/chat/sessions/${encodeURIComponent(id)}`, {
+          name: s.name,
+          messages: s.messages.slice(-200),
+          group: s.group ?? null,
+          archived: !!s.archived,
+          updated_at: s.updatedAt,
+        })
+        .catch(() => {});
+    }
+    for (const id of dels) {
+      void apiClient.del(`/chat/sessions/${encodeURIComponent(id)}`).catch(() => {});
+    }
+  }, []);
+
+  // 页面隐藏/关闭时立即上行（不等防抖），降低刷新丢同步窗口
+  useEffect(() => {
+    function onHide() {
+      if (document.visibilityState === "hidden") flushSync();
+    }
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flushSync);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", flushSync);
+    };
+  }, [flushSync]);
+
+  // 首拉：GET 云端全量 → 与本地合并（新者胜），本地独有会话补传
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const cloud = await apiClient.get<CloudSession[]>("/chat/sessions");
+        if (!alive || !Array.isArray(cloud)) {
+          cloudLoadedRef.current = true;
+          return;
+        }
+        const localMap = new Map(readLocal().map((s) => [s.id, s]));
+        for (const c of cloud) {
+          if (!c?.id || !Array.isArray(c.messages)) continue;
+          const cs: ChatSession = {
+            id: c.id,
+            name: c.name || "新会话",
+            messages: c.messages,
+            updatedAt: c.updated_at ?? 0,
+            ...(c.group ? { group: c.group } : {}),
+            ...(c.archived ? { archived: true } : {}),
+          };
+          const l = localMap.get(c.id);
+          // 云端不存在或本地更新 → 保留本地版本待上传；否则采用云端
+          if (!l || l.updatedAt <= cs.updatedAt) localMap.set(c.id, cs);
+        }
+        const merged = [...localMap.values()].sort((a, b) => a.updatedAt - b.updatedAt).slice(-MAX_SESSIONS);
+        setSessions(merged);
+        // 本地比云端新的会话标记待上行
+        const cloudIds = new Set(cloud.map((c) => c.id));
+        for (const s of merged) {
+          if (cloudIds.has(s.id) || s.messages.length > 0) dirtyRef.current.add(s.id);
+        }
+      } catch {
+        // 未登录/离线：纯本地模式
+      } finally {
+        if (alive) {
+          cloudLoadedRef.current = true;
+          setCloudReady(true);
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -76,7 +186,12 @@ export function useChatSessions() {
     } catch {
       // 存储满/隐私模式：静默降级
     }
-  }, [sessions]);
+    // 写穿：云端就绪后，把变化的会话防抖上行
+    if (!cloudLoadedRef.current) return;
+    for (const s of sessions.slice(-MAX_SESSIONS)) dirtyRef.current.add(s.id);
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(flushSync, SYNC_DEBOUNCE_MS);
+  }, [sessions, flushSync]);
 
   useEffect(() => {
     try {
@@ -106,6 +221,8 @@ export function useChatSessions() {
 
   const deleteSession = useCallback(
     (id: string) => {
+      deletedRef.current.add(id);
+      dirtyRef.current.delete(id);
       setSessions((prev) => {
         const next = prev.filter((s) => s.id !== id);
         if (next.length === 0) {
@@ -139,17 +256,13 @@ export function useChatSessions() {
       }),
     );
     if (name) {
-      setSessionGroupNames((prev) =>
-        prev.includes(name) ? prev : [...prev, name],
-      );
+      setSessionGroupNames((prev) => (prev.includes(name) ? prev : [...prev, name]));
     }
   }, []);
 
   /** 归档/取消归档会话。 */
   const archiveSession = useCallback((id: string, archived: boolean) => {
-    setSessions((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, archived } : s)),
-    );
+    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, archived } : s)));
   }, []);
 
   /** 显式新增一个自定义分组名（不绑定具体会话）。 */
@@ -227,6 +340,8 @@ export function useChatSessions() {
     currentId,
     current,
     messages: current?.messages ?? [],
+    /** 云端首拉是否完成（调用方应等它为 true 再 ensureSession，避免误建新会话）。 */
+    cloudReady,
     createSession,
     switchSession,
     deleteSession,
@@ -234,7 +349,7 @@ export function useChatSessions() {
     setCurrentMessages,
     updateCurrentMessages,
     ensureSession,
-    // 自定义分组 + 归档（v2 新增，向后兼容，既有导出不变）
+    // 自定义分组 + 归档（向后兼容，既有导出不变）
     sessionGroupNames,
     setSessionGroup,
     addSessionGroup,

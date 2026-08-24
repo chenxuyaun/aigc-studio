@@ -7,6 +7,7 @@ from app.api.v1 import (
     assets,
     auth,
     cardmarket,
+    chat_sessions,
     character_cards,
     creation,
     dashboard,
@@ -69,6 +70,7 @@ router.include_router(upstream.router, prefix="/upstream", tags=["upstream"])
 router.include_router(character_cards.router, prefix="/character-cards", tags=["character-cards"])
 router.include_router(roleplay.router, prefix="/roleplay", tags=["roleplay"])
 router.include_router(search.router, prefix="/search", tags=["search"])
+router.include_router(chat_sessions.router, prefix="/chat/sessions", tags=["chat"])
 router.include_router(story.router, prefix="/story", tags=["story"])
 router.include_router(cardmarket.router, tags=["cardmarket"])
 router.include_router(agentlist.router, prefix="", tags=["agentlist"])
