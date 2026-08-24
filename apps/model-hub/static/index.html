@@ -735,7 +735,9 @@ function controlPlane() {
     searchOpen: false, searchQ: '', searchIdx: 0,
     dnd: { slot:'', pid:'' },
 
-    get gatewayBase() { return location.origin + '/proxy/v1'; },
+    // 经 nginx /model-hub 前缀访问时，所有相对 API 调用必须带前缀（rewrite 剥前缀转给 hub）
+    apiPrefix() { return location.pathname.startsWith('/model-hub') ? '/model-hub' : ''; },
+    get gatewayBase() { return location.origin + this.apiPrefix() + '/proxy/v1'; },
 
     // ── 初始化 ──
     async initApp() {
@@ -836,7 +838,7 @@ function controlPlane() {
       await Promise.all([this.loadEvents(), this.loadCalls(), this.loadChains()]);
     },
     async api(path, opts={}) {
-      const r = await fetch(path, opts);
+      const r = await fetch(this.apiPrefix() + path, opts);
       if (!r.ok) {
         let msg = r.statusText;
         try { const j = await r.json(); msg = j.detail || j.message || JSON.stringify(j).slice(0,160); } catch(e){}
@@ -961,7 +963,7 @@ function controlPlane() {
       const msg=(this.testPrompt||'ping').slice(0,200);
       this.testResult='⏳ 已发出真实请求，经 /proxy/v1 链路路由中…'; this.testOk=true;
       try{
-        const r=await fetch('/proxy/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},
+        const r=await fetch(this.apiPrefix()+'/proxy/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({model:chain[0].default_model,messages:[{role:'user',content:msg}],max_tokens:24})});
         const j=await r.json().catch(()=>({}));
         if(r.ok){
