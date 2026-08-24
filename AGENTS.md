@@ -677,3 +677,15 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - `docs/grok2api-troubleshooting.md` — grok2api 排障
 - `scripts/` — 剧本生成器等工具
 - `backups/` — 每日自动备份（2:00）
+
+## saiOS v2 重设计规格（2026-08-24 审计完成，待用户拍板动工）
+
+- 全量审计：38 条路由 × 3 子代理逐页核查，规格书 = `docs/saios-v2-redesign.md`（六宗罪/五大决策/P0-P3 分期）。
+- 核心结论："low/没落地"不源于功能缺失（绝大多数 API 真实），而源于四大结构病：①27 个页面无导航入口
+  （含全部 /create/* 生成页！）②产出裂成素材库/作品/工作室/助手 localStorage 四处 ③假交互
+  （@引用不进 prompt、画布 setTimeout 假执行、发音人假选项、Music 只产 Suno 粘贴包）
+  ④双首页撞车 + 深浅主题两套品牌色。
+- **⚠️ Python 版本坑（PEP 758）**：api 容器跑 Python 3.14，无括号多异常捕获 `except A, B:` 合法；
+  本地/CI 老解释器报 SyntaxError。已全仓统一为 `except (A, B):`（17 处，b9ea75c 引入、躺了 13 天）。
+  **审计工具判"全站起不来"前先确认目标运行时版本**——子代理曾因此误报事故级发现。
+- 待用户决策：视觉方向 A（暖金驾驶舱）/ B（全面 Cyber）；批准后按 P0 信息架构建复 → P1 双模 → P2 Studio → P3 资产闭环 动工。
