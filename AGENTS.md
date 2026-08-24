@@ -322,7 +322,9 @@ cd apps/web && E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test --project=
 - 前端 `apps/model-hub/static/index.html` 全量重写（Alpine.js + Tailwind CDN + Lucide，零构建哲学不变）。
   八区域：总览(KPI/事件流/自愈心跳) / 能力路由(五槽地铁泳道·激光流线) / 供应商(抽屉+内联确认) /
   账号池(grok 73 格配额热力图·只读) / 可观测(proxy 调用日志表) / 接入中心(片段生成器) / 系统(备份+timer) / Prompts。
-  交互：备选卡点击升主选、**拖拽重排链序**、`/` 全局搜索、数字键 1-8 切区域、Esc 关弹层、路由发包测试发真实请求并反查实际服务者。
+  交互：备选卡点击升主选、**拖拽重排链序**、`/` 全局搜索、数字键 1-8 切区域、Esc 关弹层、
+  移动端底部导航栏（<768px，顶部 nav 隐藏）、🔔 提示音开关（WebAudio 短哔声随 toast，localStorage 持久化 hub_sfx_muted）、
+  路由发包测试发真实请求并反查实际服务者。
 - 后端新增只读 API：`/api/events`(ring buffer 500)、`/api/calls/recent`、`/api/pools/grok`
   （sqlite **只读 URI 连接**，token 只回显指纹）、`/api/system/timers`、`/api/system/backups`；
   `POST /api/active` 新增 **mode=reorder**（order 数组=该链全集排列，泳道拖拽的数据通道）。
