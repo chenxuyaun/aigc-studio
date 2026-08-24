@@ -62,9 +62,11 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // 灵感画廊 532 张图（146MB）不进 SW precache：按需加载，避免撑爆离线缓存
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        globIgnores: ["**/gallery/**"],
         navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//, /^\/health/],
+        navigateFallbackDenylist: [/^\/api\//, /^\/health/, /^\/gallery\//],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
     }),

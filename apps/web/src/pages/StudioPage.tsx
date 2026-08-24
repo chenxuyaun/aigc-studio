@@ -219,6 +219,15 @@ export function StudioPage() {
   // ── 反向克隆 Re-hydrate：/studio?rehydrate=<taskId> 带参回填再创作 ──
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
+    // 灵感画廊「在 Studio 打开」：?prompt=<文本> 直接回填图像域
+    const direct = searchParams.get("prompt");
+    if (direct) {
+      setDomain("image");
+      setPrompt(direct);
+      setRehydrated("已从灵感画廊带入 prompt，可编辑后渲染");
+      setSearchParams({}, { replace: true });
+      return;
+    }
     const rid = searchParams.get("rehydrate");
     if (!rid) return;
     void (async () => {

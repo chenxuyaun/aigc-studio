@@ -13,6 +13,7 @@ import {
   Image,
   Layers,
   Library,
+  Lightbulb,
   ListChecks,
   LogOut,
   MessageCircle,
@@ -71,6 +72,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "创作引擎",
     items: [
       { to: "/studio", label: "统一 Studio", short: "Studio", icon: Layers, mobile: true },
+      { to: "/inspiration", label: "灵感画廊", short: "灵感", icon: Lightbulb, mobile: false },
       { to: "/create/image", label: "图像生成", short: "图像", icon: Image, mobile: false },
       { to: "/create/comic", label: "漫画分镜", short: "漫画", icon: PenTool, mobile: false },
       { to: "/create/text", label: "文本写作", short: "写作", icon: PenLine, mobile: false },

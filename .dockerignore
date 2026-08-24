@@ -20,3 +20,5 @@ docs
 *.jpg
 # logo 是前端品牌资源，必须进构建上下文（排除 *.png 时显式放回）
 !apps/web/public/logo.png
+# v2 灵感画廊静态资源（gpt-image2 案例图 532 张 + cases.json）
+!apps/web/public/gallery/**
