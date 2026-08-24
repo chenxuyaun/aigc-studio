@@ -289,13 +289,34 @@ cd apps/web && E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test --project=
   上传 `/home/ubuntu/model-hub/app.py` + `systemctl --user restart model-hub`（无热加载）。
 - ② **SAIOS_DB_URL 占位符坑（同 CLASH_SECRET/AUTO_LOGIN 第三例）**：model-hub.service.d/env.conf
   里曾写 `aigc:changeme@` 模板密码从未替换 → 用量统计永远连不上。已从 saiOS .env 注入真密码（600 权限）。
-- ③ **僵尸 uvicorn 第五次复发（绑 0.0.0.0）+ guard 完成首杀后接管**：restart 窗口内 rogue 抢占端口，
-  API 响应来自 rogue（无 SAIOS_DB_URL → 误报"未配置"）。**教训：排查 hub 行为异常时先核对
-  `systemctl --user show model-hub -p MainPID` 与 `ss -tlnp` 的 pid 是否一致**——不一致时你测的是 rogue。
-  guard 已自动击杀并让 systemd 接管，自愈闭环首次实战成功。
-- **"(副本)"重复行已清理**（11→7）：早期 API 复制 key 得空串的残留。走 hub DELETE API 删（v3 自动清链引用），
-  删后链完好。链布局：text=[cpa·GPT-OSS, OpenRouter]、image=[cpa·Gemini-Image, OpenRouter·GPT-Image]、
-  audio=[Edge-TTS]；video/music 空。proxy 网关实测 chat 通。
+- ③ **"(副本)"重复行已清理**（11→7）：早期 API 复制 key 得空串的残留。走 hub DELETE API 删（v3 自动清链引用），
+  删后链完好。proxy 网关实测 chat 通。
+
+**🔴✅ 僵尸 uvicorn 真正根因查明并根治（2026-08-24 P0 启动源审计，推翻"手动启动"假设）**：
+- 五次僵尸的元凶 = **系统级与用户级同名双胞胎 unit**：`/etc/systemd/system/model-hub.service`
+  （User=ubuntu、Restart=always、**--host 0.0.0.0**、multi-user.target.wants 开机自启）vs 用户级
+  `~/.config/systemd/user/model-hub.service`（172.17.0.1 正确版）。任何人 `systemctl restart model-hub`
+  忘带 `--user`、或每次服务器重启 → 0.0.0.0 版被拉起抢端口；guard 杀掉后 Restart=always 又拉 → 循环。
+  bash_history/cron/pm2 全部无命中是因为根本不是人干的。
+- **处置**：`sudo systemctl stop/disable model-hub`（系统级）→ unit 文件移至 `~/systemd-unit-backups/` →
+  删 wants symlink → daemon-reload。验证铁律：`MainPID == ss 监听 pid` 匹配 + 一个守卫周期零击杀。
+- **教训**：排查"幽灵进程"先查 `ls /etc/systemd/system/multi-user.target.wants/` 有没有同名单胞胎；
+  guard 的判定（args 含 172.17.0.1）只杀监听者，管不了系统级 unit 反复拉起。
+- 排查期还发现 rogue 抢占窗口内 API 会由 rogue 应答（无 SAIOS_DB_URL → 误报"未配置"）——测 hub 行为前先核对 MainPID==ListenerPID。
+
+**✅ Grok2API 生图复活 + 账号池 refresh worker（2026-08-24 P1）**：
+- **阻塞从来不是刷新机制**，是 grok.com 对机场出口的风控 403（rate-limits 接口）。解法 =
+  **扫节点找非风控出口**：mihomo API 逐节点 PUT /proxies/PROXY 切换 + curl 经 7897 测 grok.com，
+  新订阅的美国节点全通（美国堪萨斯/美国1/美国2），已选「美国堪萨斯」。⚠️ mihomo PUT 返回 204 空体，
+  json.load 会炸——脚本必须容忍空响应；CLASH_AUTH 从 .deploy-env 读，勿硬编码。
+- **quota_fast 字段是 JSON 字符串**（`{"remaining":30,...}`）——SQL SUM() 求和得 0 是误判，
+  判断配额要 json.loads 后看 remaining。试点 batch/refresh 5/5 成功带回真实配额。
+- **端到端生图实测 200 出图**（/v1/images/generations, grok-imagine-image-lite，防盗链本地 URL 模式正常）。
+  账号池 73 全 active × fast 30/天 ≈ 2190 图/天产能。
+- **image 链升级三候选**：[cpa·Gemini-Image, OpenRouter·GPT-Image, grok2api]（append 进链，删 provider 自动清引用）。
+- **每日自愈 worker**：`grok-refresh.timer`（03:10，Persistent）→ `/home/ubuntu/model-hub/grok-refresh.sh`：
+  读库取全部 token → async 批量刷新(concurrency=4) → 轮询等完成 → force sync → 统计 with_fast_quota 写日志
+  `~/model-hub/grok-refresh.log`。注意 batch/refresh 的 tokens **不接受空数组**（报 No tokens provided）。
 
 **🔴 systemd drop-in 覆盖主 unit 的坑**：`systemctl --user show <svc> -p ExecStart --value` 才是
 生效值；只 sed 主 unit 而 `model-hub.service.d/venv.conf` 里还有旧 ExecStart 时改动无效。
