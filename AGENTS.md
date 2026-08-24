@@ -333,6 +333,13 @@ cd apps/web && E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test --project=
   搜索结果/CRUD 冒烟）+ 截图。⚠️ 测试脚本 goto 失败要 fail-fast，别 catch 吞掉——曾对死端口空跑一轮。
   ⚠️ Windows 下 OpenSSH 拒绝权限过宽的私钥：`icacls <key> /inheritance:r /grant:r "$env:USERNAME:R"` 一次修复。
 - 提交锚点：`32afba7`（主体）+ reorder/prompts/search 补完提交。
+- 🔴 **重写回归事故（2026-08-24 用户实测）**：hub 公网入口是 nginx `location ^~ /model-hub` +
+  `rewrite ^/model-hub/?(.*)$ /$1 break` 剥前缀反代 8511；旧版前端有
+  `const API = pathname.startsWith('/model-hub') ? '/model-hub/api' : '/api'` 前缀感知，
+  重写时被我弄丢 → 公网用户全部 API 404（"providers 加载失败: Not Found"），而 SSH 隧道直连验证全绿——
+  **测试路径与用户真实访问路径不一致的盲区**。修复：store 加 `apiPrefix()`，api()/gatewayBase/testLiveRoute 三处统一拼前缀。
+  教训：①重写任何带反向代理前缀的前端，先 grep 旧版 location.pathname/API_BASE 处理；②验收要含公网入口场景
+  （Playwright 直接打开 `http://IP/model-hub`），不能只测内网直连。
 
 **🔴 systemd drop-in 覆盖主 unit 的坑**：`systemctl --user show <svc> -p ExecStart --value` 才是
 生效值；只 sed 主 unit 而 `model-hub.service.d/venv.conf` 里还有旧 ExecStart 时改动无效。
