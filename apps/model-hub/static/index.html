@@ -418,13 +418,16 @@
               <th class="pr-3">延迟</th><th class="pr-3">状态</th><th>降级</th></tr></thead>
             <tbody>
               <template x-for="(c,i) in calls.slice(0,50)" :key="'c'+i+c.time">
-                <tr class="border-b border-space-850 hover:bg-space-850/50">
+                <tr class="border-b border-space-850 hover:bg-space-850/50" :title="c.err || ''">
                   <td class="py-1.5 pr-3 text-slate-500" x-text="c.time"></td>
                   <td class="pr-3 text-slate-200" x-text="c.provider"></td>
                   <td class="pr-3 text-slate-400" x-text="c.path"></td>
                   <td class="pr-3 text-cyan-300/80 truncate max-w-[220px]" x-text="c.model"></td>
                   <td class="pr-3" :class="c.latency_ms>3000?'text-amber-400':'text-slate-300'" x-text="c.latency_ms+'ms'"></td>
-                  <td class="pr-3" :class="c.status<400?'text-emerald-400':'text-rose-400'" x-text="c.status"></td>
+                  <td class="pr-3">
+                    <span :class="c.status<400?'text-emerald-400':'text-rose-400'" x-text="c.status"></span>
+                    <span x-show="c.err" class="ml-1 text-[10px] text-rose-300/80 truncate max-w-[260px] inline-block align-middle cursor-help" x-text="'⚠ '+c.err"></span>
+                  </td>
                   <td><span x-show="c.fallback" class="px-1.5 rounded bg-neon-purple/20 text-purple-300 text-[10px] font-bold">DEGRADED</span><span x-show="!c.fallback" class="text-slate-600">—</span></td>
                 </tr>
               </template>

@@ -1417,7 +1417,7 @@ def system_backups() -> dict[str, Any]:
     return {"backups": deduped[:30], "count": len(deduped)}
 
 
-def _record_call(row: sqlite3.Row, path: str, payload: dict[str, Any], latency_ms: int, status: int, fallback: bool) -> None:
+def _record_call(row: sqlite3.Row, path: str, payload: dict[str, Any], latency_ms: int, status: int, fallback: bool, err: str = "") -> None:
     """proxy 网关调用日志（控制台可观测页数据源）。"""
     _CALLS.appendleft({
         "time": time.strftime("%H:%M:%S"),
@@ -1427,11 +1427,12 @@ def _record_call(row: sqlite3.Row, path: str, payload: dict[str, Any], latency_m
         "latency_ms": latency_ms,
         "status": status,
         "fallback": bool(fallback),
+        "err": err[:120],
     })
     if fallback:
         _emit("FAILOVER", f"✅ 请求经降级由 {row['name']} 兜底成功 ({latency_ms}ms)")
     elif status >= 400:
-        _emit("WARN", f"{row['name']} {path} → HTTP {status}")
+        _emit("WARN", f"{row['name']} {path} → HTTP {status}" + (f" ({err[:80]})" if err else ""))
 
 
 # ── OpenAI 兼容代理 + 高可用路由（CC Switch 4.x：请求→激活 provider，失败降级）──
@@ -1487,6 +1488,17 @@ async def proxy_endpoint(path: str, request: Request) -> Any:
         payload = {}
     headers = {k: v for k, v in req.headers.items() if k.lower() in ("content-type", "accept")}
 
+    # model 别名规范化：auto/空/缺省 → 链首 default_model（兼容 OpenRouter "auto" 习惯）。
+    # 注意：规范化只发生一次，降级到后续候选时保持同一模型名由该候选自行解释。
+    _req_model = str(payload.get("model") or "").strip()
+    if not _req_model or _req_model.lower() in ("auto", "default"):
+        _primary = next(
+            (r for r in rows if (r["provider_type"] or "") in ("openai_compatible", "grok", "grok2api", "zarklab")),
+            None,
+        )
+        if _primary is not None and (_primary["default_model"] or "").strip():
+            payload["model"] = _primary["default_model"].strip()
+
     # GET /models：聚合 text 链各供应商的 default_model，供外部系统拉取模型列表
     if path == "models" and req.method == "GET":
         seen: set[str] = set()
@@ -1526,6 +1538,14 @@ async def proxy_endpoint(path: str, request: Request) -> Any:
                     json=payload if payload else None, follow_redirects=True,
                 )
             _lat = round((time.time() - t_call) * 1000)
+            # 提取上游错误摘要（供调用日志/事件流展示，免去上服务器翻日志）
+            _err = ""
+            if upstream.status_code >= 400:
+                try:
+                    _ej = upstream.json()
+                    _err = str(_ej.get("error", {}).get("message") if isinstance(_ej.get("error"), dict) else (_ej.get("error") or _ej.get("detail") or _ej))[:120]
+                except Exception:  # noqa: BLE001
+                    _err = (upstream.text or "")[:120]
             if upstream.status_code >= 500 and row["is_active"]:
                 last_err = f"{row['name']} HTTP {upstream.status_code}"
                 _emit("FAILOVER", f"⚡ {row['name']} HTTP {upstream.status_code} → 降级下一候选")
@@ -1540,9 +1560,9 @@ async def proxy_endpoint(path: str, request: Request) -> Any:
                         ) as sr:
                             async for chunk in sr.aiter_bytes():
                                 yield chunk
-                _record_call(row, path, payload, _lat, upstream.status_code, len(rows) > 1 and row is not rows[0])
+                _record_call(row, path, payload, _lat, upstream.status_code, len(rows) > 1 and row is not rows[0], _err)
                 return StreamingResponse(_gen(), media_type=upstream.headers.get("content-type", "text/event-stream"))
-            _record_call(row, path, payload, _lat, upstream.status_code, len(rows) > 1 and row is not rows[0])
+            _record_call(row, path, payload, _lat, upstream.status_code, len(rows) > 1 and row is not rows[0], _err)
             return JSONResponse(
                 content=json.loads(upstream.content) if upstream.content else {"ok": True},
                 status_code=upstream.status_code,
