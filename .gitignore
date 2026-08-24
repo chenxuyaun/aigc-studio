@@ -85,3 +85,16 @@ apps/web/e2e/.auth/
 # 调试产物
 scripts/searx_*.txt
 scripts/searx_*.html
+
+# ===== 密钥/敏感（红线：绝不能提交）=====
+# SSH 私钥（服务器免密登录密钥）
+.server-keys/
+# 部署包（含密钥的 .env/备份 tar）
+.deploy-*.tar
+.deploy-*.tgz
+# 迁移中间产物（可能含 .db / 备份）
+.build-tmp/
+
+# GPT-Image2 参考项目（146MB 图片不入库；仅保留结构化导出产物）
+/awesome-gpt-image-2/*
+!/awesome-gpt-image-2/export/
