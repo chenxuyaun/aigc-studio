@@ -21,6 +21,7 @@ import {
   Moon,
   MoreHorizontal,
   Music,
+  Palette,
   PenLine,
   PenTool,
   ScrollText,
@@ -42,7 +43,7 @@ import { cn } from "@/lib/cn";
 import { apiClient } from "@/lib/apiClient";
 import { ToastHost } from "@/components/ui/Toast";
 import { useAuthStore } from "@/stores/auth";
-import { useThemeStore } from "@/stores/theme";
+import { useThemeStore, SKINS } from "@/stores/theme";
 import type { SearchResultItem } from "@aigc/shared-types";
 
 interface NavItem {
@@ -94,6 +95,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "角色 & 故事",
     items: [
+      { to: "/persona", label: "角色中心", short: "角色中心", icon: Users, mobile: false },
       { to: "/roleplay", label: "角色扮演", short: "角色", icon: MessageCircle, mobile: true },
       { to: "/story", label: "故事工作室", short: "故事", icon: BookOpen, mobile: false },
     ],
@@ -196,6 +198,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const logout = useAuthStore((s) => s.logout);
   const themeMode = useThemeStore((s) => s.mode);
   const cycleTheme = useThemeStore((s) => s.cycle);
+  const skin = useThemeStore((s) => s.skin);
+  const setSkin = useThemeStore((s) => s.setSkin);
+  const [skinOpen, setSkinOpen] = useState(false);
   const compact = host.compactMode ?? false;
   const ThemeIcon = themeMode === "dark" ? Moon : themeMode === "light" ? Sun : Monitor;
   const themeLabel = themeMode === "dark" ? "深色" : themeMode === "light" ? "浅色" : "跟随系统";
@@ -370,7 +375,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="flex h-dvh min-w-0 flex-1 flex-col overflow-hidden">
         {!compact && (
-          <header className="z-20 flex h-15 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur md:px-6">
+          <header className="relative z-40 flex h-15 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur md:px-6">
             <div ref={boxRef} className="relative flex-1 md:max-w-sm">
               <form
                 className="relative flex h-9 items-center"
@@ -432,6 +437,35 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             </div>
             <div className="ml-auto flex items-center gap-2">
+              {/* v2 P3 皮肤引擎：四皮肤全局切换（品牌主色即时生效） */}
+              <div className="relative">
+                <button
+                  onClick={() => setSkinOpen((v) => !v)}
+                  aria-label={`皮肤：${SKINS.find((s) => s.key === skin)?.label ?? ""}`}
+                  title={`皮肤：${SKINS.find((s) => s.key === skin)?.label ?? ""}`}
+                  className="grid h-9 w-9 place-items-center rounded-full border border-border-strong text-muted-foreground hover:border-primary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Palette className="h-4.5 w-4.5" aria-hidden />
+                </button>
+                {skinOpen && (
+                  <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-border bg-surface-raised p-1.5 shadow-2xl">
+                    {SKINS.map((s) => (
+                      <button
+                        key={s.key}
+                        onClick={() => {
+                          setSkin(s.key);
+                          setSkinOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted ${skin === s.key ? "text-primary-text" : ""}`}
+                      >
+                        <span className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ background: s.dot }} />
+                        {s.label}
+                        {skin === s.key && <span className="ml-auto font-bold">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={cycleTheme}
                 aria-label={`主题：${themeLabel}（点击切换）`}
