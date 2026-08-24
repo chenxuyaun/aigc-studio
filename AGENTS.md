@@ -491,7 +491,7 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - 部署：同步 `AssistantHomePage.tsx`/`Routes.tsx`/`AppShell.tsx` → 服务器 → `docker compose -f compose.prod.yaml up -d --build frontend`。
   ⚠️ 注意：该命令会连带 recreate mysql/redis/api（已有依赖），重启后需确认全部 healthy（本次已核对）。
 
-**P0 验证**：本地 tsc 通过、生产 build 通过；服务器 frontend 重建成功、`AssistantHomePage-*.js` chunk 已进镜像、全服务 healthy、`/` 与 `/api/v1/health/live` 200。
+**P0 验证**：tsc/build 通过，frontend 重建成功，全服务 healthy，公网 200。
 
 **P1 已完成（2026-08-20）**：生图/创作结果**回显到对话**。
 - 后端 `apps/api/app/services/agent_chat.py`：tool done 事件新增 `result_data` 字段（完整结构化结果，含 `asset_url`），
@@ -499,22 +499,18 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - 前端 `AssistantHomePage.tsx`：tool done 时解析 `result_data.asset_url`，追加"图片消息"，对话内 `<img>` 回显；
   `usePersistedChat.ts` 消息类型加 `image?: string`（持久化也保留图片）。
 - 部署：同步 agent_chat.py + AssistantHomePage.tsx + usePersistedChat.ts → `docker compose -f compose.prod.yaml up -d --build api worker frontend`
-  （mysql/redis 保持 running 未动，全服务 healthy）。api/worker 容器内已含 `result_data`（grep=4），frontend chunk 哈希已更新。
+  （全服务 healthy）。
 
-**待办（P2+）**：侧栏最近会话/工作列表；创作目标模式（设目标自主推进）；记忆可视化；多模态（音频/漫画）结果回显增强。
 
 **P2 已完成（2026-08-20）**：侧栏最近会话列表。
 - 复用已有 `apps/web/src/hooks/useChatSessions.ts`（多会话 localStorage 管理：新建/切换/删除/自动命名/自动保存，本被 TextGenPage 用）。
   新增 `updateCurrentMessages(fn)` 函数式更新（供流式多步追加，避免闭包过期）。
 - `AssistantHomePage.tsx` 重构：改用 useChatSessions，#新对话 按钮 + 左侧 236px 侧栏列出最近会话（高亮当前、点击切换、hover 删除）+ 中央对话不变。
-- 部署：同步 useChatSessions.ts + AssistantHomePage.tsx → `docker compose -f compose.prod.yaml up -d --build frontend`，全服务 healthy，新 chunk `AssistantHomePage-D_rHzqb8.js`。
 
-**待办（P3+）**：创作目标模式（设目标自主推进、只认实据）；记忆可视化；多模态（音频/漫画）结果回显增强；会话云端同步（可选）。
 
 **P3 已完成（2026-08-20）**：多模态结果回显增强。
 - `AssistantHomePage.tsx`：按 `result_data.task_type` 区分媒体——`audio` 用 `<audio controls>`、`comic` 用 `cover_url` 封面图（标记 🎴 AI 漫画）、其余图片 `<img>`。
 - `usePersistedChat.ts`：`PersistedChatMessage` 加 `media?: "image"|"audio"|"comic"`。
-- 部署：同步 → `docker compose -f compose.prod.yaml up -d --build frontend`，全服务 healthy，新 chunk `AssistantHomePage-BNmv0S5Y.js`。
 
 **目标整体状态（2026-08-20）**：首页「对话中枢」改造**核心目标已达成**——中央对话框 + 侧栏最近会话 + 自然语言驱动多模态创作（生图/写文/音频/漫画）结果回显，复用 agent_chat + MCP 工具，未破坏现有功能，已上线。
 
@@ -592,42 +588,36 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
   - 媒体消息卡升级：图片带类型角标(🖼️/🎴) + 「⬇ 下载/查看」链接；音频加「🔊 AI 语音」标签。
   - 工具调用过程从单行文字 → **toolLog 事件卡**（⏳ 进行中脉冲 / ✅ 完成），流式中可见 AI 在干什么。
   - 升级 `toolLine:string` → `toolLog:{name,status}[]`。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-CuFA1jtP.js`，全服务 healthy、公网 200。
 
 **P1+ 待办**（见规格文档）：斜杠命令面板(`/`)、`@`资源引用、编辑历史消息、"AI 记得你"欢迎语、会话分组/归档/搜索、能力中心抽屉、生成画廊/再生成等。
 
 **P1-1 已完成并上线（2026-08-20）：斜杠命令面板**。
 - `AssistantHomePage.tsx`：输入 `/` 触发**命令建议面板**（COMMANDS 常量映射 MCP 能力：/画图 /写文 /写歌 /语音 /漫画 /角色 /故事），
   按输入实时筛选，点选回填示例提示词（含 `____` 占位让用户补）；Escape 关闭；placeholder 提示"输入 / 选择能力"。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-Cfp8sHAM.js`，全服务 healthy、公网 200。
 
 **P2+ 待办**：编辑历史消息（悬停铅笔重发）、`@`资源引用、"AI 记得你"欢迎语、会话分组/归档/搜索、能力中心抽屉、生成画廊/再生成、目标模式、定时创作。
 
 **P2-1 已完成并上线（2026-08-20）：编辑历史消息**。
 - `AssistantHomePage.tsx`：每条用户消息下方「✏️ 编辑此问题」→ 气泡变 textarea（可改）+「编辑重发/取消」；
   编辑重发 = 截断该条之后的上下文、以新文本重发（`send(text, editIdx)`：history 取 `messages.slice(0,editIdx)`、消息列表截断到该条前+新user+assistant占位）。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-CgsWx4Ok.js`，全服务 healthy、公网 200。
 
 **P2-2+ 待办**：`@`资源引用、"AI 记得你"欢迎语、会话分组/归档/搜索、能力中心抽屉、生成画廊/再生成、目标模式、定时创作。
 
 **P2-2 已完成并上线（2026-08-20）：媒体结果再生成**。
 - `AssistantHomePage.tsx`：图片/音频媒体卡加「🔄 再生成」按钮——找到该媒体消息前最近的一条 user 消息 prompt，
   调用 `send(prompt)` 重发，形成"生成→调整→再生成"闭环。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-CvqejcS1.js`，全服务 healthy、公网 200。
 
 **P2-3+ 待办**：`@`资源引用、"AI 记得你"欢迎语、会话分组/归档/搜索、能力中心抽屉、生成画廊时间线、目标模式、定时创作。
 
 **P2-3 已完成并上线（2026-08-20）：AI 记得你欢迎语**。
 - `AssistantHomePage.tsx`：欢迎态按历史会话个性化——有会话显示「欢迎回来 👋 上次在聊「XX」」+「回到最近会话/开启新对话」按钮；
   无会话显示首次问候。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-SyBrxYoe.js`，全服务 healthy、公网 200。
 
 **P2-4+ 待办**：`@`资源引用、会话分组/归档/搜索、能力中心抽屉、生成画廊时间线、目标模式、定时创作。
 
 **P2-4 已完成并上线（2026-08-20）：能力中心抽屉**。
 - `AssistantHomePage.tsx`：侧栏「新对话」下新增「🧭 能力中心」按钮 → 左侧覆盖抽屉（280px），按能力分组列出全部能力，
   点击某项把示例提示词放入输入框；顶部提示「输入 / 打开命令面板」。
-- 部署：同步 → `docker compose up -d --build frontend`，新 chunk `AssistantHomePage-TT_uwoj6.js`，全服务 healthy、公网 200。
 
 **P2-5+ 待办**：`@`资源引用、会话分组/归档/搜索、生成画廊时间线、目标模式、定时创作。
 
@@ -638,16 +628,16 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 **✅ saiOS 收敛改造（2026-08-20，用户授权鲸鱼做决定）**：
 - **决策**：定位 = **A·创作 AI 助手**（一句话驱动创作，深层功能收纳，治"功能太多太乱太平凡"）。
 - 规格：`docs/saios-consolidation-spec.md`。
-- **P-A1 已上线**：AppShell 侧栏**默认只展开「创作」组(3项)主入口**，资源/角色/系统组**折叠收纳**（点组标题展开、不删功能、激活组自动展开），用 useLocation 判激活。已部署 `saios-consolidation-pa1` 工件、全服务 healthy、公网 200。
+- **P-A1 已上线**：AppShell 侧栏**默认只展开「创作」组(3项)主入口**，资源/角色/系统组**折叠收纳**（点组标题展开、不删功能、激活组自动展开），用 useLocation 判激活。
 - 后续：P-A2 工具类收进 AI助手能力中心；P-A3 验证收藏路径可访问。
 
 **P-A2 已完成（2026-08-20）**：AI 助手能力中心抽屉新增「🗂️ 资源库」分组——把原侧栏资源/角色入口
 （提示词库/知识库/素材库/ASMR/Agent库/角色扮演）收纳为可跳转工具，功能不删只收敛；与 P-A1 导航折叠配合。
-已部署 `saios-consolidation-pa2` 工件、全服务 healthy、公网 200。
+
 
 **✅ AI 助手文本创作路由加固（2026-08-20）**：`AssistantHomePage.tsx` 系统提示词优化——明确「写歌词/写文案/写故事等纯文本创作
 直接用文字回答、绝不调用生图/音频工具」，只有用户明确要图片/音频才调工具。避免文本创作被模型误路由到走 grok 的媒体工具(403)，
-确保写歌/写文稳定走 cpa 文本通道。已部署 `AssistantHomePage-BzKrkTPd.js`，全服务 healthy、公网 200。
+确保写歌/写文稳定走 cpa 文本通道。
 
 ## 文档索引
 
@@ -668,13 +658,18 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - **⚠️ Python 版本坑（PEP 758）**：api 容器跑 Python 3.14，无括号多异常捕获 `except A, B:` 合法；
   本地/CI 老解释器报 SyntaxError。已全仓统一为 `except (A, B):` 兼容写法（commit b9ea75c 引入躺 13 天后修复）。
 
-## saiOS v2 落地进度（2026-08-24）
+## saiOS v2 落地进度（2026-08-24 P0-P3 全部完成）
 
-- **P0 完成（371b178）**：七大类导航（38 路由全露出）/catalog 裸数组兼容/Comic 模型改 gemini-3.1-flash-image/真 Edge-TTS 音色表/ST 页环境自适应 URL+token 掩码。
-- **⚠️ 公网入口**：nginx 根 `/` 是备案页；saiOS 实际入口 = **`/saios` 前缀**（验收必须打 /saios，打根路径得备案页曾致全 false 误判）。与上文「saiOS 占根」旧记录相反，以现状为准。
-- **P1 完成（47d82c2）**：调度大厅六硬伤——会话上云 chat_sessions（迁移 b1c2d3e4f5a6）+CRUD+useChatSessions 云写穿；@引用真注入 context_blocks→agent_chat 系统上下文；斜杠派发卡；模型选择器直连 catalog default_model；去黑话；Magic Polish。坑：router 自带 prefix 又挂载 prefix=/chat→双前缀 404。
-- **P2-1/P2-2 完成**：统一 Studio `/studio`（设计稿落地）——三段式驾驶舱+四皮肤 CSS 变量引擎+GPT-Image2 风格预设+图像/漫画/TTS/音乐真实生成链+HUD 真进度+Web Audio 频谱回放。坑：backdrop-filter 建堆叠上下文，header 下拉需 relative z-30；canvas fillStyle 不认 CSS 变量要传 rgb 数值。
-- **🔴 worker fd 耗尽**：celery 长跑累积 fd `Too many open files`→媒体任务全卡 queued。修复：compose worker ulimits nofile 65535。媒体任务集体卡 queued 先查 worker 日志 fd。
-- **🔴 MCP 工具不暴露 model 参数**：generate_image 曾带 model 形参，LLM 填自己聊天模型名→上游 400 not an image model。已去参走 hub 链。工具形参只留语义必需项。
-- **🔴 api 重启后 frontend 必须 --force-recreate**：配置未变时 up -d 不 recreate，nginx 缓存旧 api IP→502。
-- **gpt-image2 资产入库（7641c64）**：canghe.ai=awesome-gpt-image-2 的部署，线上与本地零差异；导出在 awesome-gpt-image-2/export/（529 案例 jsonl），本体 gitignore 仅收 export。
+锚点：371b178(P0)→47d82c2(P1)→7641c64(gpt-image2)→80289ad/72d07a9/10a2060(P2-1/2/3)→07d01d4+d1aa9a5(P3)→4609988(灵感画廊)。细节看 git log。
+- **P0**：七大类导航 38 路由全露出/catalog 裸数组兼容/Comic 改真 gemini 图像模型/真 Edge-TTS 音色表/ST 页环境自适应 URL+token 掩码。
+- **⚠️ 公网入口**：nginx 根 `/` 是备案页；saiOS 实际入口 = `/saios` 前缀（验收必须打 /saios）。
+- **P1 调度大厅六硬伤**：会话上云 chat_sessions（迁移 b1c2d3e4f5a6）；@引用真注入 context_blocks；斜杠派发卡；catalog 直连模型选择；去黑话。坑：router prefix 双挂 /chat→404。
+- **P2 统一 Studio /studio**：三段式驾驶舱+图像/漫画/TTS/音乐真实生成链+HUD 真进度+Web Audio 频谱+视频域（hub video 槽空时诚实报 Mock 拒绝不假装成功）+Story/Workflow 子能力导航卡。坑：backdrop-filter 建堆叠上下文，header 下拉需 relative z-30；canvas fillStyle 不认 CSS 变量要传 rgb 数值。
+- **P3**：四皮肤全局化（AppShell 🎨 data-skin 覆盖 --color-primary 系变量，Studio 同一 store）；/persona 角色中心；反向克隆闭环（任务中心/素材库 → `/studio?rehydrate=<taskId>` 回填参数）；灵感画廊 /inspiration（gpt-image2 529 案例+图进 public/gallery 静态服务、分类/风格/场景筛选、高频风格共现配方一键 ?prompt= 进 Studio、前端 TF-IDF 余弦相似推荐）。
+- **🔴 worker fd 耗尽**：celery 长跑 `Too many open files`→媒体任务全卡 queued。修复：compose worker ulimits nofile 65535。集体卡 queued 先查 worker 日志 fd。
+- **🔴 MCP 工具不暴露 model 参数**：LLM 曾填自己聊天模型名→上游 400 not an image model。已去参走 hub 链。
+- **🔴 api 重启后 frontend 必须 --force-recreate**：否则 nginx 缓存旧 api IP→502。
+- **🔴 AppShell header 曾缺定位属性**：z-20 对 static 元素无效，下拉被页面级堆叠上下文（如 Studio z-30 header）盖住；需 relative + z-40。
+- **🔴 SPA 内静态资源勿拼 /saios 前缀**：nginx 正则 location 已把 gallery/static/api 等前缀直接路由给 saiOS 容器；fetch("/saios/gallery/x") 被 SPA fallback 吃掉返回 index.html（200 text/html 极迷惑）。公共静态资源一律根绝对路径。
+- **🔴 vite-pwa precache >4MB 文件 build 直接失败**：批量图片用 workbox.globIgnores 排除（gallery/**），按需加载不进离线缓存。
+- gpt-image2 资产：canghe.ai=awesome-gpt-image-2 同源部署零差异；export/（529 案例 jsonl）入库，图片本体 gitignore 仅留本地。

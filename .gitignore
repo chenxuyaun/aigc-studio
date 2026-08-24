@@ -98,3 +98,6 @@ scripts/searx_*.html
 # GPT-Image2 参考项目（146MB 图片不入库；仅保留结构化导出产物）
 /awesome-gpt-image-2/*
 !/awesome-gpt-image-2/export/
+
+# 灵感画廊图片本体不入库（146MB）；cases.json 入库。重建：从 ../awesome-gpt-image-2/data/images 按 export/cases-full.jsonl 引用拷贝为 case<N>.<ext>
+/apps/web/public/gallery/img/
