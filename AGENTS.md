@@ -672,4 +672,9 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 
 - **P0 完成（371b178）**：七大类导航（38 路由全露出）/catalog 裸数组兼容/Comic 模型改 gemini-3.1-flash-image/真 Edge-TTS 音色表/ST 页环境自适应 URL+token 掩码。
 - **⚠️ 公网入口**：nginx 根 `/` 是备案页；saiOS 实际入口 = **`/saios` 前缀**（验收必须打 /saios，打根路径得备案页曾致全 false 误判）。与上文「saiOS 占根」旧记录相反，以现状为准。
-- **P1 完成（本轮）**：调度大厅六硬伤——①会话上云 chat_sessions 表（迁移 b1c2d3e4f5a6，down=a7b9c1d3e5f7）+/api/v1/chat/sessions CRUD+useChatSessions 写穿（防抖 PUT+visibilitychange flush+cloudReady 门控 ensureSession）；②@引用真注入 context_blocks→agent_chat 系统级上下文（knowledge/prompts 拉原文）；③斜杠 /image|music|tts|comic→派发卡推送引擎带参；④模型选择器直连 catalog（option value=default_model 非 uuid）；⑤去黑话文案；⑥Magic Polish 按钮（POST /generations/text/generate）。Dashboard 移除「交给任务总控」。坑：chat_sessions router 自带 prefix 又挂载 prefix=/chat→双前缀 404。
+- **P1 完成（47d82c2）**：调度大厅六硬伤——会话上云 chat_sessions（迁移 b1c2d3e4f5a6）+CRUD+useChatSessions 云写穿；@引用真注入 context_blocks→agent_chat 系统上下文；斜杠派发卡；模型选择器直连 catalog default_model；去黑话；Magic Polish。坑：router 自带 prefix 又挂载 prefix=/chat→双前缀 404。
+- **P2-1/P2-2 完成**：统一 Studio `/studio`（设计稿落地）——三段式驾驶舱+四皮肤 CSS 变量引擎+GPT-Image2 风格预设+图像/漫画/TTS/音乐真实生成链+HUD 真进度+Web Audio 频谱回放。坑：backdrop-filter 建堆叠上下文，header 下拉需 relative z-30；canvas fillStyle 不认 CSS 变量要传 rgb 数值。
+- **🔴 worker fd 耗尽**：celery 长跑累积 fd `Too many open files`→媒体任务全卡 queued。修复：compose worker ulimits nofile 65535。媒体任务集体卡 queued 先查 worker 日志 fd。
+- **🔴 MCP 工具不暴露 model 参数**：generate_image 曾带 model 形参，LLM 填自己聊天模型名→上游 400 not an image model。已去参走 hub 链。工具形参只留语义必需项。
+- **🔴 api 重启后 frontend 必须 --force-recreate**：配置未变时 up -d 不 recreate，nginx 缓存旧 api IP→502。
+- **gpt-image2 资产入库（7641c64）**：canghe.ai=awesome-gpt-image-2 的部署，线上与本地零差异；导出在 awesome-gpt-image-2/export/（529 案例 jsonl），本体 gitignore 仅收 export。

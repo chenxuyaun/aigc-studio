@@ -397,12 +397,14 @@ async def _create_and_poll(
 
 
 @mcp.tool()
-async def generate_image(prompt: str, model: str = "") -> dict[str, Any]:
-    """文生图：grok-imagine-image。返回任务结果（含 asset_url）。"""
+async def generate_image(prompt: str) -> dict[str, Any]:
+    """文生图：引擎由模型中心 image 链自动选择（主选失败自动降级备选）。返回任务结果（含 asset_url）。"""
     from app.schemas.generation import ImageGenerationRequest
 
-    params = ImageGenerationRequest(prompt=prompt, model=model or "grok-imagine-image")
-    return await _create_and_poll("image", params.model, params)
+    # 不向 LLM 暴露 model 参数：聊天模型曾把自己的名字填进来（如 stealth/ox-alpha）
+    # 导致生图上游 400 "not an image model"。空 model = 走 hub 链首候选。
+    params = ImageGenerationRequest(prompt=prompt)
+    return await _create_and_poll("image", "", params)
 
 
 @mcp.tool()

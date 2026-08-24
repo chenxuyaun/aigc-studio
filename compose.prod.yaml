@@ -31,6 +31,8 @@ services:
     # 容器内以 mysql 服务名访问；本地 uvicorn（无 DATABASE_URL）仍走 SQLite
     environment:
       - DATABASE_URL=mysql+aiomysql://${MYSQL_USER:-aigc}:${MYSQL_PASSWORD:-changeme}@mysql:3306/${MYSQL_DATABASE:-aigc_studio}
+      # 模型中心：容器经 host-gateway 访问宿主机 model-hub（systemd 绑 172.17.0.1）
+      - MODEL_HUB_BASE_URL=http://host.docker.internal:8511
     # 让容器内 provider 的 host.docker.internal 能指向宿主机（grok2api/cpa 跑在宿主机 docker）
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -74,8 +76,19 @@ services:
     env_file: .env
     environment:
       - DATABASE_URL=mysql+aiomysql://${MYSQL_USER:-aigc}:${MYSQL_PASSWORD:-changeme}@mysql:3306/${MYSQL_DATABASE:-aigc_studio}
+      - MODEL_HUB_BASE_URL=http://host.docker.internal:8511
+      # celery 每任务 asyncio.run 新事件循环：常驻连接池会把旧 loop 的 aiomysql
+      # 连接带进新 loop（"Future attached to a different loop"/Event loop is closed）。
+      # worker 必须 NullPool；API 进程不受此变量影响，保持默认池。
+      - DB_POOL_CLASS=null
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # worker 长跑会累积 fd（每任务事件循环/连接/临时句柄），默认 1024 上限曾耗尽
+    # （OSError: Too many open files → 全部媒体任务卡 queued）。调高容器 nofile 上限。
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     depends_on:
       mysql:
         condition: service_healthy
@@ -89,6 +102,10 @@ services:
     logging: *default-logging
   mysql:
     image: mysql:8.4
+    # 仅绑本机回环：供宿主机进程（model-hub 的 SAIOS_DB_URL=127.0.0.1:3307）读用量统计；
+    # 不暴露公网。容器间仍走服务名 mysql:3306。
+    ports:
+      - "127.0.0.1:3307:3306"
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-aigc_studio}
       MYSQL_USER: ${MYSQL_USER:-aigc}

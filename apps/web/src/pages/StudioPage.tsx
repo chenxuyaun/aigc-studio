@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Activity,
@@ -9,8 +9,10 @@ import {
   Film,
   Image as ImageIcon,
   Layers,
+  Mic,
   Music,
   Palette,
+  Pause,
   Play,
   Radio,
   RefreshCw,
@@ -27,7 +29,8 @@ import { cn } from "@/lib/cn";
 /**
  * saiOS v2 P2 —— 统一 Studio 五域引擎面板（设计稿 saios_v2 (1).html 落地）。
  * 三段式驾驶舱：顶栏遥测+主题引擎 / 左参数舱 / 中央视口（HUD 渲染特效）+ 底部动作条。
- * 图像域 = 真实生成闭环（useMediaTask → hub 链）；其余域为诚实占位（迁移中引导）。
+ * 图像域 = 真实生成闭环（hub 三候选链）；音频&TTS 域 = Edge-TTS 音色舱 + 音乐直出 +
+ * Web Audio 实时频谱；其余域为诚实占位（迁移中引导）。
  */
 
 type Domain = "image" | "music" | "video" | "story" | "workflow";
@@ -41,11 +44,11 @@ const DOMAINS: { key: Domain; label: string; icon: typeof ImageIcon; hint: strin
   { key: "workflow", label: "节点拓扑", icon: Workflow, hint: "工作流编排", legacy: "/workflows" },
 ];
 
-const THEMES: { key: ThemeName; label: string; dot: string }[] = [
-  { key: "cyan", label: "赛博冷青", dot: "#06b6d4" },
-  { key: "purple", label: "量子紫罗兰", dot: "#8b5cf6" },
-  { key: "emerald", label: "黑曜翡翠", dot: "#10b981" },
-  { key: "mono", label: "钛银极简", dot: "#cbd5e1" },
+const THEMES: { key: ThemeName; label: string; dot: string; rgb: string }[] = [
+  { key: "cyan", label: "赛博冷青", dot: "#06b6d4", rgb: "6,182,212" },
+  { key: "purple", label: "量子紫罗兰", dot: "#8b5cf6", rgb: "139,92,246" },
+  { key: "emerald", label: "黑曜翡翠", dot: "#10b981", rgb: "16,185,129" },
+  { key: "mono", label: "钛银极简", dot: "#cbd5e1", rgb: "203,213,225" },
 ];
 
 /** GPT-Image2 风格库 Top 标签（awesome-gpt-image-2 export，点选注入 prompt 词缀）。 */
@@ -67,12 +70,28 @@ const RATIOS: { label: string; w: number; h: number }[] = [
   { label: "4:3", w: 1152, h: 864 },
 ];
 
+/** Edge-TTS 真实音色表（与 AudioGenPage 一致）。 */
+const VOICES: { value: string; label: string }[] = [
+  { value: "default", label: "晓晓（自动·女声）" },
+  { value: "XiaoxiaoNeural", label: "晓晓 · 温暖女声" },
+  { value: "XiaoyiNeural", label: "晓伊 · 活泼女声" },
+  { value: "YunxiNeural", label: "云希 · 年轻男声" },
+  { value: "YunjianNeural", label: "云健 · 磁性男声" },
+  { value: "YunyangNeural", label: "云扬 · 新闻男声" },
+  { value: "liaoning-XiaobeiNeural", label: "晓北 · 东北方言" },
+  { value: "zh-TW-HsiaoChenNeural", label: "小陈 · 台湾腔" },
+  { value: "en-US-JennyNeural", label: "Jenny · English F" },
+  { value: "en-US-GuyNeural", label: "Guy · English M" },
+];
+
 interface CatalogEntry {
   id: string;
   name?: string;
   default_model?: string;
   healthy?: boolean;
 }
+
+type TaskState = ReturnType<typeof useMediaTask>;
 
 export function StudioPage() {
   const navigate = useNavigate();
@@ -82,17 +101,40 @@ export function StudioPage() {
   );
   const [themeOpen, setThemeOpen] = useState(false);
 
-  // ── 图像域状态 ──
+  // ── 图像域 ──
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState(() => localStorage.getItem("saios-studio-image-model") || "");
   const [modelList, setModelList] = useState<CatalogEntry[]>([]);
   const [activeStyles, setActiveStyles] = useState<string[]>([]);
   const [ratio, setRatio] = useState(RATIOS[0]!);
   const imageTask = useMediaTask("/generations/image/generate");
-
-  // 漫画任务（同一视口复用）
   const comicTask = useMediaTask("/generations/comic/generate");
-  const task = domain === "image" ? imageTask : comicTask;
+
+  // ── 音频&TTS 域 ──
+  const [audioMode, setAudioMode] = useState<"tts" | "song">("tts");
+  const [voice, setVoice] = useState("default");
+  const [speed, setSpeed] = useState(1);
+  const [ttsText, setTtsText] = useState("");
+  const [songDesc, setSongDesc] = useState("");
+  const [duration, setDuration] = useState(30);
+  const ttsTask = useMediaTask("/generations/audio/generate");
+  const songTask = useMediaTask("/generations/music/generate");
+
+  // 视口展示策略：正在生成的优先，其次最近有结果的
+  const tasks: Record<string, TaskState> = {
+    image: imageTask,
+    comic: comicTask,
+    tts: ttsTask,
+    song: songTask,
+  };
+  const shownKey = useMemo(() => {
+    const order = ["tts", "song", "comic", "image"];
+    return order.find((k) => tasks[k]!.busy) ?? order.find((k) => tasks[k]!.result) ?? "image";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageTask, comicTask, ttsTask, songTask]);
+  const task = tasks[shownKey]!;
+  const isAudioResult = Boolean(task.result?.assetUrl && (task.result.mime ?? "").startsWith("audio"));
+  const accentRgb = THEMES.find((t) => t.key === theme)?.rgb ?? "6,182,212";
 
   // catalog 直连（图像模型）
   useEffect(() => {
@@ -117,15 +159,28 @@ export function StudioPage() {
     };
   }, []);
 
-  // HUD step 文案随真实进度推进
+  // HUD step 文案随真实进度推进（按媒体类型分文案）
   const hudStep = useMemo(() => {
     const p = task.progress;
     if (!task.busy) return "";
+    if (isAudioShown()) {
+      if (p < 30) return "合成队列 · 分配语音引擎…";
+      if (p < 80) return isSongShown() ? "MusicGen 采样中 · 生成波形…" : "TTS 合成中 · 声学模型推理…";
+      return "转码落库 · 写入资产中心…";
+    }
     if (p < 15) return "任务已入列 · 分配 GPU 渲染节点…";
     if (p < 55) return "扩散采样中 · Latent 空间去噪…";
     if (p < 90) return "细节重构 · VAE 解码与色彩写回…";
     return "落库中 · 写入资产中心…";
-  }, [task.busy, task.progress]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.busy, task.progress, shownKey]);
+
+  function isSongShown(): boolean {
+    return shownKey === "song";
+  }
+  function isAudioShown(): boolean {
+    return shownKey === "tts" || shownKey === "song";
+  }
 
   function pickTheme(t: ThemeName) {
     setTheme(t);
@@ -139,7 +194,7 @@ export function StudioPage() {
 
   async function renderImage() {
     const base = prompt.trim();
-    if (!base || task.busy) return;
+    if (!base || imageTask.busy) return;
     const suffix = STYLE_PRESETS.filter((s) => activeStyles.includes(s.tag))
       .map((s) => s.suffix)
       .join("");
@@ -154,7 +209,7 @@ export function StudioPage() {
 
   function renderComic() {
     const base = prompt.trim();
-    if (!base || task.busy) return;
+    if (!base || comicTask.busy) return;
     void comicTask.run({
       prompt: base,
       style: STYLE_PRESETS.filter((s) => activeStyles.includes(s.tag))
@@ -164,26 +219,46 @@ export function StudioPage() {
     });
   }
 
-  function downloadResult() {
-    const url = task.result?.assetUrl;
-    if (!url) return;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `saios-studio-${Date.now()}.png`;
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.click();
+  async function renderTts() {
+    if (!ttsText.trim() || ttsTask.busy) return;
+    await ttsTask.run({ text: ttsText.trim(), voice, speed });
+  }
+
+  function renderSong() {
+    if (!songDesc.trim() || songTask.busy) return;
+    void songTask.run({ prompt: songDesc.trim(), duration_seconds: duration });
+  }
+
+  function retryShown() {
+    if (shownKey === "image") void renderImage();
+    else if (shownKey === "comic") renderComic();
+    else if (shownKey === "tts") void renderTts();
+    else renderSong();
   }
 
   function copyPrompt() {
-    if (prompt.trim()) void navigator.clipboard.writeText(prompt.trim());
+    const t =
+      shownKey === "image" || shownKey === "comic"
+        ? prompt.trim()
+        : shownKey === "tts"
+          ? ttsText.trim()
+          : songDesc.trim();
+    if (t) void navigator.clipboard.writeText(t);
   }
 
   // 推送助手：带 prompt 回调度大厅
   function pushToAssistant() {
-    const t = prompt.trim();
+    const t =
+      shownKey === "image" || shownKey === "comic"
+        ? prompt.trim()
+        : shownKey === "tts"
+          ? ttsText.trim()
+          : songDesc.trim();
     navigate(`/?studio_prompt=${encodeURIComponent(t)}`);
   }
+
+  const extFromMime = (m?: string) =>
+    m?.includes("wav") ? "wav" : m?.includes("ogg") ? "ogg" : m?.includes("mp4") ? "m4a" : "mp3";
 
   const accentVar = { color: "var(--st-accent)" };
 
@@ -210,8 +285,10 @@ export function StudioPage() {
         <div className="flex items-center gap-4 font-mono text-[11px]">
           <span className="hidden items-center gap-1.5 text-slate-500 md:flex">
             <Activity className="h-3.5 w-3.5" style={accentVar} aria-hidden />
-            模型:
-            <strong className="max-w-[180px] truncate text-slate-200">{model || "—"}</strong>
+            引擎:
+            <strong className="max-w-[180px] truncate text-slate-200">
+              {shownKey === "tts" ? voice : shownKey === "song" ? `MusicGen ${duration}s` : model || "—"}
+            </strong>
           </span>
           <span className="hidden items-center gap-1.5 text-slate-500 lg:flex">
             <Radio className="h-3.5 w-3.5" style={accentVar} aria-hidden />
@@ -362,7 +439,7 @@ export function StudioPage() {
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <button
                   onClick={() => void renderImage()}
-                  disabled={!prompt.trim() || task.busy}
+                  disabled={!prompt.trim() || imageTask.busy}
                   className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold text-slate-950 transition-transform enabled:hover:scale-[1.02] disabled:opacity-40"
                   style={{ background: "linear-gradient(120deg, var(--st-accent), rgba(255,255,255,.82))" }}
                 >
@@ -371,7 +448,7 @@ export function StudioPage() {
                 </button>
                 <button
                   onClick={renderComic}
-                  disabled={!prompt.trim() || task.busy}
+                  disabled={!prompt.trim() || comicTask.busy}
                   className="rounded-xl border py-2.5 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/5 disabled:opacity-40"
                   style={{ borderColor: "var(--st-border)" }}
                 >
@@ -379,8 +456,126 @@ export function StudioPage() {
                 </button>
               </div>
             </div>
+          ) : domain === "music" ? (
+            /* ═══ 音频&TTS 域参数舱 ═══ */
+            <div className="space-y-4">
+              {/* 子模式 */}
+              <div className="grid grid-cols-2 gap-1.5">
+                {(["tts", "song"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setAudioMode(m)}
+                    className={cn(
+                      "rounded-lg border border-white/10 py-2 text-[11px] font-semibold text-slate-400 transition-all",
+                      audioMode === m && "st-chip-active border",
+                    )}
+                  >
+                    {m === "tts" ? "🎙 语音合成 TTS" : "🎵 音乐生成"}
+                  </button>
+                ))}
+              </div>
+
+              {audioMode === "tts" ? (
+                <>
+                  <div>
+                    <p className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                      <Mic className="h-3 w-3" aria-hidden /> 发音人（Edge-TTS）
+                    </p>
+                    <select
+                      value={voice}
+                      onChange={(e) => setVoice(e.target.value)}
+                      className="w-full rounded-xl border bg-slate-950/70 px-3 py-2 text-xs text-white outline-none [&>option]:bg-slate-900"
+                      style={{ borderColor: "var(--st-border)" }}
+                    >
+                      {VOICES.map((v) => (
+                        <option key={v.value} value={v.value}>
+                          {v.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                      朗读文本 <span className="font-mono normal-case text-slate-600">{ttsText.length}/2000</span>
+                    </p>
+                    <textarea
+                      value={ttsText}
+                      onChange={(e) => setTtsText(e.target.value.slice(0, 2000))}
+                      rows={6}
+                      placeholder="输入要合成为语音的文字…"
+                      className="w-full resize-none rounded-xl border bg-slate-950/70 px-3 py-2.5 text-xs leading-relaxed text-slate-100 outline-none placeholder:text-slate-600"
+                      style={{ borderColor: "var(--st-border)" }}
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                      <span>语速</span>
+                      <span className="font-mono text-slate-300">{speed.toFixed(1)}×</span>
+                    </p>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                      value={speed}
+                      onChange={(e) => setSpeed(Number(e.target.value))}
+                      className="w-full accent-cyan-400"
+                      style={{ accentColor: "var(--st-accent)" }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => void renderTts()}
+                    disabled={!ttsText.trim() || ttsTask.busy}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold text-slate-950 transition-transform enabled:hover:scale-[1.02] disabled:opacity-40"
+                    style={{ background: "linear-gradient(120deg, var(--st-accent), rgba(255,255,255,.82))" }}
+                  >
+                    <Zap className="h-3.5 w-3.5" aria-hidden />
+                    {ttsTask.busy ? "合成中…" : "合成语音"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">音乐描述</p>
+                    <textarea
+                      value={songDesc}
+                      onChange={(e) => setSongDesc(e.target.value.slice(0, 1000))}
+                      rows={5}
+                      placeholder="描述风格/情绪/乐器…例：轻快的夏日民谣，木吉他为主，海边日落氛围"
+                      className="w-full resize-none rounded-xl border bg-slate-950/70 px-3 py-2.5 text-xs leading-relaxed text-slate-100 outline-none placeholder:text-slate-600"
+                      style={{ borderColor: "var(--st-border)" }}
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                      <span>时长</span>
+                      <span className="font-mono text-slate-300">{duration}s</span>
+                    </p>
+                    <input
+                      type="range"
+                      min={5}
+                      max={120}
+                      step={5}
+                      value={duration}
+                      onChange={(e) => setDuration(Number(e.target.value))}
+                      className="w-full"
+                      style={{ accentColor: "var(--st-accent)" }}
+                    />
+                  </div>
+                  <button
+                    onClick={renderSong}
+                    disabled={!songDesc.trim() || songTask.busy}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold text-slate-950 transition-transform enabled:hover:scale-[1.02] disabled:opacity-40"
+                    style={{ background: "linear-gradient(120deg, var(--st-accent), rgba(255,255,255,.82))" }}
+                  >
+                    <Zap className="h-3.5 w-3.5" aria-hidden />
+                    {songTask.busy ? `生成中 ${songTask.progress}%` : "生成音乐"}
+                  </button>
+                </>
+              )}
+            </div>
           ) : (
-            /* 其余四域：诚实占位（不假执行） */
+            /* 其余三域：诚实占位（不假执行） */
             <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/10 p-6 text-center">
               {(() => {
                 const d = DOMAINS.find((x) => x.key === domain)!;
@@ -429,22 +624,34 @@ export function StudioPage() {
             {/* 空态准星 */}
             {!task.result && !task.busy && !task.error && (
               <div className="pointer-events-none select-none text-center">
-                <div className="st-node-pulse relative mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full border" style={{ borderColor: "var(--st-border)" }}>
+                <div
+                  className="st-node-pulse relative mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full border"
+                  style={{ borderColor: "var(--st-border)" }}
+                >
                   <Play className="h-6 w-6" style={accentVar} aria-hidden />
                 </div>
                 <p className="font-mono text-sm font-bold tracking-widest" style={accentVar}>
                   STUDIO VIEWPORT
                 </p>
                 <p className="mt-1.5 max-w-sm text-[11px] leading-relaxed text-slate-500">
-                  在左侧参数舱输入 Prompt 并选择风格预设，点击「渲染图像」开始创作。
-                  <br />
-                  移动端请先在上方选择域。
+                  {domain === "music"
+                    ? "左侧选择「语音合成」或「音乐生成」，输入内容后开始创作。产出将在视口内以实时频谱回放。"
+                    : "在左侧参数舱输入 Prompt 并选择风格预设，点击「渲染图像」开始创作。移动端请先在上方选择域。"}
                 </p>
               </div>
             )}
 
-            {/* 结果 */}
-            {task.result?.assetUrl && !task.busy && (
+            {/* 音频结果：频谱 + 播放器 */}
+            {isAudioResult && task.result?.assetUrl && !task.busy && (
+              <AudioStage
+                src={task.result.assetUrl}
+                accentRgb={accentRgb}
+                title={shownKey === "tts" ? `TTS · ${VOICES.find((v) => v.value === voice)?.label ?? voice}` : `MusicGen · ${duration}s`}
+              />
+            )}
+
+            {/* 图片结果 */}
+            {!isAudioResult && task.result?.assetUrl && !task.busy && (
               <figure className="flex max-h-full max-w-full flex-col items-center gap-2">
                 <img
                   src={task.result.assetUrl}
@@ -472,7 +679,7 @@ export function StudioPage() {
                 <p className="text-xs font-semibold text-rose-300">渲染失败</p>
                 <p className="mt-1 break-all text-[11px] leading-relaxed text-slate-400">{task.error}</p>
                 <button
-                  onClick={() => void renderImage()}
+                  onClick={retryShown}
                   className="mt-3 inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/5"
                 >
                   <RefreshCw className="h-3 w-3" aria-hidden /> 重试
@@ -502,12 +709,23 @@ export function StudioPage() {
           {/* ═══ 底部动作条 ═══ */}
           <footer className="flex items-center justify-between gap-2 border-t border-white/5 px-4 py-2.5">
             <div className="flex min-w-0 items-center gap-2 font-mono text-[10px] text-slate-600">
-              <span className="truncate">{prompt.trim() ? `PROMPT: ${prompt.trim().slice(0, 48)}${prompt.trim().length > 48 ? "…" : ""}` : "IDLE"}</span>
+              <span className="truncate">
+                {(() => {
+                  const t =
+                    shownKey === "image" || shownKey === "comic"
+                      ? prompt.trim()
+                      : shownKey === "tts"
+                        ? ttsText.trim()
+                        : songDesc.trim();
+                  return t ? `${t.slice(0, 48)}${t.length > 48 ? "…" : ""}` : "IDLE";
+                })()}
+              </span>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <button
                 onClick={copyPrompt}
-                disabled={!prompt.trim()}
+                disabled={!(shownKey === "tts" ? ttsText : songDesc).trim() &&
+                  !(shownKey === "image" || shownKey === "comic" ? prompt.trim() : "")}
                 title="复制 Prompt"
                 className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-slate-400 transition-colors hover:bg-white/5 disabled:opacity-35"
               >
@@ -515,19 +733,20 @@ export function StudioPage() {
               </button>
               <button
                 onClick={pushToAssistant}
-                disabled={!prompt.trim()}
                 title="推送调度大厅继续对话式创作"
-                className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors hover:bg-white/5 disabled:opacity-35"
+                className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors hover:bg-white/5"
                 style={{ borderColor: "var(--st-border)", color: "var(--st-accent)" }}
               >
                 <Sparkles className="h-3 w-3" aria-hidden /> 推送助手
               </button>
               <a
                 href={task.result?.assetUrl ?? "#"}
+                download={`saios-studio-${Date.now()}${isAudioResult ? "." + extFromMime(task.result?.mime) : ".png"}`}
                 onClick={(e) => {
                   if (!task.result?.assetUrl) e.preventDefault();
-                  else downloadResult();
                 }}
+                target={isAudioResult ? undefined : "_blank"}
+                rel="noopener"
                 className={cn(
                   "flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-slate-400 transition-colors hover:bg-white/5",
                   !task.result?.assetUrl && "pointer-events-none opacity-35",
@@ -539,6 +758,139 @@ export function StudioPage() {
           </footer>
         </main>
       </div>
+    </div>
+  );
+}
+
+/* ══════════ 音频回放舞台：Web Audio 实时频谱 + 播放控制 ══════════ */
+function AudioStage({ src, accentRgb, title }: { src: string; accentRgb: string; title: string }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const graphRef = useRef<{ ac: AudioContext; an: AnalyserNode } | null>(null);
+  const rafRef = useRef(0);
+  const [playing, setPlaying] = useState(false);
+  const [time, setTime] = useState({ cur: 0, dur: 0 });
+
+  function ensureGraph(): boolean {
+    const el = audioRef.current;
+    if (!el || graphRef.current) return true;
+    try {
+      const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ac = new AC();
+      const source = ac.createMediaElementSource(el);
+      const an = ac.createAnalyser();
+      an.fftSize = 256;
+      an.smoothingTimeConstant = 0.82;
+      source.connect(an);
+      an.connect(ac.destination);
+      graphRef.current = { ac, an };
+      return true;
+    } catch {
+      return false; // 频谱失败不影响播放
+    }
+  }
+
+  function drawFrame() {
+    const cv = canvasRef.current;
+    const c2 = cv?.getContext("2d");
+    if (!cv || !c2) return;
+    const W = (cv.width = cv.clientWidth * 2);
+    const H = (cv.height = cv.clientHeight * 2);
+    c2.clearRect(0, 0, W, H);
+    const bars = 56;
+    const gap = 4;
+    const bw = (W - gap * (bars - 1)) / bars;
+    const g = graphRef.current;
+    let data: Uint8Array | null = null;
+    if (g) {
+      data = new Uint8Array(g.an.frequencyBinCount);
+      g.an.getByteFrequencyData(data);
+    }
+    for (let i = 0; i < bars; i++) {
+      const v = data ? data[Math.floor((i * data.length) / bars)]! / 255 : 0.03;
+      const h = Math.max(6, v * H * 0.82);
+      const x = i * (bw + gap);
+      c2.fillStyle = `rgba(${accentRgb},${0.28 + v * 0.72})`;
+      c2.beginPath();
+      c2.roundRect(x, H - h, bw, h, bw / 2);
+      c2.fill();
+    }
+    if (playing) rafRef.current = requestAnimationFrame(drawFrame);
+  }
+
+  useEffect(() => {
+    if (playing) {
+      rafRef.current = requestAnimationFrame(drawFrame);
+    } else {
+      cancelAnimationFrame(rafRef.current);
+      // 停止时画一次静态低幅
+      requestAnimationFrame(drawFrame);
+    }
+    return () => cancelAnimationFrame(rafRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, accentRgb]);
+
+  async function togglePlay() {
+    const el = audioRef.current;
+    if (!el) return;
+    if (el.paused) {
+      ensureGraph();
+      await graphRef.current?.ac.resume().catch(() => {});
+      await el.play().then(() => setPlaying(true)).catch(() => {});
+    } else {
+      el.pause();
+      setPlaying(false);
+    }
+  }
+
+  const fmt = (s: number) =>
+    `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const pct = time.dur > 0 ? (time.cur / time.dur) * 100 : 0;
+
+  return (
+    <div className="w-full max-w-xl">
+      <p className="mb-3 flex items-center justify-between font-mono text-[10px] text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <Music className="h-3.5 w-3.5" style={{ color: `rgb(${accentRgb})` }} aria-hidden />
+          {title}
+        </span>
+        <span className="tabular-nums">
+          {fmt(time.cur)} / {fmt(time.dur)}
+        </span>
+      </p>
+      <canvas ref={canvasRef} className="h-40 w-full rounded-xl border" style={{ borderColor: "var(--st-border)", background: "rgba(2,6,17,.55)" }} />
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          onClick={() => void togglePlay()}
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-950 shadow-lg transition-transform hover:scale-105"
+          style={{ background: "linear-gradient(135deg, var(--st-accent), rgba(255,255,255,.85))" }}
+          aria-label={playing ? "暂停" : "播放"}
+        >
+          {playing ? <Pause className="h-5 w-5" aria-hidden /> : <Play className="ml-0.5 h-5 w-5" aria-hidden />}
+        </button>
+        <div
+          className="group relative h-2 flex-1 cursor-pointer rounded-full bg-white/10"
+          onClick={(e) => {
+            const el = audioRef.current;
+            if (!el || !time.dur) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            el.currentTime = ((e.clientX - rect.left) / rect.width) * time.dur;
+          }}
+        >
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 rounded-full"
+            style={{ width: `${pct}%`, background: "var(--st-accent)" }}
+          />
+        </div>
+      </div>
+      <audio
+        ref={audioRef}
+        src={src}
+        onLoadedMetadata={(e) => setTime({ cur: 0, dur: e.currentTarget.duration || 0 })}
+        onTimeUpdate={(e) => setTime((p) => ({ ...p, cur: e.currentTarget.currentTime }))}
+        onEnded={() => setPlaying(false)}
+        preload="metadata"
+      />
     </div>
   );
 }
