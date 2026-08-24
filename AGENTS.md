@@ -283,6 +283,20 @@ cd apps/web && E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test --project=
   删 seed_data 函数时必须同步改 entrypoint（曾致 api 循环崩溃；应急用 docker cp 修复脚本 + restart）。
 - 长构建挂 nohup 必须 `< /dev/null & disown` 三件套，否则 paramiko channel 挂起/被工具超时误杀。
 
+**🔴 模型中心 P3 连带修复三连（2026-08-24）**：
+- ① **hub /api/usage SQL 1146**：usage 统计 LEFT JOIN provider_configs——表删即炸。已改为不再查库，
+  by_provider 降级为常量说明（provider_id 恒 NULL 后该维度本就无从回溯）。改 hub app.py 必须
+  上传 `/home/ubuntu/model-hub/app.py` + `systemctl --user restart model-hub`（无热加载）。
+- ② **SAIOS_DB_URL 占位符坑（同 CLASH_SECRET/AUTO_LOGIN 第三例）**：model-hub.service.d/env.conf
+  里曾写 `aigc:changeme@` 模板密码从未替换 → 用量统计永远连不上。已从 saiOS .env 注入真密码（600 权限）。
+- ③ **僵尸 uvicorn 第五次复发（绑 0.0.0.0）+ guard 完成首杀后接管**：restart 窗口内 rogue 抢占端口，
+  API 响应来自 rogue（无 SAIOS_DB_URL → 误报"未配置"）。**教训：排查 hub 行为异常时先核对
+  `systemctl --user show model-hub -p MainPID` 与 `ss -tlnp` 的 pid 是否一致**——不一致时你测的是 rogue。
+  guard 已自动击杀并让 systemd 接管，自愈闭环首次实战成功。
+- **"(副本)"重复行已清理**（11→7）：早期 API 复制 key 得空串的残留。走 hub DELETE API 删（v3 自动清链引用），
+  删后链完好。链布局：text=[cpa·GPT-OSS, OpenRouter]、image=[cpa·Gemini-Image, OpenRouter·GPT-Image]、
+  audio=[Edge-TTS]；video/music 空。proxy 网关实测 chat 通。
+
 **🔴 systemd drop-in 覆盖主 unit 的坑**：`systemctl --user show <svc> -p ExecStart --value` 才是
 生效值；只 sed 主 unit 而 `model-hub.service.d/venv.conf` 里还有旧 ExecStart 时改动无效。
 
