@@ -55,7 +55,9 @@ export function ComicGenPage() {
     if (!prompt.trim() || task.busy) return;
     setComic(null);
     const raw = await task.run({
-      model: "grok-imagine-image",
+      // v2 P0 止血：grok-imagine-image 需 super 账号（池内仅 lite 可用）必失败；
+      // 对齐 hub image 链主选 gemini-3.1-flash-image（P2 Studio 将改为动态选模）
+      model: "gemini-3.1-flash-image",
       prompt,
       panels,
       style,

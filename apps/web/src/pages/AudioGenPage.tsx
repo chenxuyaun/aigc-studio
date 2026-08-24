@@ -78,10 +78,17 @@ export function AudioGenPage() {
                 onChange={(e) => setVoice(e.target.value)}
                 className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm"
               >
-                <option value="default">默认</option>
-                <option value="female">女声</option>
-                <option value="male">男声</option>
-                <option value="child">童声</option>
+                {/* Edge-TTS 真实音色（v2 P0：原 female/male/child 后端不识别，恒落 default） */}
+                <option value="default">自动（晓晓）</option>
+                <option value="zh-CN-XiaoxiaoNeural">晓晓 · 女声温暖</option>
+                <option value="zh-CN-XiaoyiNeural">晓伊 · 女声活泼</option>
+                <option value="zh-CN-YunxiNeural">云希 · 男声阳光</option>
+                <option value="zh-CN-YunjianNeural">云健 · 男声磁性</option>
+                <option value="zh-CN-YunyangNeural">云扬 · 男声播音</option>
+                <option value="zh-CN-liaoning-XiaobeiNeural">晓北 · 东北女声</option>
+                <option value="zh-TW-HsiaoChenNeural">曉臻 · 台湾女声</option>
+                <option value="en-US-JennyNeural">Jenny · English Female</option>
+                <option value="en-US-GuyNeural">Guy · English Male</option>
               </select>
             )}
           </Field>

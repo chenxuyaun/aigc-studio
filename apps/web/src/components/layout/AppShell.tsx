@@ -5,20 +5,32 @@ import {
   Bot,
   BookOpen,
   Clapperboard,
+  Camera,
+  Cpu,
+  Film,
   FolderOpen,
   Headphones,
+  Image,
+  Layers,
   Library,
   ListChecks,
   LogOut,
+  MessageCircle,
+  Mic,
   Monitor,
   Moon,
   MoreHorizontal,
+  Music,
+  PenLine,
   ScrollText,
   Search,
   Server,
   Sun,
+  UserPlus,
   Users,
-  MessageCircle,
+  Video,
+  Wand2,
+  Workflow,
   Sparkles,
   BarChart3,
 } from "lucide-react";
@@ -41,39 +53,73 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
-/** 导航分组：侧栏按场景分组展示（移动端底部导航仍用扁平 short 项）。 */
+/**
+ * 导航分组（saiOS v2 IA）：对齐设计稿七大类——对话 / 创作引擎 / 资产中心 /
+ * 角色故事 / 自动化 / 资源库 / 系统。v2 终态路由（/studio 等）在 P1-P2 落地，
+ * P0 阶段先把全部 27 个悬空页露出，确保任何路由 ≤2 次点击可达。
+ */
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
-    label: "创作",
+    label: "对话",
     items: [
-      { to: "/", label: "AI 助手", short: "助手", icon: Sparkles, mobile: true },
-      { to: "/dashboard", label: "数据看板", short: "看板", icon: BarChart3, mobile: false },
-      { to: "/works", label: "我的创作", short: "我的", icon: Clapperboard, mobile: true },
+      { to: "/", label: "AI 调度大厅", short: "调度", icon: Sparkles, mobile: true },
     ],
   },
   {
-    label: "资源",
+    label: "创作引擎",
     items: [
-      { to: "/prompts", label: "提示词库", short: "提示词", icon: Library, mobile: true },
-      { to: "/knowledge", label: "知识库", short: "知识库", icon: BookOpen, mobile: true },
-      { to: "/assets", label: "素材库", short: "素材", icon: FolderOpen, mobile: true },
-      { to: "/asmr", label: "ASMR 库", short: "ASMR", icon: Headphones, mobile: true },
-      { to: "/agents", label: "Agent 库", short: "Agent", icon: Bot, mobile: false },
+      { to: "/create/image", label: "图像生成", short: "图像", icon: Image, mobile: true },
+      { to: "/create/comic", label: "漫画分镜", short: "漫画", icon: Layers, mobile: false },
+      { to: "/create/text", label: "文本写作", short: "写作", icon: PenLine, mobile: false },
+      { to: "/create/audio", label: "语音合成", short: "语音", icon: Mic, mobile: false },
+      { to: "/create/music", label: "音乐创作", short: "音乐", icon: Music, mobile: false },
+      { to: "/create/video", label: "视频生成", short: "视频", icon: Video, mobile: false },
+      { to: "/create/character-card", label: "角色捏卡", short: "捏卡", icon: UserPlus, mobile: false },
+      { to: "/create/studio", label: "AI 导演", short: "导演", icon: Film, mobile: false },
+      { to: "/create/prompt", label: "提示词工坊", short: "造词", icon: Wand2, mobile: false },
+      { to: "/create/prompt-optimize", label: "提示词优化", short: "优词", icon: Wand2, mobile: false },
     ],
   },
   {
-    label: "角色",
+    label: "资产中心",
+    items: [
+      { to: "/works", label: "我的作品", short: "作品", icon: Clapperboard, mobile: true },
+      { to: "/tasks", label: "任务中心", short: "任务", icon: ListChecks, mobile: true },
+      { to: "/assets", label: "素材库", short: "素材", icon: FolderOpen, mobile: false },
+      { to: "/photography", label: "写真摄影", short: "摄影", icon: Camera, mobile: false },
+    ],
+  },
+  {
+    label: "角色 & 故事",
     items: [
       { to: "/roleplay", label: "角色扮演", short: "角色", icon: MessageCircle, mobile: true },
+      { to: "/story", label: "故事工作室", short: "故事", icon: BookOpen, mobile: false },
+    ],
+  },
+  {
+    label: "自动化",
+    items: [
+      { to: "/workflows", label: "工作流编排", short: "工作流", icon: Workflow, mobile: false },
+      { to: "/skills", label: "技能库", short: "技能", icon: Cpu, mobile: false },
+    ],
+  },
+  {
+    label: "资源库",
+    items: [
+      { to: "/prompts", label: "提示词库", short: "提示词", icon: Library, mobile: false },
+      { to: "/knowledge", label: "知识库", short: "知识库", icon: BookOpen, mobile: false },
+      { to: "/asmr", label: "ASMR 库", short: "ASMR", icon: Headphones, mobile: false },
+      { to: "/agents", label: "Agent 库", short: "Agent", icon: Bot, mobile: false },
+      { to: "/search", label: "全域搜索", short: "搜索", icon: Search, mobile: false },
     ],
   },
   {
     label: "系统",
     items: [
-      { to: "/tasks", label: "任务中心", short: "任务", icon: ListChecks, mobile: true },
+      { to: "/dashboard", label: "数据看板", short: "看板", icon: BarChart3, mobile: false },
       {
         to: "/settings/providers",
-        label: "模型配置",
+        label: "模型中心",
         short: "模型",
         icon: Server,
         mobile: false,

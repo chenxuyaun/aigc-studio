@@ -90,16 +90,16 @@ export function StoryProjectPage() {
   useEffect(() => {
     const loadModels = async () => {
       try {
+        // /providers/catalog 返回裸数组（providers.py response_model=list），
+        // 兼容 {items:[...]} 与 [...] 两种形态，避免永远落到 FALLBACK 列表
         const r = await apiClient.get<
-          { items: { id: string; name: string; healthy?: boolean }[] }
+          | { items: { id: string; name: string; healthy?: boolean }[] }
+          | { id: string; name: string; healthy?: boolean }[]
         >("/providers/catalog");
-        const list = (r.items ?? [])
-          .filter((p) => p.id !== "mock")
-          .map((p) => p.id);
+        const raw = Array.isArray(r) ? r : (r.items ?? []);
+        const list = raw.filter((p) => p.id !== "mock").map((p) => p.id);
         setModels(list.length ? list : FALLBACK_MODELS);
-        setUnhealthyModels(
-          new Set((r.items ?? []).filter((p) => p.healthy === false).map((p) => p.id)),
-        );
+        setUnhealthyModels(new Set(raw.filter((p) => p.healthy === false).map((p) => p.id)));
       } catch {
         setModels(FALLBACK_MODELS);
       }
