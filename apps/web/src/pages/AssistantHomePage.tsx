@@ -300,6 +300,16 @@ export function AssistantHomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudReady]);
 
+  // v2 P2：接收统一 Studio 的「推送助手」——带 prompt 回大厅继续对话式创作
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search).get("studio_prompt");
+    if (sp && sp.trim()) {
+      setInput(sp.trim());
+      // 清掉 query 参数避免刷新重复注入
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
   // v2 P1：模型列表直连 catalog（裸数组），选中值持久化
   useEffect(() => {
     let alive = true;

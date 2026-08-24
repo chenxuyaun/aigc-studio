@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   Music,
   PenLine,
+  PenTool,
   ScrollText,
   Search,
   Server,
@@ -68,8 +69,9 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: "创作引擎",
     items: [
-      { to: "/create/image", label: "图像生成", short: "图像", icon: Image, mobile: true },
-      { to: "/create/comic", label: "漫画分镜", short: "漫画", icon: Layers, mobile: false },
+      { to: "/studio", label: "统一 Studio", short: "Studio", icon: Layers, mobile: true },
+      { to: "/create/image", label: "图像生成", short: "图像", icon: Image, mobile: false },
+      { to: "/create/comic", label: "漫画分镜", short: "漫画", icon: PenTool, mobile: false },
       { to: "/create/text", label: "文本写作", short: "写作", icon: PenLine, mobile: false },
       { to: "/create/audio", label: "语音合成", short: "语音", icon: Mic, mobile: false },
       { to: "/create/music", label: "音乐创作", short: "音乐", icon: Music, mobile: false },
