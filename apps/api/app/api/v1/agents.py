@@ -261,6 +261,6 @@ def _with_list(a: Agent) -> dict[str, object]:
     data: dict[str, object] = {c.name: getattr(a, c.name) for c in a.__table__.columns}
     try:
         data["tools"] = json.loads(str(data.get("tools") or "[]"))
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         data["tools"] = []
     return data

@@ -276,7 +276,7 @@ def _load_json(raw: str | None, default: Any) -> Any:
         return default
     try:
         return json.loads(raw)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return default
 
 

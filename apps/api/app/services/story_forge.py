@@ -42,7 +42,7 @@ def _load_json(raw: str | None, default: Any) -> Any:
         return default
     try:
         return json.loads(raw)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return default
 
 
@@ -812,7 +812,7 @@ async def _chapter_tool_loop(
             try:
                 args = tc.get("arguments") or {}
                 args = json.loads(args) if isinstance(args, str) else (args or {})
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 args = {}
             out = await _run_tool(name, args if isinstance(args, dict) else {})
             tool_log.append({"name": name, "summary": str(out)[:200]})
@@ -1133,7 +1133,7 @@ def _parse_outline_json(raw: str, chapters: int) -> list[dict[str, Any]]:
         return []
     try:
         data = json.loads(m.group(0))
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return []
     if not isinstance(data, list):
         return []

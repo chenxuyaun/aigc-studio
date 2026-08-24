@@ -240,7 +240,7 @@ def _parse_states(raw: str) -> dict[str, str]:
         return {}
     try:
         data = json.loads(m.group(0))
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return {}
     if not isinstance(data, dict):
         return {}

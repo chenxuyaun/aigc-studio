@@ -38,7 +38,7 @@ def _with_dict(w: Workflow) -> dict[str, object]:
     data: dict[str, object] = {c.name: getattr(w, c.name) for c in w.__table__.columns}
     try:
         data["graph"] = json.loads(str(data.get("graph") or "{}"))
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         data["graph"] = {}
     return data
 
@@ -399,7 +399,7 @@ async def run_workflow(
         raise HTTPException(status_code=404, detail="工作流不存在")
     try:
         graph = json.loads(wf.graph or "{}")
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="工作流图数据损坏") from None
     nodes = graph.get("nodes") if isinstance(graph, dict) else None
     edges = graph.get("edges") if isinstance(graph, dict) else None

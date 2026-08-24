@@ -137,7 +137,7 @@ def _lore_dict(e: RoleplayLoreEntry) -> dict[str, Any]:
         try:
             v = json.loads(raw or "[]")
             return [str(x) for x in v] if isinstance(v, list) else []
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return []
 
     return {
@@ -167,7 +167,7 @@ def _character_dict(c: RoleplayCharacter) -> dict[str, Any]:
     def _j(raw: str | None, default: Any) -> Any:
         try:
             return json.loads(raw or "")
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return default
 
     return {
@@ -193,11 +193,11 @@ def _character_dict(c: RoleplayCharacter) -> dict[str, Any]:
 def _chat_dict(c: RoleplayChat) -> dict[str, Any]:
     try:
         char_ids = json.loads(c.character_asset_ids or "[]")
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         char_ids = []
     try:
         settings = json.loads(c.settings or "{}")
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         settings = {}
     return {
         "id": c.id,

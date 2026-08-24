@@ -106,6 +106,6 @@ async def latest_inspection(
         return {"report": None}
     try:
         data = json.loads(row.content)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         data = {"raw": row.content[:1000]}
     return {"report": data, "created_at": row.created_at.isoformat() if row.created_at else None}

@@ -29,7 +29,7 @@ def _load_json_list(raw: str | None) -> list[str]:
         v = json.loads(raw)
         if isinstance(v, list):
             return [str(x) for x in v if x]
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         pass
     return []
 
