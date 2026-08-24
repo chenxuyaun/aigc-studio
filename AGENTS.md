@@ -318,6 +318,20 @@ cd apps/web && E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test --project=
   读库取全部 token → async 批量刷新(concurrency=4) → 轮询等完成 → force sync → 统计 with_fast_quota 写日志
   `~/model-hub/grok-refresh.log`。注意 batch/refresh 的 tokens **不接受空数组**（报 No tokens provided）。
 
+**🎮✅ 模型中心重设计为「AI 能力控制台」（2026-08-24 上线，设计稿 ai_capability_control_plane.html 落地）**：
+- 前端 `apps/model-hub/static/index.html` 全量重写（Alpine.js + Tailwind CDN + Lucide，零构建哲学不变）。
+  八区域：总览(KPI/事件流/自愈心跳) / 能力路由(五槽地铁泳道·激光流线) / 供应商(抽屉+内联确认) /
+  账号池(grok 73 格配额热力图·只读) / 可观测(proxy 调用日志表) / 接入中心(片段生成器) / 系统(备份+timer) / Prompts。
+  交互：备选卡点击升主选、**拖拽重排链序**、`/` 全局搜索、数字键 1-8 切区域、Esc 关弹层、路由发包测试发真实请求并反查实际服务者。
+- 后端新增只读 API：`/api/events`(ring buffer 500)、`/api/calls/recent`、`/api/pools/grok`
+  （sqlite **只读 URI 连接**，token 只回显指纹）、`/api/system/timers`、`/api/system/backups`；
+  `POST /api/active` 新增 **mode=reorder**（order 数组=该链全集排列，泳道拖拽的数据通道）。
+- proxy 网关埋点：每次调用记 provider/model/延迟/status/fallback 进 calls；降级与异常自动 emit 事件流。
+- 验收方式沉淀：SSH 隧道 `-L 18511:172.17.0.1:8511` + Playwright 无头浏览器断言（Alpine $data 状态/DnD 属性/
+  搜索结果/CRUD 冒烟）+ 截图。⚠️ 测试脚本 goto 失败要 fail-fast，别 catch 吞掉——曾对死端口空跑一轮。
+  ⚠️ Windows 下 OpenSSH 拒绝权限过宽的私钥：`icacls <key> /inheritance:r /grant:r "$env:USERNAME:R"` 一次修复。
+- 提交锚点：`32afba7`（主体）+ reorder/prompts/search 补完提交。
+
 **🔴 systemd drop-in 覆盖主 unit 的坑**：`systemctl --user show <svc> -p ExecStart --value` 才是
 生效值；只 sed 主 unit 而 `model-hub.service.d/venv.conf` 里还有旧 ExecStart 时改动无效。
 

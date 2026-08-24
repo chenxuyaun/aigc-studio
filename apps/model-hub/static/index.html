@@ -108,6 +108,9 @@
         <i data-lucide="network" class="w-3.5 h-3.5 text-cyan-400"></i>
         <span class="text-slate-400">gateway</span><span class="text-emerald-400">●</span>
       </div>
+      <button @click="openSearch()" class="p-2 rounded-md bg-space-850 border border-space-700 hover:border-cyan-400 transition" title="全局搜索 ( / )">
+        <i data-lucide="search" class="w-3.5 h-3.5"></i>
+      </button>
       <button @click="refreshAll()" class="p-2 rounded-md bg-space-850 border border-space-700 hover:border-cyan-400 transition" title="刷新全部数据">
         <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="refreshing && 'animate-spin text-cyan-400'"></i>
       </button>
@@ -218,7 +221,10 @@
               </div>
               <div class="subway-line w-6 md:w-16 self-center h-1 rounded-full bg-space-750 shrink-0 mx-1"></div>
               <div class="flex-1 min-w-0">
-                <div class="rounded-xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/60 to-space-900 p-3.5 flex items-center justify-between gap-3 flex-wrap">
+                <div class="rounded-xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/60 to-space-900 p-3.5 flex items-center justify-between gap-3 flex-wrap"
+                     @dragover.prevent="$event.dataTransfer && ($event.dataTransfer.dropEffect='move')"
+                     @drop.prevent="dropOnPrimary(s.key)"
+                     :class="dnd.pid && dnd.slot===s.key && 'ring-2 ring-cyan-500/60'">
                   <div class="min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
                       <span class="text-[10px] font-cyber font-bold tracking-widest text-cyan-300 px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-700">主选</span>
@@ -235,10 +241,17 @@
                   <div class="flex items-stretch gap-2 mt-2 overflow-x-auto no-scrollbar pb-1">
                     <template x-for="(p,idx) in chains[s.key].slice(1)" :key="'b'+p.id">
                       <div class="group relative shrink-0 rounded-lg border border-space-700 bg-space-900 hover:border-cyan-500/50 transition px-3 py-2 cursor-pointer min-w-[170px]"
-                           @click="promote(s.key, p.id)" title="点击设为主选（原主选降为备选#2）">
+                           draggable="true"
+                           @dragstart="dragStart(s.key, p.id, $event)"
+                           @dragend="dnd={slot:'',pid:''}"
+                           @dragover.prevent="$event.dataTransfer && ($event.dataTransfer.dropEffect='move')"
+                           @drop.prevent="dropOnBackup(s.key, p.id)"
+                           :class="(dnd.slot===s.key && dnd.pid && dnd.pid!==p.id) && 'border-dashed border-cyan-500/70'"
+                           title="点击设为主选 · 拖拽调整备选顺序">
                         <div class="flex items-center gap-1.5">
                           <span class="text-[10px] font-mono text-purple-300" x-text="'#'+(idx+2)"></span>
                           <span class="text-xs font-semibold text-slate-200 truncate" x-text="p.name"></span>
+                          <span class="text-slate-600 text-[10px] opacity-0 group-hover:opacity-100 transition ml-auto shrink-0">⠿</span>
                         </div>
                         <p class="text-[10px] font-mono text-slate-500 truncate mt-0.5" x-text="p.default_model || '-'"></p>
                         <button @click.stop="removeFromSlot(s.key, p.id)"
@@ -483,6 +496,39 @@
         </div>
       </div>
     </div>
+    <!-- ═══════════ REGION 8: Prompts ═══════════ -->
+    <div x-show="currentTab===8" x-cloak class="space-y-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs text-slate-400 font-mono">提示词库 · 激活的 prompt 作为 hub 级系统提示注入参考</p>
+        <button @click="openPromptModal(null)" class="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-space-950 font-bold text-xs rounded-xl font-mono transition flex items-center gap-1.5 shadow-lg shadow-cyan-950/50">
+          <i data-lucide="plus" class="w-4 h-4"></i>新建 Prompt
+        </button>
+      </div>
+      <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <template x-for="pr in prompts" :key="pr.id">
+          <div class="glass-panel hud-box rounded-xl p-4 relative group" :class="pr.is_active && 'border-emerald-500/50'">
+            <div x-show="confirmDelPromptId===pr.id" class="absolute inset-0 z-10 rounded-xl bg-rose-950/95 backdrop-blur-sm flex flex-col items-center justify-center gap-2 p-4">
+              <p class="text-xs text-rose-200 font-mono">确认删除该 Prompt？</p>
+              <div class="flex gap-2">
+                <button @click="delPrompt(pr.id)" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">确认删除</button>
+                <button @click="confirmDelPromptId=''" class="px-3 py-1.5 rounded-lg bg-space-800 border border-space-700 text-slate-300 text-xs">取消</button>
+              </div>
+            </div>
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <span class="font-bold text-sm text-white truncate" x-text="pr.name"></span>
+              <span x-show="pr.is_active" class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-neon-green led-emerald"></span>ACTIVE</span>
+            </div>
+            <p class="text-[11px] font-mono text-slate-400 line-clamp-4 whitespace-pre-wrap break-words h-16 overflow-hidden" x-text="pr.content || '（空）'"></p>
+            <div class="mt-3 flex items-center justify-end gap-1.5">
+              <button x-show="!pr.is_active" @click="activatePrompt(pr.id)" class="px-2 py-1 rounded-md bg-space-850 border border-space-700 hover:border-emerald-400 text-[11px] font-mono text-slate-300 transition">设为激活</button>
+              <button @click="openPromptModal(pr)" class="px-2 py-1 rounded-md bg-space-850 border border-space-700 hover:border-cyan-400 text-[11px] font-mono text-slate-300 transition">编辑</button>
+              <button @click="confirmDelPromptId=pr.id" class="px-2 py-1 rounded-md bg-space-850 border border-space-700 hover:border-rose-500 hover:text-rose-300 text-[11px] font-mono text-slate-400 transition">删除</button>
+            </div>
+          </div>
+        </template>
+      </div>
+      <p x-show="!prompts.length" class="text-center text-slate-500 font-mono text-xs py-10">还没有 Prompt — 新建一个试试</p>
+    </div>
   </main>
 
   <!-- ═══ Provider 抽屉 ═══ -->
@@ -577,6 +623,55 @@
     </div>
   </div>
 
+  <!-- ═══ Prompt 编辑 Modal ═══ -->
+  <div x-show="promptModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="promptModalOpen=false"></div>
+    <div class="relative glass-panel-glow rounded-2xl w-full max-w-xl p-5 space-y-3.5">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-base text-white" x-text="editPromptId ? '编辑 Prompt' : '新建 Prompt'"></h3>
+        <button @click="promptModalOpen=false" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">名称 *</label>
+        <input x-model="promptForm.name" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none"></div>
+      <div class="space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">内容</label>
+        <textarea x-model="promptForm.content" rows="8" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none resize-y"></textarea></div>
+      <div class="flex justify-end gap-2 pt-1">
+        <button @click="promptModalOpen=false" class="px-4 py-2 rounded-lg bg-space-850 border border-space-700 text-slate-300 text-xs font-mono">取消</button>
+        <button @click="savePrompt()" class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-space-950 text-xs font-bold font-mono">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 全局搜索覆盖层 ( / ) ═══ -->
+  <div x-show="searchOpen" x-cloak class="fixed inset-0 z-[55]" @keydown.escape.window="searchOpen=false">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="searchOpen=false"></div>
+    <div class="relative glass-panel-glow rounded-2xl max-w-lg mx-auto mt-24 p-4 space-y-3" @click.stop>
+      <div class="flex items-center gap-2 border-b border-space-700 pb-2.5">
+        <i data-lucide="search" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+        <input x-ref="searchInput" x-model="searchQ" @keydown.down.prevent="searchIdx=Math.min(searchIdx+1, searchResults().length-1)"
+               @keydown.up.prevent="searchIdx=Math.max(searchIdx-1,0)"
+               @keydown.enter="goSearch(searchResults()[searchIdx])"
+               placeholder="搜供应商 / 模型 / 槽位…（↑↓ 选择 · Enter 打开 · Esc 关闭）"
+               class="flex-1 bg-transparent text-sm font-mono text-slate-100 outline-none placeholder:text-slate-600">
+        <kbd class="text-[10px] font-mono text-slate-500 px-1.5 py-0.5 rounded bg-space-850 border border-space-700">Esc</kbd>
+      </div>
+      <div class="max-h-80 overflow-y-auto space-y-1">
+        <template x-for="(r,i) in searchResults()" :key="r.kind+r.id">
+          <button @click="goSearch(r)" @mouseenter="searchIdx=i"
+                  class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition font-mono text-xs"
+                  :class="i===searchIdx ? 'bg-cyan-950/80 border border-cyan-700' : 'border border-transparent hover:bg-space-850'">
+            <span class="shrink-0" x-text="r.icon"></span>
+            <span class="text-slate-200 font-semibold truncate" x-text="r.title"></span>
+            <span class="text-slate-500 truncate ml-auto" x-text="r.sub"></span>
+            <span class="shrink-0 text-[10px] px-1 py-0.5 rounded bg-space-800 text-slate-400 border border-space-700" x-text="r.tag"></span>
+          </button>
+        </template>
+        <p x-show="searchQ && !searchResults().length" class="text-center text-slate-500 text-xs font-mono py-6">无匹配结果</p>
+        <p x-show="!searchQ" class="text-center text-slate-600 text-[11px] font-mono py-4">输入关键词 · 数字键 1-8 可直接切换区域</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ Toasts ═══ -->
   <div class="fixed bottom-4 right-4 z-[60] space-y-2 w-80 max-w-[90vw]">
     <template x-for="t in toasts" :key="t.id">
@@ -601,6 +696,7 @@ function controlPlane() {
     TABS: [
       { name:'总览', icon:'📡' }, { name:'能力路由', icon:'🚇' }, { name:'供应商', icon:'🔌' },
       { name:'账号池', icon:'🗄️' }, { name:'可观测', icon:'📈' }, { name:'接入中心', icon:'🔗' }, { name:'系统', icon:'⚙️' },
+      { name:'Prompts', icon:'📝' },
     ],
     FILTERS: ['all','文本','图像','语音','停用'],
 
@@ -617,6 +713,11 @@ function controlPlane() {
     fetchedModels: [], snippetLang: 'python',
     toasts: [], _tid: 0,
     envConflictText: '点我检查',
+    // prompts / search 状态
+    prompts: [], promptModalOpen: false, editPromptId: null,
+    promptForm: { name:'', content:'' }, confirmDelPromptId: '',
+    searchOpen: false, searchQ: '', searchIdx: 0,
+    dnd: { slot:'', pid:'' },
 
     get gatewayBase() { return location.origin + '/proxy/v1'; },
 
@@ -625,12 +726,93 @@ function controlPlane() {
       await this.refreshAll();
       setInterval(() => this.pollLight(), 30000);
       this.startCanvas();
+      window.addEventListener('keydown', (e) => this.onKey(e));
+    },
+    onKey(e) {
+      const tag = (e.target && e.target.tagName || '').toLowerCase();
+      const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target && e.target.isContentEditable);
+      if (e.key === '/' && !typing) { e.preventDefault(); this.openSearch(); return; }
+      if (e.key === 'Escape') {
+        if (this.searchOpen) { this.searchOpen = false; return; }
+        if (this.modalOpen) { this.modalOpen = false; return; }
+        if (this.promptModalOpen) { this.promptModalOpen = false; return; }
+        if (this.drawerOpen) { this.drawerOpen = false; return; }
+        return;
+      }
+      if (!typing && /^[1-8]$/.test(e.key)) { this.switchTab(parseInt(e.key, 10)); }
+    },
+    openSearch() { this.searchOpen = true; this.searchQ=''; this.searchIdx=0;
+      setTimeout(()=>{ this.$refs.searchInput && this.$refs.searchInput.focus(); }, 60); },
+    searchResults() {
+      const q = this.searchQ.trim().toLowerCase();
+      if (!q) return [];
+      const out = [];
+      for (const s of this.SLOT_META) {
+        if (s.label.includes(q) || s.key.includes(q)) out.push({ kind:'slot', id:s.key, icon:s.icon, title:s.label+' 链路', sub:(this.chains[s.key]||[]).length+' 候选', tag:'路由' });
+      }
+      for (const p of this.providers) {
+        if ((p.name||'').toLowerCase().includes(q) || (p.default_model||'').toLowerCase().includes(q)) {
+          out.push({ kind:'provider', id:p.id, icon:'🔌', title:p.name, sub:p.default_model||p.provider_type, tag:'供应商' });
+        }
+      }
+      return out.slice(0, 12);
+    },
+    goSearch(r) {
+      if (!r) return;
+      this.searchOpen = false;
+      if (r.kind === 'slot') { this.currentTab = 2; this.$nextTick(()=>{ const el=document.getElementById('lane-'+r.id); el&&el.scrollIntoView({behavior:'smooth',block:'center'}); }); }
+      else { const p=this.providerById(r.id); if(p){ this.currentTab=3; this.openDrawer(p); } }
+    },
+
+    // ── Prompts CRUD ──
+    async loadPrompts() { try { this.prompts = await this.api('/api/prompts'); } catch(e){} },
+    openPromptModal(pr) {
+      this.editPromptId = pr ? pr.id : null;
+      this.promptForm = { name: pr ? pr.name : '', content: pr ? pr.content : '' };
+      this.promptModalOpen = true; this.drawerOpen = false;
+    },
+    async savePrompt() {
+      if (!this.promptForm.name.trim()) { this.toast('名称必填', false); return; }
+      try {
+        if (this.editPromptId) await this.api('/api/prompts/'+this.editPromptId, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.promptForm)});
+        else await this.api('/api/prompts', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.promptForm)});
+        this.promptModalOpen=false; await this.loadPrompts(); this.toast('已保存');
+      } catch(e){ this.toast('保存失败: '+e.message,false); }
+    },
+    async delPrompt(id) {
+      this.confirmDelPromptId='';
+      try { await this.api('/api/prompts/'+id,{method:'DELETE'}); await this.loadPrompts(); this.toast('已删除'); }
+      catch(e){ this.toast('删除失败: '+e.message,false); }
+    },
+    async activatePrompt(id) {
+      try { await this.api('/api/prompts/'+id+'/activate',{method:'POST'}); await this.loadPrompts(); this.toast('已激活'); }
+      catch(e){ this.toast('激活失败: '+e.message,false); }
+    },
+
+    // ── 泳道拖拽排序（HTML5 DnD → mode=reorder）──
+    dragStart(slot, pid, e) { this.dnd = { slot: slot, pid: pid }; if (e && e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; },
+    dropOnBackup(slot, targetPid) {
+      const from = this.dnd;
+      this.dnd = { slot:'', pid:'' };
+      if (from.slot !== slot || !from.pid || from.pid === targetPid) return;
+      const rebuilt = (this.chains[slot]||[]).map(p=>p.id);
+      const fi = rebuilt.indexOf(from.pid), ti = rebuilt.indexOf(targetPid);
+      if (fi < 0 || ti < 0) return;
+      rebuilt.splice(fi, 1);
+      rebuilt.splice(rebuilt.indexOf(targetPid) + (fi < ti ? 1 : 0), 0, from.pid);
+      this.postActive({slot:slot, order:rebuilt, mode:'reorder'}, '链序已更新');
+    },
+    dropOnPrimary(slot) {
+      const from = this.dnd;
+      this.dnd = { slot:'', pid:'' };
+      if (from.slot !== slot || !from.pid) return;
+      this.promote(slot, from.pid);
     },
     async refreshAll() {
       this.refreshing = true;
       try {
         await Promise.all([this.loadProviders(), this.loadChains(), this.loadUsage(), this.loadEvents(),
-                           this.loadCalls(), this.loadPool(), this.loadTimers(), this.loadBackups(), this.loadPresets()]);
+                           this.loadCalls(), this.loadPool(), this.loadTimers(), this.loadBackups(), this.loadPresets(), this.loadPrompts()]);
       } finally { this.refreshing = false; }
       this.$nextTick(() => window.lucide && lucide.createIcons());
     },

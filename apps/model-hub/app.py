@@ -497,9 +497,9 @@ def set_active(body: dict[str, Any]) -> dict[str, Any]:
     provider_id = str(body.get("provider_id") or "")
     slot = str(body.get("slot") or "").strip().lower()
     mode = str(body.get("mode") or "").strip().lower()
-    if not provider_id and not slot:
+    if not provider_id and not slot and mode != "reorder":
         raise HTTPException(status_code=400, detail="缺少 provider_id")
-    if mode and mode not in ("replace", "promote", "append", "remove", "clear"):
+    if mode and mode not in ("replace", "promote", "append", "remove", "clear", "reorder"):
         raise HTTPException(status_code=400, detail=f"未知 mode: {mode}")
     with _conn() as conn:
         if provider_id and mode != "clear":
@@ -516,6 +516,16 @@ def set_active(body: dict[str, Any]) -> dict[str, Any]:
                 chain = _append_slot(conn, slot, provider_id)
             elif mode == "remove":
                 chain = _remove_from_slot(conn, slot, provider_id)
+            elif mode == "reorder":
+                # 整链重排（泳道拖拽）：order 必须是该槽位链的全集排列
+                order = [str(x) for x in (body.get("order") or [])]
+                current = set(_chain_ids(conn, slot))
+                if set(order) != current or len(order) != len(current):
+                    raise HTTPException(status_code=400, detail="order 必须恰好包含该槽位链的全部候选")
+                for pid in order:
+                    if conn.execute("SELECT id FROM providers WHERE id = ?", (pid,)).fetchone() is None:
+                        raise HTTPException(status_code=404, detail="provider 不存在")
+                _chain_set(conn, slot, order)
             elif mode == "clear" or (not provider_id):
                 _chain_set(conn, slot, [])
             else:
