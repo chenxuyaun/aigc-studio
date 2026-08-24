@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -501,6 +502,13 @@ export function TasksPage() {
               </pre>
             )}
             <div className="flex flex-wrap gap-2 pt-1">
+              {/* v2 P2-3 反向克隆：媒体任务一键带参回统一 Studio 再创作 */}
+              {["image", "comic", "video", "audio", "music"].includes(detail.task_type) && (
+                <Button variant="outline" onClick={() => navigate(`/studio?rehydrate=${detail.id}`)}>
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  在 Studio 再创作
+                </Button>
+              )}
               <Button variant="outline" onClick={() => handleRerun(detail)}>
                 <RotateCcw className="h-4 w-4" aria-hidden />
                 再次运行

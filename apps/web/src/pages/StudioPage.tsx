@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Activity,
+  ArrowRight,
   Check,
   ChevronDown,
   Copy,
@@ -43,6 +44,22 @@ const DOMAINS: { key: Domain; label: string; icon: typeof ImageIcon; hint: strin
   { key: "story", label: "角色&Story", icon: UserRound, hint: "角色卡 · 故事工坊", legacy: "/create/character-card" },
   { key: "workflow", label: "节点拓扑", icon: Workflow, hint: "工作流编排", legacy: "/workflows" },
 ];
+
+/** 角色&Story / Workflow 域的子能力导航（迁移期：直达完整版专页）。 */
+const DOMAIN_LINKS: Partial<Record<Domain, { label: string; desc: string; to: string }[]>> = {
+  story: [
+    { label: "角色捏卡", desc: "世界书 · 头像 · SillyTavern 导出", to: "/create/character-card" },
+    { label: "角色扮演", desc: "长期记忆陪伴对话", to: "/roleplay" },
+    { label: "故事工作室", desc: "AI 剧本工坊连载创作", to: "/story" },
+    { label: "SillyTavern", desc: "专业前端直连管理", to: "/sillytavern" },
+  ],
+  workflow: [
+    { label: "节点编排", desc: "xyflow 可视化工作流画布", to: "/workflows" },
+    { label: "Agent 库", desc: "智能体配置与技能绑定", to: "/agents" },
+    { label: "MCP 技能", desc: "工具能力清单与调试", to: "/skills" },
+    { label: "AI 导演", desc: "选角建组群聊共创", to: "/create/studio" },
+  ],
+};
 
 const THEMES: { key: ThemeName; label: string; dot: string; rgb: string }[] = [
   { key: "cyan", label: "赛博冷青", dot: "#06b6d4", rgb: "6,182,212" },
@@ -120,20 +137,30 @@ export function StudioPage() {
   const ttsTask = useMediaTask("/generations/audio/generate");
   const songTask = useMediaTask("/generations/music/generate");
 
+  // ── 视频域 ──
+  const [videoDesc, setVideoDesc] = useState("");
+  const [videoDuration, setVideoDuration] = useState(5);
+  const videoTask = useMediaTask("/generations/video/generate");
+
+  // 反向克隆提示条
+  const [rehydrated, setRehydrated] = useState("");
+
   // 视口展示策略：正在生成的优先，其次最近有结果的
   const tasks: Record<string, TaskState> = {
     image: imageTask,
     comic: comicTask,
     tts: ttsTask,
     song: songTask,
+    video: videoTask,
   };
   const shownKey = useMemo(() => {
-    const order = ["tts", "song", "comic", "image"];
+    const order = ["tts", "song", "video", "comic", "image"];
     return order.find((k) => tasks[k]!.busy) ?? order.find((k) => tasks[k]!.result) ?? "image";
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageTask, comicTask, ttsTask, songTask]);
+  }, [imageTask, comicTask, ttsTask, songTask, videoTask]);
   const task = tasks[shownKey]!;
   const isAudioResult = Boolean(task.result?.assetUrl && (task.result.mime ?? "").startsWith("audio"));
+  const isVideoResult = Boolean(task.result?.assetUrl && (task.result.mime ?? "").startsWith("video"));
   const accentRgb = THEMES.find((t) => t.key === theme)?.rgb ?? "6,182,212";
 
   // catalog 直连（图像模型）
@@ -163,6 +190,11 @@ export function StudioPage() {
   const hudStep = useMemo(() => {
     const p = task.progress;
     if (!task.busy) return "";
+    if (shownKey === "video") {
+      if (p < 30) return "视频引擎排队 · 分配渲染节点…";
+      if (p < 85) return "逐帧合成中 · 关键帧扩散采样…";
+      return "编码封装 · H.264 写回资产库…";
+    }
     if (isAudioShown()) {
       if (p < 30) return "合成队列 · 分配语音引擎…";
       if (p < 80) return isSongShown() ? "MusicGen 采样中 · 生成波形…" : "TTS 合成中 · 声学模型推理…";
@@ -181,6 +213,53 @@ export function StudioPage() {
   function isAudioShown(): boolean {
     return shownKey === "tts" || shownKey === "song";
   }
+
+  // ── 反向克隆 Re-hydrate：/studio?rehydrate=<taskId> 带参回填再创作 ──
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const rid = searchParams.get("rehydrate");
+    if (!rid) return;
+    void (async () => {
+      try {
+        const t = await apiClient.get<{ id: string; task_type: string; params: string }>(`/tasks/${rid}`);
+        const p = JSON.parse(t.params || "{}") as Record<string, unknown>;
+        const s = (k: string) => (typeof p[k] === "string" ? (p[k] as string) : "");
+        switch (t.task_type) {
+          case "audio":
+            setDomain("music");
+            setAudioMode("tts");
+            setTtsText(s("text") || s("prompt"));
+            if (typeof p.voice === "string") setVoice(p.voice);
+            break;
+          case "music":
+            setDomain("music");
+            setAudioMode("song");
+            setSongDesc(s("prompt"));
+            if (typeof p.duration_seconds === "number") setDuration(p.duration_seconds);
+            break;
+          case "video":
+            setDomain("video");
+            setVideoDesc(s("prompt"));
+            if (typeof p.duration === "number") setVideoDuration(p.duration);
+            break;
+          default: // image / comic
+            setDomain("image");
+            setPrompt(s("prompt") || s("text"));
+            const w = typeof p.width === "number" ? p.width : 0;
+            const h = typeof p.height === "number" ? p.height : 0;
+            const hit = RATIOS.find((r) => r.w === w && r.h === h);
+            if (hit) setRatio(hit);
+            break;
+        }
+        setRehydrated(`已从任务 ${rid.slice(0, 8)} 回填参数，可调整后再次渲染`);
+      } catch {
+        /* 任务不存在/无权限：静默保持空参数 */
+      } finally {
+        setSearchParams({}, { replace: true });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   function pickTheme(t: ThemeName) {
     setTheme(t);
@@ -229,32 +308,35 @@ export function StudioPage() {
     void songTask.run({ prompt: songDesc.trim(), duration_seconds: duration });
   }
 
+  function renderVideo() {
+    if (!videoDesc.trim() || videoTask.busy) return;
+    void videoTask.run({ prompt: videoDesc.trim(), duration: videoDuration });
+  }
+
   function retryShown() {
     if (shownKey === "image") void renderImage();
     else if (shownKey === "comic") renderComic();
     else if (shownKey === "tts") void renderTts();
+    else if (shownKey === "video") renderVideo();
     else renderSong();
   }
 
+  /** 当前视口任务对应的提示词文本（复制/推送/状态条共用）。 */
+  function activePrompt(): string {
+    if (shownKey === "tts") return ttsText.trim();
+    if (shownKey === "song") return songDesc.trim();
+    if (shownKey === "video") return videoDesc.trim();
+    return prompt.trim();
+  }
+
   function copyPrompt() {
-    const t =
-      shownKey === "image" || shownKey === "comic"
-        ? prompt.trim()
-        : shownKey === "tts"
-          ? ttsText.trim()
-          : songDesc.trim();
+    const t = activePrompt();
     if (t) void navigator.clipboard.writeText(t);
   }
 
   // 推送助手：带 prompt 回调度大厅
   function pushToAssistant() {
-    const t =
-      shownKey === "image" || shownKey === "comic"
-        ? prompt.trim()
-        : shownKey === "tts"
-          ? ttsText.trim()
-          : songDesc.trim();
-    navigate(`/?studio_prompt=${encodeURIComponent(t)}`);
+    navigate(`/?studio_prompt=${encodeURIComponent(activePrompt())}`);
   }
 
   const extFromMime = (m?: string) =>
@@ -287,7 +369,13 @@ export function StudioPage() {
             <Activity className="h-3.5 w-3.5" style={accentVar} aria-hidden />
             引擎:
             <strong className="max-w-[180px] truncate text-slate-200">
-              {shownKey === "tts" ? voice : shownKey === "song" ? `MusicGen ${duration}s` : model || "—"}
+              {shownKey === "tts"
+                ? voice
+                : shownKey === "song"
+                  ? `MusicGen ${duration}s`
+                  : shownKey === "video"
+                    ? `Video ${videoDuration}s`
+                    : model || "—"}
             </strong>
           </span>
           <span className="hidden items-center gap-1.5 text-slate-500 lg:flex">
@@ -334,6 +422,19 @@ export function StudioPage() {
       </header>
 
       <div className="mx-3 mb-3 mt-3 flex min-h-[calc(100vh-108px)] gap-3 pb-3">
+        {/* 反向克隆提示条 */}
+        {rehydrated && (
+          <div
+            className="fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-xl border px-4 py-2.5 font-mono text-[11px] shadow-2xl backdrop-blur"
+            style={{ borderColor: "var(--st-border)", background: "rgba(var(--st-accent-rgb), .12)", color: "var(--st-accent)" }}
+          >
+            {rehydrated}
+            <button onClick={() => setRehydrated("")} className="ml-3 text-slate-500 hover:text-slate-300" aria-label="关闭">
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* ═══ 左参数舱 ═══ */}
         <aside className="st-panel hidden w-[300px] shrink-0 flex-col overflow-y-auto p-4 lg:flex">
           {/* 五域 tab（纵向） */}
@@ -574,8 +675,74 @@ export function StudioPage() {
                 </>
               )}
             </div>
+          ) : domain === "video" ? (
+            /* ═══ 视频域参数舱 ═══ */
+            <div className="space-y-4">
+              <div>
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">画面描述</p>
+                <textarea
+                  value={videoDesc}
+                  onChange={(e) => setVideoDesc(e.target.value.slice(0, 2000))}
+                  rows={6}
+                  placeholder="描述视频画面与镜头运动…例：无人机掠过霓虹雨夜的都市天际线，缓慢推进"
+                  className="w-full resize-none rounded-xl border bg-slate-950/70 px-3 py-2.5 text-xs leading-relaxed text-slate-100 outline-none placeholder:text-slate-600"
+                  style={{ borderColor: "var(--st-border)" }}
+                />
+              </div>
+              <div>
+                <p className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  <span>时长</span>
+                  <span className="font-mono text-slate-300">{videoDuration}s</span>
+                </p>
+                <input
+                  type="range"
+                  min={1}
+                  max={60}
+                  step={1}
+                  value={videoDuration}
+                  onChange={(e) => setVideoDuration(Number(e.target.value))}
+                  className="w-full"
+                  style={{ accentColor: "var(--st-accent)" }}
+                />
+                <p className="mt-2 rounded-lg border border-dashed border-white/10 px-3 py-2 text-[10px] leading-relaxed text-slate-500">
+                  提示：视频引擎需在模型中心配置 video 槽位；未配置时提交会明确报错，不会假装成功。
+                </p>
+              </div>
+              <button
+                onClick={renderVideo}
+                disabled={!videoDesc.trim() || videoTask.busy}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold text-slate-950 transition-transform enabled:hover:scale-[1.02] disabled:opacity-40"
+                style={{ background: "linear-gradient(120deg, var(--st-accent), rgba(255,255,255,.82))" }}
+              >
+                <Zap className="h-3.5 w-3.5" aria-hidden />
+                {videoTask.busy ? `生成中 ${videoTask.progress}%` : "生成视频"}
+              </button>
+            </div>
+          ) : domain === "story" || domain === "workflow" ? (
+            /* ═══ 角色&Story / 节点拓扑：子能力导航卡 ═══ */
+            <div className="space-y-2">
+              {(DOMAIN_LINKS[domain] ?? []).map((l) => (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 transition-all hover:border-[rgba(var(--st-accent-rgb),.5)] hover:bg-white/[0.06]"
+                >
+                  <span
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border"
+                    style={{ borderColor: "var(--st-border)", color: "var(--st-accent)" }}
+                  >
+                    {domain === "story" ? <UserRound className="h-4 w-4" aria-hidden /> : <Workflow className="h-4 w-4" aria-hidden />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold text-slate-200">{l.label}</span>
+                    <span className="block truncate text-[10px] text-slate-500">{l.desc}</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-slate-600 transition-transform group-hover:translate-x-0.5" style={{ color: "var(--st-accent)" }} aria-hidden />
+                </Link>
+              ))}
+            </div>
           ) : (
-            /* 其余三域：诚实占位（不假执行） */
+            /* 兜底占位（不应到达） */
             <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/10 p-6 text-center">
               {(() => {
                 const d = DOMAINS.find((x) => x.key === domain)!;
@@ -650,8 +817,27 @@ export function StudioPage() {
               />
             )}
 
+            {/* 视频结果 */}
+            {isVideoResult && task.result?.assetUrl && !task.busy && (
+              <figure className="flex max-h-full max-w-full flex-col items-center gap-2">
+                <video
+                  src={task.result.assetUrl}
+                  controls
+                  autoPlay
+                  loop
+                  className="max-h-[62vh] rounded-xl border shadow-2xl"
+                  style={{ borderColor: "var(--st-border)" }}
+                />
+                <figcaption className="flex items-center gap-2 font-mono text-[10px] text-slate-500">
+                  <span style={accentVar}>{task.result.provider}</span>
+                  <span>·</span>
+                  <span>{videoDuration}s</span>
+                </figcaption>
+              </figure>
+            )}
+
             {/* 图片结果 */}
-            {!isAudioResult && task.result?.assetUrl && !task.busy && (
+            {!isAudioResult && !isVideoResult && task.result?.assetUrl && !task.busy && (
               <figure className="flex max-h-full max-w-full flex-col items-center gap-2">
                 <img
                   src={task.result.assetUrl}
@@ -709,23 +895,15 @@ export function StudioPage() {
           {/* ═══ 底部动作条 ═══ */}
           <footer className="flex items-center justify-between gap-2 border-t border-white/5 px-4 py-2.5">
             <div className="flex min-w-0 items-center gap-2 font-mono text-[10px] text-slate-600">
-              <span className="truncate">
-                {(() => {
-                  const t =
-                    shownKey === "image" || shownKey === "comic"
-                      ? prompt.trim()
-                      : shownKey === "tts"
-                        ? ttsText.trim()
-                        : songDesc.trim();
-                  return t ? `${t.slice(0, 48)}${t.length > 48 ? "…" : ""}` : "IDLE";
-                })()}
-              </span>
+              <span className="truncate">{(() => {
+                const t = activePrompt();
+                return t ? `${t.slice(0, 48)}${t.length > 48 ? "…" : ""}` : "IDLE";
+              })()}</span>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <button
                 onClick={copyPrompt}
-                disabled={!(shownKey === "tts" ? ttsText : songDesc).trim() &&
-                  !(shownKey === "image" || shownKey === "comic" ? prompt.trim() : "")}
+                disabled={!activePrompt()}
                 title="复制 Prompt"
                 className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-slate-400 transition-colors hover:bg-white/5 disabled:opacity-35"
               >
