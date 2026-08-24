@@ -96,10 +96,11 @@ export default function App(props: AigcStudioHostProps = {}) {
   }, [accessToken]);
 
   const storeTheme = useThemeStore((s) => s.mode);
+  const storeSkin = useThemeStore((s) => s.skin);
   const theme = props.theme ?? storeTheme;
 
   return (
-    <div data-aigc-studio-root data-theme={theme}>
+    <div data-aigc-studio-root data-theme={theme} data-skin={storeSkin}>
       <HostProvider value={props}>
         <QueryClientProvider client={queryClient}>
           <BrowserRouter {...(props.basename ? { basename: props.basename } : {})}>

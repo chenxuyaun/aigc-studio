@@ -13,6 +13,7 @@ const AssistantHomePage = lazy(() =>
   import("@/pages/AssistantHomePage").then((m) => ({ default: m.AssistantHomePage })),
 );
 const StudioPage = lazy(() => import("@/pages/StudioPage").then((m) => ({ default: m.StudioPage })));
+const PersonaPage = lazy(() => import("@/pages/PersonaPage").then((m) => ({ default: m.PersonaPage })));
 const DashboardPage = lazy(() =>
   import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })),
 );
@@ -137,6 +138,7 @@ export function AppRoutes() {
       <Route element={<ProtectedLayout />}>
       <Route path="/" element={<Page><AssistantHomePage /></Page>} />
       <Route path="/studio" element={<Page><StudioPage /></Page>} />
+      <Route path="/persona" element={<Page><PersonaPage /></Page>} />
       {/* 原工作台（数据统计/功能速览）移至 /dashboard 保留 */}
       <Route path="/dashboard" element={<Page><DashboardPage /></Page>} />
       {/* AI 创作已与工作台合一（目标框 + 引擎直控）；/create 直达重定向 */}

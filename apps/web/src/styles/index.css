@@ -311,6 +311,26 @@ body {
 .st-root[data-theme="emerald"] { --st-accent: #10b981; --st-accent-rgb: 16, 185, 129; --st-border: rgba(16, 185, 129, 0.25); }
 .st-root[data-theme="mono"] { --st-accent: #cbd5e1; --st-accent-rgb: 203, 213, 225; --st-border: rgba(203, 213, 225, 0.25); }
 
+/* ═══ v2 P3 皮肤引擎全局化：data-skin 覆盖全站品牌主色（浅/深主题共用同名变量）═══ */
+[data-aigc-studio-root][data-skin="purple"] {
+  --color-primary: #8b5cf6;
+  --color-primary-hover: #7c3aed;
+  --color-primary-text: #6d28d9;
+  --color-ring: #8b5cf6;
+}
+[data-aigc-studio-root][data-skin="emerald"] {
+  --color-primary: #10b981;
+  --color-primary-hover: #059669;
+  --color-primary-text: #047857;
+  --color-ring: #10b981;
+}
+[data-aigc-studio-root][data-skin="mono"] {
+  --color-primary: #94a3b8;
+  --color-primary-hover: #cbd5e1;
+  --color-primary-text: #64748b;
+  --color-ring: #cbd5e1;
+}
+
 .st-panel {
   background: rgba(11, 16, 29, 0.72);
   border: 1px solid var(--st-border);

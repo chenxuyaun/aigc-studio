@@ -25,6 +25,7 @@ import {
 
 import { apiClient } from "@/lib/apiClient";
 import { useMediaTask } from "@/hooks/useMediaTask";
+import { useThemeStore, type SkinName } from "@/stores/theme";
 import { cn } from "@/lib/cn";
 
 /**
@@ -113,9 +114,10 @@ type TaskState = ReturnType<typeof useMediaTask>;
 export function StudioPage() {
   const navigate = useNavigate();
   const [domain, setDomain] = useState<Domain>("image");
-  const [theme, setTheme] = useState<ThemeName>(
-    () => (localStorage.getItem("saios-studio-theme") as ThemeName) || "cyan",
-  );
+  // v2 P3：皮肤接入全局主题引擎（与 AppShell 顶栏选择器同源，全站一致）
+  const skin = useThemeStore((s) => s.skin);
+  const setSkin = useThemeStore((s) => s.setSkin);
+  const theme: SkinName = skin;
   const [themeOpen, setThemeOpen] = useState(false);
 
   // ── 图像域 ──
@@ -261,9 +263,8 @@ export function StudioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  function pickTheme(t: ThemeName) {
-    setTheme(t);
-    localStorage.setItem("saios-studio-theme", t);
+  function pickTheme(t: SkinName) {
+    setSkin(t);
     setThemeOpen(false);
   }
 

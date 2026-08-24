@@ -467,6 +467,12 @@ export function AssetsPage() {
                   查看任务
                 </Link>
               )}
+              {preview.task_id && (
+                <Button variant="outline" onClick={() => navigate(`/studio?rehydrate=${preview.task_id}`)}>
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  在 Studio 再创作
+                </Button>
+              )}
               <Button
                 variant="outline"
                 className="text-danger"
