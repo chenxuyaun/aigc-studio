@@ -1275,6 +1275,155 @@ def env_conflicts() -> dict[str, Any]:
         return {"env_path": env_path, "conflicts": [], "count": 0, "error": str(e)[:160]}
 
 
+# ── 控制台可观测层：事件 ring buffer + 调用日志 + 账号池 + 系统状态 ──
+from collections import deque
+
+_EVENTS: deque[dict[str, str]] = deque(maxlen=500)
+_CALLS: deque[dict[str, Any]] = deque(maxlen=200)
+
+
+def _emit(etype: str, msg: str) -> None:
+    """向控制台事件流推一条事件（内存 ring buffer，重启即清，不落盘）。"""
+    _EVENTS.appendleft({
+        "time": time.strftime("%H:%M:%S"),
+        "date": time.strftime("%Y-%m-%d"),
+        "type": etype,
+        "msg": msg,
+    })
+
+
+@app.get("/api/events")
+def list_events(limit: int = 100) -> dict[str, Any]:
+    return {"events": list(_EVENTS)[: max(1, min(limit, 500))]}
+
+
+@app.get("/api/calls/recent")
+def recent_calls(limit: int = 50) -> dict[str, Any]:
+    return {"calls": list(_CALLS)[: max(1, min(limit, 200))]}
+
+
+@app.get("/api/pools/{pool_name}")
+def pool_status(pool_name: str) -> dict[str, Any]:
+    """账号池只读聚合视图（grok 先行）：读上游 accounts.db，绝不返回 token 明文。"""
+    if pool_name != "grok":
+        raise HTTPException(status_code=404, detail="未知账号池")
+    db_path = os.environ.get(
+        "GROK_ACCOUNTS_DB", "/home/ubuntu/grok2api/data/accounts.db"
+    )
+    if not os.path.exists(db_path):
+        return {"enabled": False, "message": f"未找到 {db_path}", "accounts": []}
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        accounts = []
+        for r in conn.execute(
+            "SELECT token, status, quota_fast, usage_fail_count, last_fail_reason,"
+            " last_sync_at, updated_at FROM accounts WHERE deleted_at IS NULL"
+        ):
+            remaining = total = None
+            try:
+                q = json.loads(r["quota_fast"]) if isinstance(r["quota_fast"], str) else {}
+                # quota_fast 是 JSON 字符串 {"remaining":30,...}——SUM() 会误判为 0
+                remaining = q.get("remaining")
+                total = q.get("total")
+            except Exception:  # noqa: BLE001
+                pass
+            accounts.append({
+                "fp": (r["token"] or "")[:8] + "…" + (r["token"] or "")[-6:],  # 指纹，不回显全文
+                "status": r["status"],
+                "remaining": remaining,
+                "total": total,
+                "fail_count": r["usage_fail_count"],
+                "last_fail_reason": r["last_fail_reason"],
+                "updated_at": r["updated_at"],
+            })
+        conn.close()
+        with_q = [a for a in accounts if isinstance(a["remaining"], (int, float))]
+        quota_sum = sum(a["remaining"] or 0 for a in with_q)
+        return {
+            "enabled": True,
+            "db": db_path,
+            "total_accounts": len(accounts),
+            "active": sum(1 for a in accounts if a["status"] == "active"),
+            "with_quota": len(with_q),
+            "quota_remaining_sum": quota_sum,
+            "accounts": accounts,
+        }
+    except Exception as e:  # noqa: BLE001
+        return {"enabled": False, "message": str(e)[:160], "accounts": []}
+
+
+@app.get("/api/system/timers")
+def system_timers() -> dict[str, Any]:
+    """三个自愈 timer 的 systemd user 状态（guard/backup/grok-refresh）。"""
+    import subprocess
+
+    out: dict[str, Any] = {}
+    for name in ("model-hub-guard", "model-hub-backup", "grok-refresh"):
+        entry: dict[str, Any] = {"timer": False, "service": "-", "last": "-"}
+        try:
+            entry["timer"] = subprocess.run(
+                ["systemctl", "--user", "is-active", f"{name}.timer"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip() == "active"
+            entry["service"] = subprocess.run(
+                ["systemctl", "--user", "is-active", f"{name}.service"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip()
+            entry["last"] = subprocess.run(
+                ["systemctl", "--user", "show", f"{name}.timer", "-p", "LastTriggerUSec", "--value"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip() or "-"
+        except Exception:  # noqa: BLE001
+            pass  # 非 Linux / 无 systemd 环境（本地开发）静默降级
+        out[name] = entry
+    return out
+
+
+@app.get("/api/system/backups")
+def system_backups() -> dict[str, Any]:
+    """备份快照列表（model-hub-backup.timer 产出的 sqlite + export JSON）。"""
+    import glob as _glob
+
+    items: list[dict[str, Any]] = []
+    for pat in (
+        "/home/ubuntu/model-hub/backups/*",
+        "/home/ubuntu/model-hub-backups/*",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "backups", "*"),
+    ):
+        for p in sorted(_glob.glob(pat), reverse=True):
+            try:
+                st = os.stat(p)
+                items.append({
+                    "file": os.path.basename(p),
+                    "path": p,
+                    "size_kb": round(st.st_size / 1024, 1),
+                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
+                })
+            except OSError:
+                continue
+    seen: set[str] = set()
+    deduped = [i for i in items if not (i["file"] in seen or seen.add(i["file"]))]
+    return {"backups": deduped[:30], "count": len(deduped)}
+
+
+def _record_call(row: sqlite3.Row, path: str, payload: dict[str, Any], latency_ms: int, status: int, fallback: bool) -> None:
+    """proxy 网关调用日志（控制台可观测页数据源）。"""
+    _CALLS.appendleft({
+        "time": time.strftime("%H:%M:%S"),
+        "provider": row["name"],
+        "path": path,
+        "model": (payload or {}).get("model") or row["default_model"] or "",
+        "latency_ms": latency_ms,
+        "status": status,
+        "fallback": bool(fallback),
+    })
+    if fallback:
+        _emit("FAILOVER", f"✅ 请求经降级由 {row['name']} 兜底成功 ({latency_ms}ms)")
+    elif status >= 400:
+        _emit("WARN", f"{row['name']} {path} → HTTP {status}")
+
+
 # ── OpenAI 兼容代理 + 高可用路由（CC Switch 4.x：请求→激活 provider，失败降级）──
 @app.api_route("/proxy/v1/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 async def proxy_endpoint(path: str, request: Request) -> Any:
@@ -1360,13 +1509,16 @@ async def proxy_endpoint(path: str, request: Request) -> Any:
             else:
                 up_headers["Authorization"] = f"Bearer {key}"
         try:
+            t_call = time.time()
             async with httpx.AsyncClient(timeout=300) as client:
                 upstream = await client.request(
                     req.method, upstream_url, headers=up_headers,
                     json=payload if payload else None, follow_redirects=True,
                 )
+            _lat = round((time.time() - t_call) * 1000)
             if upstream.status_code >= 500 and row["is_active"]:
                 last_err = f"{row['name']} HTTP {upstream.status_code}"
+                _emit("FAILOVER", f"⚡ {row['name']} HTTP {upstream.status_code} → 降级下一候选")
                 continue  # 激活 provider 500 → 降级下一个
             # 流式透传
             if payload.get("stream"):
@@ -1378,13 +1530,16 @@ async def proxy_endpoint(path: str, request: Request) -> Any:
                         ) as sr:
                             async for chunk in sr.aiter_bytes():
                                 yield chunk
+                _record_call(row, path, payload, _lat, upstream.status_code, len(rows) > 1 and row is not rows[0])
                 return StreamingResponse(_gen(), media_type=upstream.headers.get("content-type", "text/event-stream"))
+            _record_call(row, path, payload, _lat, upstream.status_code, len(rows) > 1 and row is not rows[0])
             return JSONResponse(
                 content=json.loads(upstream.content) if upstream.content else {"ok": True},
                 status_code=upstream.status_code,
             )
         except Exception as e:  # noqa: BLE001
             last_err = f"{row['name']}: {str(e)[:120]}"
+            _emit("FAILOVER", f"⚡ {row['name']} 连接失败({last_err[:40]}) → 降级下一候选")
             continue
     return JSONResponse({"error": {"message": f"model hub: 所有 provider 均失败: {last_err}"}}, status_code=502)
 

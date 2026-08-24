@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 能力控制台 · Model Hub</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {
+        fontFamily: {
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          cyber: ['Orbitron', 'Inter', 'sans-serif'],
+        },
+        colors: {
+          space: { 950:'#05080E',900:'#0A0F1D',850:'#0E1628',800:'#131D33',750:'#1A2744',700:'#233357',600:'#314675' },
+          cyan: { 300:'#67E8F9',400:'#22D3EE',500:'#06B6D4',950:'#042F2E' },
+          neon: { pink:'#FF007F', cyan:'#00F0FF', green:'#00FF66', purple:'#9D00FF', amber:'#FFB800' },
+        },
+      }},
+    }
+  </script>
+
+  <style>
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0A0F1D; }
+    ::-webkit-scrollbar-thumb { background: #1A2744; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #22D3EE; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+
+    .glass-panel {
+      background: rgba(14,22,40,.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(35,51,87,.7);
+    }
+    .glass-panel-glow {
+      background: rgba(14,22,40,.85); backdrop-filter: blur(16px);
+      border: 1px solid rgba(34,211,238,.35);
+      box-shadow: 0 0 20px rgba(34,211,238,.12), inset 0 0 15px rgba(34,211,238,.05);
+    }
+    .hud-box { position: relative; }
+    .hud-box::before { content:''; position:absolute; top:-1px; left:-1px; width:8px; height:8px;
+      border-top:2px solid #00F0FF; border-left:2px solid #00F0FF; pointer-events:none; }
+    .hud-box::after { content:''; position:absolute; bottom:-1px; right:-1px; width:8px; height:8px;
+      border-bottom:2px solid #00F0FF; border-right:2px solid #00F0FF; pointer-events:none; }
+
+    @keyframes laserPulse { 0%{left:-30%;opacity:0} 30%{opacity:1} 70%{opacity:1} 100%{left:100%;opacity:0} }
+    .subway-line { position: relative; overflow: hidden; }
+    .subway-line::after { content:''; position:absolute; top:0; bottom:0; width:80px;
+      background: linear-gradient(90deg, transparent,#00F0FF,#9D00FF,transparent);
+      animation: laserPulse 2.2s cubic-bezier(.4,0,.6,1) infinite; box-shadow:0 0 15px #00F0FF; }
+
+    @keyframes radarSweep { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+    .radar-sweeper { animation: radarSweep 3s linear infinite; transform-origin:center; }
+
+    @keyframes scanLine { 0%{top:0;opacity:.8} 50%{opacity:1} 100%{top:100%;opacity:0} }
+    .grid-scanner { position:relative; overflow:hidden; }
+    .grid-scanner::before { content:''; position:absolute; left:0; right:0; height:3px;
+      background:linear-gradient(90deg,transparent,#00FF66,transparent); box-shadow:0 0 10px #00FF66;
+      animation:scanLine 3.5s linear infinite; z-index:10; pointer-events:none; }
+
+    .led-emerald { box-shadow:0 0 10px #00FF66, 0 0 20px rgba(0,255,102,.4); }
+    .led-cyan { box-shadow:0 0 10px #00F0FF, 0 0 20px rgba(0,240,255,.4); }
+    .led-rose { box-shadow:0 0 10px #FF007F, 0 0 20px rgba(255,0,127,.4); }
+    .led-amber { box-shadow:0 0 10px #FFB800, 0 0 20px rgba(255,184,0,.4); }
+
+    .quota-cell:hover .quota-tooltip { opacity:1; visibility:visible; transform:translateY(-6px); }
+    @keyframes toastIn { from{transform:translateX(120%);opacity:0} to{transform:translateX(0);opacity:1} }
+    .toast-in { animation: toastIn .25s ease-out; }
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+
+<body x-data="controlPlane()" x-init="initApp()"
+      class="bg-space-950 text-slate-200 font-sans antialiased min-h-screen flex flex-col relative selection:bg-cyan-500 selection:text-space-950 overflow-x-hidden">
+
+  <canvas id="cyberCanvas" class="fixed inset-0 pointer-events-none z-0 opacity-40"></canvas>
+
+  <!-- ═══ Header: 品牌 + 五槽状态带 ═══ -->
+  <header class="h-14 border-b border-space-700/80 bg-space-950/90 backdrop-blur-xl px-4 flex items-center justify-between sticky top-0 z-40 text-xs font-mono shadow-2xl">
+    <div class="flex items-center gap-3 overflow-x-auto py-1 no-scrollbar">
+      <div class="flex items-center gap-2 font-cyber text-white font-bold tracking-widest text-sm shrink-0">
+        <span class="w-3 h-3 rounded-full bg-cyan-400 led-cyan animate-pulse"></span>
+        <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-indigo-300 to-neon-pink">AI CONTROL PLANE</span>
+      </div>
+      <div class="h-5 w-px bg-space-700 shrink-0 mx-1"></div>
+      <template x-for="s in SLOT_META" :key="s.key">
+        <div @click="currentTab=2; $nextTick(()=>document.getElementById('lane-'+s.key)?.scrollIntoView({behavior:'smooth',block:'center'}))"
+             class="cursor-pointer flex items-center gap-2 px-2.5 py-1 rounded-md bg-space-850/80 border border-space-700 hover:border-cyan-400 transition group shrink-0"
+             :title="s.label + ' 槽位'">
+          <span class="text-sm" x-text="s.icon"></span>
+          <span class="w-2 h-2 rounded-full shrink-0"
+                :class="slotHealth(s.key)==='ok' ? 'bg-neon-green led-emerald' : (slotHealth(s.key)==='empty' ? 'bg-space-600' : 'bg-neon-amber led-amber')"></span>
+          <span class="text-slate-300 group-hover:text-white max-w-[140px] truncate" x-text="primaryName(s.key) || (s.label+' 未配置')"></span>
+        </div>
+      </template>
+    </div>
+    <div class="flex items-center gap-3 shrink-0 pl-3">
+      <div class="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-space-850 border border-space-700" title="proxy 网关运行中">
+        <i data-lucide="network" class="w-3.5 h-3.5 text-cyan-400"></i>
+        <span class="text-slate-400">gateway</span><span class="text-emerald-400">●</span>
+      </div>
+      <button @click="refreshAll()" class="p-2 rounded-md bg-space-850 border border-space-700 hover:border-cyan-400 transition" title="刷新全部数据">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="refreshing && 'animate-spin text-cyan-400'"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══ Nav Tabs ═══ -->
+  <nav class="sticky top-14 z-30 bg-space-950/80 backdrop-blur-lg border-b border-space-700/60 px-4 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-mono">
+    <template x-for="(t,i) in TABS" :key="t.name">
+      <button @click="switchTab(i+1)" class="px-3 py-1.5 rounded-lg border transition whitespace-nowrap flex items-center gap-1.5"
+              :class="currentTab===i+1 ? 'bg-cyan-950 text-cyan-300 border-cyan-600' : 'bg-space-850 text-slate-400 border-space-700 hover:text-slate-200'">
+        <span x-text="t.icon"></span><span x-text="t.name"></span>
+      </button>
+    </template>
+  </nav>
+
+  <main class="flex-1 p-4 md:p-6 space-y-6 relative z-10 max-w-[1600px] w-full mx-auto">
+
+    <!-- ═══════════ REGION 1: 总览 ═══════════ -->
+    <div x-show="currentTab===1" x-cloak class="space-y-6">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <template x-for="k in kpiCards()" :key="k.label">
+          <div class="glass-panel hud-box rounded-xl p-4">
+            <p class="text-[11px] font-mono text-slate-400 uppercase tracking-wider" x-text="k.label"></p>
+            <p class="mt-1 font-mono text-2xl font-bold" :class="k.color" x-text="k.value"></p>
+            <p class="mt-0.5 text-[11px] text-slate-500 font-mono truncate" x-text="k.sub"></p>
+          </div>
+        </template>
+      </div>
+      <div class="grid lg:grid-cols-5 gap-4">
+        <div class="glass-panel hud-box rounded-xl p-4 lg:col-span-3">
+          <h3 class="font-bold text-sm text-slate-100 mb-2 flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-cyan-400"></i>链路脉搏 <span class="text-[10px] text-slate-500 font-normal">（proxy 延迟驱动的实时波形）</span></h3>
+          <canvas id="qpsCanvas" class="w-full h-36"></canvas>
+        </div>
+        <div class="glass-panel hud-box rounded-xl p-4 lg:col-span-2">
+          <h3 class="font-bold text-sm text-slate-100 mb-3 flex items-center gap-2"><i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>自愈心跳</h3>
+          <div class="space-y-2.5 font-mono text-xs">
+            <template x-for="(v,name) in timers" :key="name">
+              <div class="flex items-center justify-between bg-space-900/60 rounded-lg px-3 py-2 border border-space-750">
+                <div class="flex items-center gap-2">
+                  <span class="relative w-4 h-4 inline-flex items-center justify-center">
+                    <span class="absolute w-2 h-2 rounded-full" :class="v.timer ? 'bg-neon-green led-emerald' : 'bg-space-600'"></span>
+                    <svg v-if="v.timer" class="radar-sweeper absolute w-4 h-4 text-emerald-500/60" viewBox="0 0 24 24" fill="none"><path d="M12 12 L12 2 A10 10 0 0 1 22 12 Z" fill="currentColor" opacity=".35"/></svg>
+                  </span>
+                  <span class="text-slate-300" x-text="name"></span>
+                </div>
+                <span class="text-slate-500 truncate max-w-[150px]" x-text="'上次: '+v.last"></span>
+              </div>
+            </template>
+            <template x-if="!Object.keys(timers).length"><p class="text-slate-500">读取 systemd 状态…（本地开发环境无 timer 属正常）</p></template>
+          </div>
+        </div>
+      </div>
+      <div class="glass-panel hud-box rounded-xl p-4">
+        <h3 class="font-bold text-sm text-slate-100 mb-3 flex items-center gap-2"><i data-lucide="radio" class="w-4 h-4 text-neon-purple"></i>事件流 <span class="text-[10px] text-slate-500 font-normal">（降级 / 调用 / 系统 · 最近在前 · 30s 自动刷新）</span></h3>
+        <div class="space-y-1 font-mono text-xs max-h-72 overflow-y-auto">
+          <template x-for="(e,i) in events.slice(0,40)" :key="'ev'+i+e.time">
+            <div class="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-space-850/70">
+              <span class="text-slate-500 shrink-0" x-text="e.time"></span>
+              <span class="shrink-0 px-1.5 rounded text-[10px] font-bold"
+                    :class="e.type==='FAILOVER' ? 'bg-neon-pink/15 text-neon-pink' : (e.type==='WARN' ? 'bg-amber-500/15 text-amber-400' : 'bg-cyan-500/15 text-cyan-300')" x-text="e.type"></span>
+              <span class="text-slate-300" x-text="e.msg"></span>
+            </div>
+          </template>
+          <template x-if="!events.length"><p class="text-slate-500 px-2 py-4">暂无事件 — proxy 收到第一个请求后开始记录。</p></template>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ REGION 2: 能力路由泳道 ═══════════ -->
+    <div x-show="currentTab===2" x-cloak class="space-y-5">
+      <div class="glass-panel-glow rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="font-cyber font-bold text-base text-white tracking-wide">能力路由拓扑</h2>
+          <p class="text-xs text-slate-400 mt-0.5">五槽有序候选链 · 主选失败自动降级备选 · 点击备选卡设为主选</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <input x-model="testPrompt" @keydown.enter="testLiveRoute()" type="text" placeholder="路由发包测试：输入一段 prompt 打到 text 链…"
+                 class="bg-space-950 border border-space-700 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-cyan-400 w-64 md:w-96">
+          <button @click="testLiveRoute()" class="px-3.5 py-1.5 bg-space-800 hover:bg-space-700 border border-space-700 hover:border-cyan-400 text-slate-200 font-mono text-xs rounded-lg transition flex items-center gap-1.5">
+            <i data-lucide="send" class="w-3.5 h-3.5 text-cyan-400"></i><span>发真实请求</span>
+          </button>
+        </div>
+      </div>
+      <p x-show="testResult" x-text="testResult" class="text-xs font-mono px-1" :class="testOk ? 'text-emerald-400' : 'text-rose-400'"></p>
+
+      <template x-for="s in SLOT_META" :key="s.key">
+        <div :id="'lane-'+s.key" class="glass-panel hud-box rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-lg" x-text="s.icon"></span>
+              <h3 class="font-bold text-sm text-slate-100" x-text="s.label+' 链路'"></h3>
+              <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-space-800 text-slate-400 border border-space-700" x-text="(chains[s.key]?.length||0)+' 候选'"></span>
+            </div>
+            <div class="flex items-center gap-1.5" x-show="providers.length">
+              <select x-model="appendPick[s.key]" class="bg-space-950 border border-space-700 rounded-md px-2 py-1 text-[11px] font-mono text-slate-300 outline-none focus:border-cyan-400 max-w-[190px]">
+                <option value="">＋ 添加候选…</option>
+                <template x-for="p in candidatesFor(s.key)" :key="p.id"><option :value="p.id" x-text="p.name"></option></template>
+              </select>
+              <button x-show="appendPick[s.key]" @click="appendSlot(s.key)" class="px-2 py-1 rounded-md bg-cyan-600/90 hover:bg-cyan-500 text-space-950 text-[11px] font-bold transition">加入链尾</button>
+            </div>
+          </div>
+
+          <template x-if="chains[s.key]?.length">
+            <div class="flex items-stretch gap-0">
+              <div class="flex flex-col justify-center shrink-0 hidden sm:flex">
+                <span class="text-[9px] font-mono text-slate-600 [writing-mode:vertical-rl] rotate-180 tracking-widest">PRIMARY</span>
+              </div>
+              <div class="subway-line w-6 md:w-16 self-center h-1 rounded-full bg-space-750 shrink-0 mx-1"></div>
+              <div class="flex-1 min-w-0">
+                <div class="rounded-xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/60 to-space-900 p-3.5 flex items-center justify-between gap-3 flex-wrap">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-[10px] font-cyber font-bold tracking-widest text-cyan-300 px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-700">主选</span>
+                      <span class="font-bold text-sm text-white truncate" x-text="chains[s.key][0].name"></span>
+                      <span class="w-2 h-2 rounded-full shrink-0" :class="providerDot(chains[s.key][0].id)"></span>
+                      <span class="text-[10px] font-mono text-slate-500" x-text="latencyText(chains[s.key][0].id)"></span>
+                    </div>
+                    <p class="text-[11px] font-mono text-slate-400 mt-1 truncate" x-text="chains[s.key][0].default_model || '(默认模型未设)'"></p>
+                  </div>
+                  <button @click="unsetPrimary(s.key)" class="px-2 py-1 rounded-md bg-space-800 hover:bg-rose-900/60 border border-space-700 text-[11px] text-slate-400 hover:text-rose-300 transition shrink-0"
+                          title="清空该槽位（合法空态，对应任务将响亮报错而非伪造）">清空槽位</button>
+                </div>
+                <template x-if="chains[s.key].length > 1">
+                  <div class="flex items-stretch gap-2 mt-2 overflow-x-auto no-scrollbar pb-1">
+                    <template x-for="(p,idx) in chains[s.key].slice(1)" :key="'b'+p.id">
+                      <div class="group relative shrink-0 rounded-lg border border-space-700 bg-space-900 hover:border-cyan-500/50 transition px-3 py-2 cursor-pointer min-w-[170px]"
+                           @click="promote(s.key, p.id)" title="点击设为主选（原主选降为备选#2）">
+                        <div class="flex items-center gap-1.5">
+                          <span class="text-[10px] font-mono text-purple-300" x-text="'#'+(idx+2)"></span>
+                          <span class="text-xs font-semibold text-slate-200 truncate" x-text="p.name"></span>
+                        </div>
+                        <p class="text-[10px] font-mono text-slate-500 truncate mt-0.5" x-text="p.default_model || '-'"></p>
+                        <button @click.stop="removeFromSlot(s.key, p.id)"
+                                class="absolute -top-1.5 -right-1.5 w-[18px] h-[18px] rounded-full bg-rose-950 border border-rose-700 text-rose-400 text-[10px] leading-none opacity-0 group-hover:opacity-100 transition">✕</button>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+          <template x-if="!chains[s.key]?.length">
+            <div class="border border-dashed border-space-700 rounded-xl p-5 text-center">
+              <p class="text-sm text-slate-400 font-medium" x-text="s.icon+' 此能力暂无上游 — 这是合法状态'"></p>
+              <p class="text-[11px] font-mono text-slate-600 mt-1">saiOS 对应任务将响亮报错而非静默伪造 · 从右上「＋ 添加候选」接入</p>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+
+    <!-- ═══════════ REGION 3: 供应商 ═══════════ -->
+    <div x-show="currentTab===3" x-cloak class="space-y-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-1.5 font-mono text-xs overflow-x-auto no-scrollbar">
+          <template x-for="g in FILTERS" :key="g">
+            <button @click="providerFilter=g" class="px-3 py-1.5 rounded-lg border transition whitespace-nowrap"
+                    :class="providerFilter===g ? 'bg-cyan-950 text-cyan-300 border-cyan-600' : 'bg-space-850 text-slate-400 border-space-700 hover:text-slate-200'" x-text="g"></button>
+          </template>
+        </div>
+        <button @click="openModal(null)" class="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-space-950 font-bold text-xs rounded-xl font-mono transition flex items-center gap-1.5 shadow-lg shadow-cyan-950/50">
+          <i data-lucide="plus" class="w-4 h-4"></i>新增供应商
+        </button>
+      </div>
+
+      <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <template x-for="p in filteredProviders()" :key="p.id">
+          <div class="glass-panel hud-box rounded-xl p-4 hover:border-cyan-500/40 transition group cursor-pointer relative" @click="openDrawer(p)">
+            <div x-show="confirmDeleteId===p.id" @click.stop class="absolute inset-0 z-10 rounded-xl bg-rose-950/95 backdrop-blur-sm flex flex-col items-center justify-center gap-2 p-4">
+              <p class="text-xs text-rose-200 font-mono text-center">删除后将从所有链路移除，不可恢复。</p>
+              <div class="flex gap-2">
+                <button @click.stop="delProvider(p.id)" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">确认删除</button>
+                <button @click.stop="confirmDeleteId=''" class="px-3 py-1.5 rounded-lg bg-space-800 border border-space-700 text-slate-300 text-xs">取消</button>
+              </div>
+            </div>
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-sm text-white truncate" x-text="p.name"></span>
+                  <span class="w-2 h-2 rounded-full shrink-0" :class="providerDot(p.id)"></span>
+                </div>
+                <p class="text-[11px] font-mono text-slate-500 truncate mt-0.5" x-text="p.base_url || ('builtin://'+p.provider_type)"></p>
+              </div>
+              <span class="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded border" :class="typeBadgeClass(p.provider_type)" x-text="p.provider_type"></span>
+            </div>
+            <p class="mt-2.5 text-xs font-mono text-cyan-300/90 truncate" x-text="p.default_model || '—'"></p>
+            <div class="mt-3 flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <template x-for="m in slotBadges(p.id)" :key="m"><span class="text-[10px] px-1 py-0.5 rounded bg-space-800 border border-space-700" x-text="m"></span></template>
+                <span x-show="!p.is_enabled" class="text-[10px] px-1 py-0.5 rounded bg-rose-950 border border-rose-800 text-rose-300">停用</span>
+              </div>
+              <span class="text-[10px] font-mono text-slate-500" x-text="latencyText(p.id)"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+      <p x-show="!filteredProviders().length" class="text-center text-slate-500 font-mono text-xs py-10">没有匹配的供应商</p>
+    </div>
+
+    <!-- ═══════════ REGION 4: 账号池 ═══════════ -->
+    <div x-show="currentTab===4" x-cloak class="space-y-5">
+      <template x-if="pool.enabled">
+        <div class="space-y-5">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="glass-panel hud-box rounded-xl p-4"><p class="text-[11px] font-mono text-slate-400 uppercase">账号总数</p><p class="mt-1 font-mono text-2xl font-bold text-white" x-text="pool.total_accounts"></p></div>
+            <div class="glass-panel hud-box rounded-xl p-4"><p class="text-[11px] font-mono text-slate-400 uppercase">Active</p><p class="mt-1 font-mono text-2xl font-bold text-emerald-400" x-text="pool.active"></p></div>
+            <div class="glass-panel hud-box rounded-xl p-4"><p class="text-[11px] font-mono text-slate-400 uppercase">有配额账号</p><p class="mt-1 font-mono text-2xl font-bold text-cyan-300" x-text="pool.with_quota"></p></div>
+            <div class="glass-panel hud-box rounded-xl p-4"><p class="text-[11px] font-mono text-slate-400 uppercase">剩余生图配额</p><p class="mt-1 font-mono text-2xl font-bold text-neon-green" x-text="'≈'+pool.quota_remaining_sum"></p><p class="text-[10px] text-slate-500 font-mono">fast 配额合计（张）</p></div>
+          </div>
+          <div class="glass-panel hud-box rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2"><i data-lucide="database" class="w-4 h-4 text-neon-green"></i>grok 账号池配额热力图 <span class="text-[10px] text-slate-500 font-normal">绿=满 红=空 · 只读 · 悬停看详情</span></h3>
+              <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400">
+                <span x-text="'每日刷新 worker: '+(timers['grok-refresh']?.timer ? '🟢 在岗 (03:10)' : '⚪ 状态未知')"></span>
+                <button @click="loadPool()" class="px-2 py-1 rounded-md bg-space-850 border border-space-700 hover:border-cyan-400 transition">刷新数据</button>
+              </div>
+            </div>
+            <div class="grid-scanner rounded-lg p-3 bg-space-950/60 border border-space-800">
+              <div class="grid gap-1.5" style="grid-template-columns: repeat(auto-fill, minmax(26px, 1fr));">
+                <template x-for="(a,i) in pool.accounts" :key="'a'+i+a.fp">
+                  <div class="quota-cell relative aspect-square rounded cursor-pointer border transition hover:scale-110" :style="cellColor(a)">
+                    <div class="quota-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 p-2.5 rounded-lg glass-panel-glow text-[10px] font-mono text-slate-300 opacity-0 invisible transition-all z-20 pointer-events-none">
+                      <p class="text-cyan-300 font-bold" x-text="a.fp"></p>
+                      <p class="mt-1" x-text="'status: '+a.status"></p>
+                      <p x-text="'配额: '+(a.remaining ?? '?')+' / '+(a.total ?? '?')"></p>
+                      <p x-show="a.last_fail_reason" class="text-rose-400" x-text="'fail: '+a.last_fail_reason"></p>
+                      <p class="text-slate-500 truncate" x-text="String(a.updated_at||'')"></p>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template x-if="!pool.enabled">
+        <div class="glass-panel rounded-xl p-8 text-center">
+          <p class="text-sm text-slate-400" x-text="pool.message || '账号池数据不可读（GROK_ACCOUNTS_DB 未指向有效 accounts.db）'"></p>
+          <p class="text-[11px] font-mono text-slate-600 mt-2">hub 所在宿主机需能只读访问 grok2api 的 sqlite</p>
+        </div>
+      </template>
+    </div>
+
+    <!-- ═══════════ REGION 5: 可观测 ═══════════ -->
+    <div x-show="currentTab===5" x-cloak class="space-y-5">
+      <div class="grid lg:grid-cols-2 gap-4">
+        <div class="glass-panel hud-box rounded-xl p-4">
+          <h3 class="font-bold text-sm text-slate-100 mb-3 flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-4 h-4 text-cyan-400"></i>saiOS 任务用量 by_model <span class="text-[10px] text-slate-500 font-normal" x-text="usage.enabled ? '' : '(SAIOS_DB_URL 未接通)'"></span></h3>
+          <div class="space-y-2.5 font-mono text-xs max-h-64 overflow-y-auto">
+            <template x-for="m in (usage.by_model||[]).slice(0,10)" :key="'um'+m.model">
+              <div>
+                <div class="flex justify-between text-slate-300 mb-1"><span class="truncate mr-2" x-text="m.model"></span><span class="text-cyan-300 shrink-0" x-text="m.count + ((m.succeeded!=null)?(' ✓'+m.succeeded):'')"></span></div>
+                <div class="w-full h-1.5 bg-space-950 rounded-full overflow-hidden"><div class="h-full bg-gradient-to-r from-cyan-500 to-indigo-400 rounded-full" :style="'width:'+barWidth(m.count)+'%'"></div></div>
+              </div>
+            </template>
+            <p x-show="!(usage.by_model||[]).length" class="text-slate-500 py-4 text-center">暂无数据</p>
+          </div>
+        </div>
+        <div class="glass-panel hud-box rounded-xl p-4">
+          <h3 class="font-bold text-sm text-slate-100 mb-3 flex items-center gap-2"><i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i>近期异常分布 <span class="text-[10px] text-slate-500 font-normal">（事件流实时聚合）</span></h3>
+          <div class="space-y-4 font-mono text-xs">
+            <template x-for="e in failTop()" :key="'ft'+e.k">
+              <div>
+                <div class="flex justify-between text-slate-300 mb-1"><span x-text="e.k"></span><span class="text-rose-400 font-bold" x-text="e.pct+'%'"></span></div>
+                <div class="w-full h-2 bg-space-950 rounded-full overflow-hidden"><div class="h-full bg-rose-500 rounded-full" :style="'width:'+e.pct+'%'"></div></div>
+              </div>
+            </template>
+            <p x-show="!failTop().length" class="text-slate-500 py-4 text-center">近期零异常 🎉</p>
+          </div>
+        </div>
+      </div>
+      <div class="glass-panel hud-box rounded-xl p-4">
+        <h3 class="font-bold text-sm text-slate-100 mb-3 flex items-center gap-2"><i data-lucide="scroll-text" class="w-4 h-4 text-neon-purple"></i>proxy 网关调用日志 <span class="text-[10px] text-slate-500 font-normal">（最近 50 条 · 降级标紫）</span></h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs font-mono">
+            <thead><tr class="text-left text-slate-500 border-b border-space-750">
+              <th class="py-2 pr-3">时间</th><th class="pr-3">供应商</th><th class="pr-3">路径</th><th class="pr-3">模型</th>
+              <th class="pr-3">延迟</th><th class="pr-3">状态</th><th>降级</th></tr></thead>
+            <tbody>
+              <template x-for="(c,i) in calls.slice(0,50)" :key="'c'+i+c.time">
+                <tr class="border-b border-space-850 hover:bg-space-850/50">
+                  <td class="py-1.5 pr-3 text-slate-500" x-text="c.time"></td>
+                  <td class="pr-3 text-slate-200" x-text="c.provider"></td>
+                  <td class="pr-3 text-slate-400" x-text="c.path"></td>
+                  <td class="pr-3 text-cyan-300/80 truncate max-w-[220px]" x-text="c.model"></td>
+                  <td class="pr-3" :class="c.latency_ms>3000?'text-amber-400':'text-slate-300'" x-text="c.latency_ms+'ms'"></td>
+                  <td class="pr-3" :class="c.status<400?'text-emerald-400':'text-rose-400'" x-text="c.status"></td>
+                  <td><span x-show="c.fallback" class="px-1.5 rounded bg-neon-purple/20 text-purple-300 text-[10px] font-bold">DEGRADED</span><span x-show="!c.fallback" class="text-slate-600">—</span></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          <p x-show="!calls.length" class="text-slate-500 py-6 text-center text-xs font-mono">暂无调用 — 向 /proxy/v1 发一个请求试试（接入中心有现成片段）</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ REGION 6: 接入中心 ═══════════ -->
+    <div x-show="currentTab===6" x-cloak class="space-y-6">
+      <div class="glass-panel-glow rounded-xl p-5 shadow-2xl flex flex-wrap items-center justify-between gap-4">
+        <div class="space-y-1">
+          <h2 class="font-bold text-slate-100 text-base font-cyber">OpenAI 兼容统一 Proxy 网关</h2>
+          <p class="text-xs text-slate-400 font-mono">按 text 链自动降级 · 服务器内网任意进程/容器可接 · api_key 任意（除非设置了 MODEL_HUB_PROXY_KEY）</p>
+        </div>
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <input type="text" readonly :value="gatewayBase" class="bg-space-950 border border-space-700 rounded-lg px-3.5 py-2 text-cyan-300 font-mono text-xs w-full md:w-80 select-all">
+          <button @click="copyToClipboard(gatewayBase)" class="px-4 py-2 bg-cyan-400 hover:bg-cyan-300 text-space-950 font-bold text-xs rounded-xl font-mono transition shrink-0 flex items-center gap-2 shadow-lg shadow-cyan-950/50">
+            <i data-lucide="copy" class="w-4 h-4"></i><span>一键复制</span>
+          </button>
+        </div>
+      </div>
+      <div class="glass-panel rounded-xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-space-700/80 pb-3">
+          <h3 class="font-bold text-sm text-slate-100">代码片段快速生成器 <span class="text-[10px] text-slate-500 font-normal">model 自动填当前 text 链首模型</span></h3>
+          <div class="flex gap-2 font-mono text-xs">
+            <template x-for="l in [['curl','cURL'],['python','Python OpenAI'],['node','Node.js']]" :key="l[0]">
+              <button @click="snippetLang=l[0]" class="px-3 py-1 rounded-lg border transition"
+                      :class="snippetLang===l[0] ? 'bg-cyan-950 text-cyan-300 border-cyan-600' : 'bg-space-850 text-slate-400 border-space-700'" x-text="l[1]"></button>
+            </template>
+          </div>
+        </div>
+        <div class="relative bg-space-950 border border-space-750 rounded-xl p-4 font-mono text-xs text-slate-300 overflow-x-auto">
+          <button @click="copyToClipboard(snippetCode())" class="absolute top-3 right-3 px-3 py-1.5 bg-space-850 hover:bg-space-800 border border-space-700 rounded-lg text-slate-300 text-[10px] transition z-10">复制</button>
+          <pre class="whitespace-pre-wrap break-words pt-8" x-text="snippetCode()"></pre>
+        </div>
+      </div>
+      <div class="glass-panel rounded-xl p-5">
+        <h3 class="font-bold text-sm text-slate-100 mb-3">已接入消费者</h3>
+        <div class="grid sm:grid-cols-2 gap-3 text-xs font-mono">
+          <div class="flex items-center justify-between bg-space-900/60 rounded-lg px-3 py-2.5 border border-space-750">
+            <div><p class="text-slate-200 font-semibold">memory-core</p><p class="text-slate-500 text-[10px] mt-0.5">TDAI_LLM_BASE_URL → hub proxy</p></div>
+            <span class="text-emerald-400">已验证</span>
+          </div>
+          <div class="flex items-center justify-between bg-space-900/60 rounded-lg px-3 py-2.5 border border-space-750">
+            <div><p class="text-slate-200 font-semibold">saiOS api/worker</p><p class="text-slate-500 text-[10px] mt-0.5">MODEL_HUB_BASE_URL 直连 API</p></div>
+            <span class="text-emerald-400">已验证</span>
+          </div>
+          <div class="flex items-center justify-between bg-space-900/40 rounded-lg px-3 py-2.5 border border-dashed border-space-700">
+            <div><p class="text-slate-400">SillyTavern / writers / ten</p><p class="text-slate-600 text-[10px] mt-0.5">同法可接 · base_url 换成网关即可</p></div>
+            <span class="text-slate-500">待接入</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ REGION 7: 系统 ═══════════ -->
+    <div x-show="currentTab===7" x-cloak class="space-y-5">
+      <div class="grid lg:grid-cols-2 gap-4">
+        <div class="glass-panel hud-box rounded-xl p-4">
+          <h3 class="font-bold text-sm text-slate-100 mb-3 flex items-center gap-2"><i data-lucide="archive" class="w-4 h-4 text-amber-400"></i>备份快照 <span class="text-[10px] text-slate-500 font-normal" x-text="backups.backups?.length ? backups.backups.length+' 份轮转留存' : ''"></span></h3>
+          <div class="space-y-1 font-mono text-xs max-h-56 overflow-y-auto">
+            <template x-for="b in backups.backups" :key="b.path">
+              <div class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-space-850/70">
+                <span class="text-slate-300 truncate mr-2" x-text="b.file"></span>
+                <span class="text-slate-500 shrink-0" x-text="b.size_kb+' KB · '+b.mtime"></span>
+              </div>
+            </template>
+            <p x-show="!backups.backups?.length" class="text-slate-500 py-4 text-center">备份目录暂无快照（backup.timer 每日 03:40）</p>
+          </div>
+        </div>
+        <div class="glass-panel hud-box rounded-xl p-4 space-y-3">
+          <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2"><i data-lucide="settings-2" class="w-4 h-4 text-cyan-400"></i>运维操作</h3>
+          <div class="grid grid-cols-2 gap-2.5 text-xs font-mono">
+            <button @click="exportConfig()" class="px-3 py-2.5 rounded-lg bg-space-850 border border-space-700 hover:border-cyan-400 transition text-left">⬇ 导出配置<br><span class="text-[10px] text-slate-500">providers+链+prompts 含 key</span></button>
+            <label class="px-3 py-2.5 rounded-lg bg-space-850 border border-space-700 hover:border-cyan-400 transition text-left cursor-pointer">⬆ 导入恢复<br><span class="text-[10px] text-slate-500">覆盖式 · 请先导出备份</span>
+              <input type="file" accept=".json" class="hidden" @change="importConfig($event)"></label>
+            <button @click="checkEnvConflicts()" class="px-3 py-2.5 rounded-lg bg-space-850 border border-space-700 hover:border-cyan-400 transition text-left">🔍 env 冲突检查<br><span class="text-[10px] text-slate-500" x-text="envConflictText"></span></button>
+            <div class="px-3 py-2.5 rounded-lg bg-space-900/60 border border-space-800 text-left text-slate-400">🛡️ 自愈守卫<br><span class="text-[10px] text-slate-500" x-text="timers['model-hub-guard']?.timer ? 'guard.timer active 每分钟巡检' : '状态未知'"></span></div>
+          </div>
+          <p class="text-[10px] font-mono text-slate-600 leading-relaxed pt-1">铁律：生产服务唯一入口 = systemctl --user（172.17.0.1 绑定）。严禁手动 uvicorn；
+          系统级同名 unit 已于 2026-08-24 摘除，重启服务器不会再出现 0.0.0.0 僵尸。</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══ Provider 抽屉 ═══ -->
+  <div x-show="drawerOpen" x-cloak class="fixed inset-0 z-50">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="drawerOpen=false"></div>
+    <aside class="absolute top-0 right-0 h-full w-full max-w-md bg-space-900 border-l border-space-700 shadow-2xl overflow-y-auto p-5 space-y-4">
+      <div class="flex items-center justify-between sticky -top-5 -mt-5 pt-5 pb-3 bg-space-900 z-10">
+        <h3 class="font-bold text-base text-white font-cyber truncate" x-text="drawerP?.name"></h3>
+        <button @click="drawerOpen=false" class="p-1.5 rounded-md hover:bg-space-800 text-slate-400 shrink-0">✕</button>
+      </div>
+      <template x-if="drawerP">
+        <div class="space-y-4 text-xs font-mono">
+          <div class="glass-panel-glow rounded-lg p-3 space-y-1.5">
+            <p class="flex justify-between"><span class="text-slate-500">类型</span><span class="text-cyan-300" x-text="drawerP.provider_type"></span></p>
+            <p class="flex justify-between gap-3"><span class="text-slate-500 shrink-0">base_url</span><span class="text-slate-300 truncate" x-text="drawerP.base_url || 'builtin'"></span></p>
+            <p class="flex justify-between gap-3"><span class="text-slate-500 shrink-0">默认模型</span><span class="text-slate-300 truncate" x-text="drawerP.default_model || '—'"></span></p>
+            <p class="flex justify-between"><span class="text-slate-500">密钥</span><span class="text-slate-300" x-text="drawerP.has_api_key ? '已配置 🔒' : '无'"></span></p>
+            <p class="flex justify-between"><span class="text-slate-500">优先级</span><span class="text-slate-300" x-text="drawerP.priority"></span></p>
+            <p class="flex justify-between"><span class="text-slate-500">上次探测</span><span class="text-slate-300" x-text="(drawerP.last_ok===1?'✓ 通过':(drawerP.last_ok===0?'✗ 失败':'—')) + ' ' + latencyText(drawerP.id)"></span></p>
+            <p class="flex justify-between"><span class="text-slate-500">所在链路</span><span class="text-slate-300" x-text="slotBadges(drawerP.id).join('  ') || '未挂链'"></span></p>
+          </div>
+          <div id="probe-result" class="hidden bg-space-950 border border-space-750 rounded-lg p-3 text-slate-300 space-y-1"></div>
+          <p x-show="balanceText" x-text="balanceText" class="text-slate-300 bg-space-950 border border-space-750 rounded-lg p-3 break-words"></p>
+          <div class="grid grid-cols-2 gap-2">
+            <button @click="testProvider(drawerP.id)" class="px-3 py-2 rounded-lg bg-space-850 border border-space-700 hover:border-cyan-400 transition">⚡ 连通测试</button>
+            <button @click="checkBalance(drawerP.id)" class="px-3 py-2 rounded-lg bg-space-850 border border-space-700 hover:border-cyan-400 transition">💰 查余额</button>
+            <button @click="openModal(drawerP.id)" class="px-3 py-2 rounded-lg bg-space-850 border border-space-700 hover:border-cyan-400 transition">✏️ 编辑</button>
+            <button @click="dupProvider(drawerP.id)" class="px-3 py-2 rounded-lg bg-space-850 border border-space-700 hover:border-cyan-400 transition">📄 复制</button>
+          </div>
+          <button @click="confirmDeleteId=drawerP.id; drawerOpen=false; currentTab=3" class="w-full px-3 py-2 rounded-lg bg-rose-950/70 border border-rose-800 text-rose-300 hover:bg-rose-900/60 transition">🗑 删除此供应商</button>
+        </div>
+      </template>
+    </aside>
+  </div>
+
+  <!-- ═══ 新增/编辑 Modal ═══ -->
+  <div x-show="modalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="closeModal()"></div>
+    <div class="relative glass-panel-glow rounded-2xl w-full max-w-lg p-5 space-y-3.5 max-h-[88vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-base text-white" x-text="editId ? '编辑供应商' : '新增供应商'"></h3>
+        <button @click="closeModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-1">
+        <label class="text-[10px] font-mono text-slate-500 uppercase">从预设快速填充</label>
+        <select x-model="form.preset" @change="applyPreset()" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 outline-none focus:border-cyan-400">
+          <option value="">— 手动填写 —</option>
+          <template x-for="cat in presetCats()" :key="cat">
+            <optgroup :label="cat">
+              <template x-for="p in presetsByCat(cat)" :key="p.key">
+                <option :value="p.key" x-text="p.name + ' · ' + (p.desc||'')"></option>
+              </template>
+            </optgroup>
+          </template>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2 space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">名称 *</label>
+          <input x-model="form.name" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none"></div>
+        <div class="space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">类型</label>
+          <select x-model="form.provider_type" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none">
+            <option value="openai_compatible">openai_compatible</option><option value="chat_image">chat_image</option>
+            <option value="edge_tts">edge_tts</option><option value="zarklab">zarklab</option>
+          </select></div>
+        <div class="space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">分组标签</label>
+          <input x-model="form.group_tag" placeholder="文本/图像…" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none"></div>
+        <div class="col-span-2 space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">base_url</label>
+          <input x-model="form.base_url" placeholder="https://…/v1（本地型如 edge_tts 可留空）" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none"></div>
+        <div class="col-span-2 space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">API Key（编辑时留空=不改）</label>
+          <input x-model="form.api_key" type="password" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none"></div>
+        <div class="col-span-2 space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">默认模型</label>
+          <div class="flex gap-2">
+            <input x-model="form.default_model" class="flex-1 bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none">
+            <button @click="fetchModels()" class="px-3 rounded-lg bg-space-800 border border-space-700 text-[11px] font-mono text-slate-300 hover:border-cyan-400 transition shrink-0">拉取列表</button>
+          </div>
+          <div x-show="fetchedModels.length" class="max-h-32 overflow-y-auto mt-1.5 space-y-1">
+            <template x-for="m in fetchedModels" :key="m">
+              <button @click="form.default_model=m" class="block w-full text-left px-2 py-1 rounded bg-space-900 border border-space-800 hover:border-cyan-500 text-[11px] font-mono text-slate-300 truncate" x-text="m"></button>
+            </template>
+          </div>
+        </div>
+        <div class="space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">优先级</label>
+          <input x-model.number="form.priority" type="number" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none"></div>
+        <div class="flex items-end pb-1"><label class="flex items-center gap-2 text-xs font-mono text-slate-300"><input x-model="form.is_enabled" type="checkbox" class="accent-cyan-500"> 启用</label></div>
+        <div class="col-span-2 space-y-1"><label class="text-[10px] font-mono text-slate-500 uppercase">备注</label>
+          <input x-model="form.note" class="w-full bg-space-950 border border-space-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 outline-none"></div>
+      </div>
+      <div class="flex justify-end gap-2 pt-1">
+        <button @click="closeModal()" class="px-4 py-2 rounded-lg bg-space-850 border border-space-700 text-slate-300 text-xs font-mono">取消</button>
+        <button @click="saveProvider()" class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-space-950 text-xs font-bold font-mono">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Toasts ═══ -->
+  <div class="fixed bottom-4 right-4 z-[60] space-y-2 w-80 max-w-[90vw]">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="toast-in glass-panel-glow rounded-xl px-4 py-3 text-xs font-mono flex items-start gap-2"
+           :class="t.ok ? 'text-emerald-300' : 'text-rose-300'">
+        <span x-text="t.ok ? '✅' : '❌'"></span><span class="flex-1 break-all" x-text="t.msg"></span>
+      </div>
+    </template>
+  </div>
+
+<script>
+function controlPlane() {
+  return {
+    // ── 常量 ──
+    SLOT_META: [
+      { key:'text',  label:'对话', icon:'💬' },
+      { key:'image', label:'生图', icon:'🎨' },
+      { key:'video', label:'视频', icon:'🎬' },
+      { key:'audio', label:'语音', icon:'🔊' },
+      { key:'music', label:'音乐', icon:'🎵' },
+    ],
+    TABS: [
+      { name:'总览', icon:'📡' }, { name:'能力路由', icon:'🚇' }, { name:'供应商', icon:'🔌' },
+      { name:'账号池', icon:'🗄️' }, { name:'可观测', icon:'📈' }, { name:'接入中心', icon:'🔗' }, { name:'系统', icon:'⚙️' },
+    ],
+    FILTERS: ['all','文本','图像','语音','停用'],
+
+    // ── 状态 ──
+    currentTab: 1, refreshing: false,
+    providers: [], chains: {}, presets: [],
+    usage: {}, events: [], calls: [], pool: { enabled:false, accounts: [] },
+    timers: {}, backups: { backups: [] },
+    appendPick: {}, testPrompt: '', testResult: '', testOk: false,
+    providerFilter: 'all', confirmDeleteId: '',
+    drawerOpen: false, drawerP: null, balanceText: '',
+    modalOpen: false, editId: null,
+    form: { preset:'', name:'', provider_type:'openai_compatible', base_url:'', api_key:'', default_model:'', priority:1, is_enabled:true, group_tag:'', note:'' },
+    fetchedModels: [], snippetLang: 'python',
+    toasts: [], _tid: 0,
+    envConflictText: '点我检查',
+
+    get gatewayBase() { return location.origin + '/proxy/v1'; },
+
+    // ── 初始化 ──
+    async initApp() {
+      await this.refreshAll();
+      setInterval(() => this.pollLight(), 30000);
+      this.startCanvas();
+    },
+    async refreshAll() {
+      this.refreshing = true;
+      try {
+        await Promise.all([this.loadProviders(), this.loadChains(), this.loadUsage(), this.loadEvents(),
+                           this.loadCalls(), this.loadPool(), this.loadTimers(), this.loadBackups(), this.loadPresets()]);
+      } finally { this.refreshing = false; }
+      this.$nextTick(() => window.lucide && lucide.createIcons());
+    },
+    async pollLight() {
+      await Promise.all([this.loadEvents(), this.loadCalls(), this.loadChains()]);
+    },
+    async api(path, opts={}) {
+      const r = await fetch(path, opts);
+      if (!r.ok) {
+        let msg = r.statusText;
+        try { const j = await r.json(); msg = j.detail || j.message || JSON.stringify(j).slice(0,160); } catch(e){}
+        throw new Error(msg);
+      }
+      return r.status === 204 ? null : r.json();
+    },
+    async loadProviders() { try { this.providers = await this.api('/api/providers'); } catch(e){ this.toast('providers 加载失败: '+e.message,false);} },
+    async loadChains() {
+      try {
+        const d = await this.api('/api/active');
+        const c = {}; for (const s of this.SLOT_META) c[s.key] = (d.slots_chain && d.slots_chain[s.key]) || [];
+        this.chains = c;
+      } catch(e){}
+    },
+    async loadPresets() { try { this.presets = await this.api('/api/presets'); } catch(e){} },
+    async loadUsage() { try { this.usage = await this.api('/api/usage'); } catch(e){ this.usage={enabled:false}; } },
+    async loadEvents() { try { this.events = (await this.api('/api/events?limit=200')).events; } catch(e){} },
+    async loadCalls() { try { this.calls = (await this.api('/api/calls/recent?limit=50')).calls; } catch(e){} },
+    async loadPool() { try { this.pool = await this.api('/api/pools/grok'); } catch(e){ this.pool={enabled:false}; } },
+    async loadTimers() { try { this.timers = await this.api('/api/system/timers'); } catch(e){ this.timers={}; } },
+    async loadBackups() { try { this.backups = await this.api('/api/system/backups'); } catch(e){} },
+
+    // ── 派生视图 ──
+    primaryName(slot) { const n=this.chains[slot]?.[0]?.name; return n||''; },
+    slotHealth(slot) {
+      const c=this.chains[slot]; if(!c||!c.length) return 'empty';
+      for (const p of c) { const pr=this.providerById(p.id); if (!pr) continue; if (!pr.is_enabled || pr.last_ok===0) return 'degraded'; }
+      return 'ok';
+    },
+    providerById(id) { return this.providers.find(p=>p.id===id); },
+    providerDot(id) {
+      const p=this.providerById(id);
+      if(!p) return 'bg-space-600';
+      if(!p.is_enabled) return 'bg-neon-amber led-amber';
+      if(p.last_ok===1) return 'bg-neon-green led-emerald';
+      if(p.last_ok===0) return 'bg-neon-pink led-rose';
+      return 'bg-space-600';
+    },
+    latencyText(id) { const p=this.providerById(id); return (p&&p.last_latency_ms!=null)?p.last_latency_ms+'ms':'—'; },
+    slotBadges(pid) {
+      const out=[];
+      for(const s of this.SLOT_META){
+        const idx=(this.chains[s.key]||[]).findIndex(p=>p.id===pid);
+        if(idx===0) out.push(s.icon+'主'); else if(idx>0) out.push(s.icon+'备'+idx);
+      }
+      return out;
+    },
+    candidatesFor(slot) {
+      const inChain=new Set((this.chains[slot]||[]).map(p=>p.id));
+      return this.providers.filter(p=>!inChain.has(p.id));
+    },
+    filteredProviders() {
+      let ps=this.providers;
+      const f=this.providerFilter;
+      if(f==='停用') ps=ps.filter(p=>!p.is_enabled);
+      else if(f==='文本') ps=ps.filter(p=>(p.capabilities&&p.capabilities.text));
+      else if(f==='图像') ps=ps.filter(p=>(p.capabilities&&p.capabilities.image)||p.provider_type==='chat_image'||p.provider_type==='zarklab');
+      else if(f==='语音') ps=ps.filter(p=>p.provider_type==='edge_tts');
+      return ps;
+    },
+    kpiCards() {
+      const today=(this.usage.by_day||[])[0];
+      const deg=this.events.filter(e=>e.type==='FAILOVER').length;
+      return [
+        { label:'累计创作任务', value:(this.usage.total??'—')+'', sub:'saiOS generation_tasks', color:'text-white' },
+        { label:'最近任务日', value:String(today?today.count:'0'), sub:today?('· '+today.date):'', color:'text-cyan-300' },
+        { label:'近期降级事件', value:String(deg), sub:'FAILOVER · ring buffer', color: deg?'text-neon-pink':'text-emerald-400' },
+        { label:'grok 生图余量', value:this.pool.enabled?('≈'+this.pool.quota_remaining_sum):'—',
+          sub:this.pool.enabled?(this.pool.total_accounts+' 号池 · '+this.pool.active+' active'):'', color:'text-neon-green' },
+      ];
+    },
+    barWidth(n) { const arr=(this.usage.by_model||[]); const mx=Math.max(...arr.map(x=>x.count),1); return Math.max(3, Math.round(n/mx*100)); },
+    failTop() {
+      const cnt={};
+      for(const e of this.events){
+        if(e.type!=='FAILOVER'&&e.type!=='WARN') continue;
+        let k=null;
+        const m=/HTTP (\d+)/.exec(e.msg);
+        if(m) k='HTTP '+m[1];
+        else if(e.msg.includes('连接失败')) k='连接错误';
+        else k='其他';
+        cnt[k]=(cnt[k]||0)+1;
+      }
+      const total=Object.values(cnt).reduce((a,b)=>a+b,0)||1;
+      return Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,5)
+        .map(([k,v])=>({k,v,pct:Math.max(3,Math.round(v/total*100))}));
+    },
+    typeBadgeClass(t){
+      if(t==='chat_image') return 'bg-neon-pink/10 text-neon-pink border-pink-800';
+      if(t==='edge_tts') return 'bg-emerald-900/40 text-emerald-300 border-emerald-800';
+      return 'bg-cyan-900/40 text-cyan-300 border-cyan-800';
+    },
+    cellColor(a){
+      if(a.remaining==null||a.remaining==undefined) return 'background:#131D33;border-color:#233357';
+      const tot=(a.total&&a.total>0)?a.total:30;
+      const ratio=Math.max(0,Math.min(1,a.remaining/tot));
+      const g=Math.round(ratio*170)+40, r=Math.round((1-ratio)*220)+35;
+      return 'background:rgba('+r+','+g+',70,.30);border-color:rgba('+r+','+g+',70,.55)';
+    },
+    presetCats(){ return [...new Set(this.presets.map(p=>p.category))]; },
+    presetsByCat(c){ return this.presets.filter(p=>p.category===c); },
+
+    // ── 链操作 ──
+    async postActive(body, okMsg) {
+      try {
+        await this.api('/api/active',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        await this.loadChains(); this.toast(okMsg);
+      } catch(e){ this.toast('操作失败: '+e.message,false); }
+    },
+    promote(slot,pid){ const n=(this.providerById(pid)||{}).name||pid; this.postActive({slot:slot,provider_id:pid,mode:'promote'},n+' 升为 '+slot+' 主选'); },
+    removeFromSlot(slot,pid){ const n=(this.providerById(pid)||{}).name||pid; this.postActive({slot:slot,provider_id:pid,mode:'remove'},n+' 已移出 '+slot+' 链'); },
+    appendSlot(slot){ const pid=this.appendPick[slot]; if(!pid)return;
+      const n=(this.providerById(pid)||{}).name||pid; this.appendPick[slot]='';
+      this.postActive({slot:slot,provider_id:pid,mode:'append'},n+' 加入 '+slot+' 链尾'); },
+    unsetPrimary(slot){ this.postActive({slot:slot,provider_id:'',mode:'clear'},slot+' 槽位已清空（合法空态）'); },
+
+    // ── 路由发包测试（打真实 proxy，从 calls/recent 反查实际服务者）──
+    async testLiveRoute(){
+      const chain=this.chains.text||[];
+      if(!chain.length){ this.testOk=false; this.testResult='text 链为空 — 无法测试'; return; }
+      const msg=(this.testPrompt||'ping').slice(0,200);
+      this.testResult='⏳ 已发出真实请求，经 /proxy/v1 链路路由中…'; this.testOk=true;
+      try{
+        const r=await fetch('/proxy/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({model:chain[0].default_model,messages:[{role:'user',content:msg}],max_tokens:24})});
+        const j=await r.json().catch(()=>({}));
+        if(r.ok){
+          await new Promise(res=>setTimeout(res,500));
+          let c=null; try{ c=(await this.api('/api/calls/recent?limit=1')).calls[0]; }catch(e){}
+          this.testOk=true;
+          this.testResult='✅ HTTP '+r.status+' · 实际由「'+((c&&c.provider)||chain[0].name)+'」服务'+(c?(' · '+c.latency_ms+'ms · fallback='+c.fallback):'');
+        } else { this.testOk=false; this.testResult='❌ HTTP '+r.status+' '+((j.error&&j.error.message)||''); }
+      }catch(e){ this.testOk=false; this.testResult='❌ '+e.message; }
+    },
+
+    // ── Provider CRUD ──
+    openModal(id){
+      this.editId=id; this.fetchedModels=[]; this.form.preset='';
+      const p=id?this.providerById(id):null;
+      this.form = p
+        ? {preset:'',name:p.name,provider_type:p.provider_type,base_url:p.base_url||'',api_key:'',default_model:p.default_model||'',priority:p.priority,is_enabled:p.is_enabled,group_tag:p.group_tag||'',note:p.note||''}
+        : {preset:'',name:'',provider_type:'openai_compatible',base_url:'',api_key:'',default_model:'',priority:1,is_enabled:true,group_tag:'',note:''};
+      this.modalOpen=true; this.drawerOpen=false;
+    },
+    closeModal(){ this.modalOpen=false; },
+    applyPreset(){
+      const p=this.presets.find(x=>x.key===this.form.preset); if(!p)return;
+      this.form.name=p.name; this.form.provider_type=p.provider_type;
+      this.form.base_url=p.base_url; this.form.default_model=p.default_model; this.form.group_tag=p.category||'';
+    },
+    async fetchModels(){
+      if(!this.form.base_url){ this.toast('先填 base_url',false); return; }
+      try{
+        const d=await this.api('/api/models/fetch',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({base_url:this.form.base_url,api_key:this.form.api_key,provider_type:this.form.provider_type})});
+        this.fetchedModels=(d.models||[]).map(m=>(typeof m==='string')?m:(m.id||m.name)).filter(Boolean).slice(0,60);
+        if(!this.fetchedModels.length) this.toast((d.error||'上游未返回模型'),false);
+      }catch(e){ this.toast('拉取失败: '+e.message,false); }
+    },
+    async saveProvider(){
+      const b=Object.assign({},this.form); delete b.preset;
+      if(!b.name){ this.toast('名称必填',false); return; }
+      try{
+        if(this.editId) await this.api('/api/providers/'+this.editId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+        else await this.api('/api/providers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+        this.closeModal(); await this.loadProviders(); await this.loadChains(); this.toast('已保存');
+      }catch(e){ this.toast('保存失败: '+e.message,false); }
+    },
+    async delProvider(id){
+      this.confirmDeleteId='';
+      try{ await this.api('/api/providers/'+id,{method:'DELETE'});
+        await Promise.all([this.loadProviders(),this.loadChains()]);
+        this.toast('已删除并同步清理所有链路引用');
+      }catch(e){ this.toast('删除失败: '+e.message,false); }
+    },
+    openDrawer(p){ this.drawerP=p; this.balanceText=''; this.drawerOpen=true;
+      setTimeout(()=>{ const b=document.getElementById('probe-result'); if(b){b.classList.add('hidden'); b.innerHTML='';} },50); },
+    async testProvider(id){
+      const box=document.getElementById('probe-result');
+      if(box){ box.classList.remove('hidden'); box.innerHTML='<p class="text-slate-400 animate-pulse">⚡ 测试中（真实最小请求）…</p>'; }
+      try{
+        const d=await this.api('/api/providers/'+id+'/test',{method:'POST'});
+        if(box){
+          box.innerHTML=(d.results||[]).map(function(r){
+            return '<p>'+(r.ok?'✅':'❌')+' '+r.check+': '+(r.ok?('HTTP '+r.http+(r.ttfb_ms?' TTFB '+r.ttfb_ms+'ms':'')):((r.error||r.detail||'').slice(0,90)))+'</p>';
+          }).join('')
+          +'<p class="pt-1 '+(d.ok?'text-emerald-400':'text-rose-400')+'">'+(d.ok?'总体通过':'总体失败')+((d.latency_ms!=null)?' · '+d.latency_ms+'ms':'')+'</p>';
+        }
+        await this.loadProviders();
+      }catch(e){ if(box) box.innerHTML='<p class="text-rose-400">❌ '+e.message+'</p>'; }
+    },
+    async checkBalance(id){
+      this.balanceText='查询中…';
+      try{
+        const d=await this.api('/api/providers/'+id+'/balance');
+        this.balanceText=d.supported?('余额: used=$'+(d.usage!=null?d.usage:'?')+' limit='+((d.limit==null)?'无限':('$'+d.limit))+' remaining='+((d.limit_remaining==null)?'∞':('$'+d.limit_remaining))):(d.message||'不支持');
+      }catch(e){ this.balanceText='查询失败: '+e.message; }
+    },
+    async dupProvider(id){
+      try{ await this.api('/api/providers/'+id+'/duplicate',{method:'POST'}); await this.loadProviders();
+        this.toast('已复制（出于安全 key 不回显，新副本需重填 key）');
+      }catch(e){ this.toast(e.message,false); }
+    },
+
+    // ── 系统 ──
+    async exportConfig(){
+      try{
+        const d=await this.api('/api/export');
+        const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+        const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+        a.download='model-hub-export-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
+        this.toast('已导出（含 key，妥善保管）');
+      }catch(e){ this.toast(e.message,false); }
+    },
+    async importConfig(ev){
+      const f=ev.target.files[0]; if(!f)return;
+      if(!confirm('导入将覆盖全部现有配置，确定继续？'))return;
+      try{
+        const body=JSON.parse(await f.text());
+        await this.api('/api/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        await this.refreshAll(); this.toast('导入完成');
+      }catch(e){ this.toast('导入失败: '+e.message,false); }
+      ev.target.value='';
+    },
+    async checkEnvConflicts(){
+      try{ const d=await this.api('/api/env-conflicts');
+        this.envConflictText=(d.count!=null?d.count:0)+' 处冲突';
+        this.toast('env 冲突: '+(d.count!=null?d.count:'?')+' 处'+((d.conflicts&&d.conflicts.length)?' — 详情见服务器日志':''), !d.count);
+      }catch(e){ this.toast(e.message,false); }
+    },
+
+    // ── 接入中心 ──
+    snippetCode(){
+      const model=(this.chains.text&&this.chains.text[0]&&this.chains.text[0].default_model)||'auto';
+      const base=this.gatewayBase;
+      if(this.snippetLang==='curl')
+        return "curl -X POST '"+base+"/chat/completions' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"model\": \""+model+"\",\n    \"messages\": [{\"role\": \"user\", \"content\": \"Hello Control Plane!\"}]\n  }'";
+      if(this.snippetLang==='python')
+        return 'from openai import OpenAI\n\nclient = OpenAI(\n    base_url="'+base+'",\n    api_key="any-string"  # 未设 MODEL_HUB_PROXY_KEY 时任意\n)\n\nresponse = client.chat.completions.create(\n    model="'+model+'",\n    messages=[{"role": "user", "content": "Hello!"}]\n)\nprint(response.choices[0].message.content)';
+      return "import OpenAI from 'openai';\n\nconst openai = new OpenAI({\n  baseURL: '"+base+"',\n  apiKey: 'any-string',\n});\n\nconst res = await openai.chat.completions.create({\n  model: '"+model+"',\n  messages: [{ role: 'user', content: 'Hello!' }],\n});";
+    },
+    copyToClipboard(t){ navigator.clipboard.writeText(t).then(()=>this.toast('已复制到剪贴板')).catch(()=>this.toast('复制失败',false)); },
+
+    // ── UI 杂项 ──
+    toast(msg,ok=true){
+      const id=++this._tid; this.toasts.push({id:id,msg:msg,ok:ok});
+      setTimeout(()=>{ this.toasts=this.toasts.filter(t=>t.id!==id); },3800);
+    },
+    switchTab(n){ this.currentTab=n; this.$nextTick(()=>window.lucide&&lucide.createIcons()); },
+
+    // ── 背景粒子 + QPS 波形（装饰层，QPS 由真实 proxy 延迟驱动）──
+    startCanvas(){
+      const cv=document.getElementById('cyberCanvas'); if(!cv)return;
+      const ctx=cv.getContext('2d'); let W,H,drops=[];
+      const resize=function(){ W=cv.width=innerWidth; H=cv.height=innerHeight;
+        drops=[]; for(let i=0;i<Math.floor(W/28);i++) drops.push({x:i*28,y:Math.random()*H,v:.3+Math.random()*.8}); };
+      resize(); addEventListener('resize',resize);
+      (function loop(){ ctx.clearRect(0,0,W,H); ctx.fillStyle='rgba(34,211,238,.5)';
+        for(const d of drops){ ctx.fillRect(d.x,d.y,1.6,10); d.y+=d.v*3; if(d.y>H)d.y=-10; }
+        requestAnimationFrame(loop); })();
+
+      const self=this;
+      const qc=document.getElementById('qpsCanvas');
+      if(qc){
+        const qx=qc.getContext('2d');
+        const pts=[]; for(let i=0;i<48;i++) pts.push(30+Math.random()*20);
+        const draw=function(){
+          const w=qc.width=qc.offsetWidth||600, h=qc.height=qc.offsetHeight||144;
+          qx.clearRect(0,0,w,h); qx.strokeStyle='rgba(35,51,87,.6)';
+          for(let y=.2;y<1;y+=.25){ qx.beginPath(); qx.moveTo(0,h*y); qx.lineTo(w,h*y); qx.stroke(); }
+          const step=w/(pts.length-1);
+          qx.beginPath(); qx.moveTo(0,h-(pts[0]/100)*h);
+          for(let i=1;i<pts.length;i++) qx.lineTo(i*step,h-(pts[i]/100)*h);
+          qx.lineTo(w,h); qx.lineTo(0,h); qx.closePath();
+          const grad=qx.createLinearGradient(0,0,0,h);
+          grad.addColorStop(0,'rgba(34,211,238,.35)'); grad.addColorStop(1,'rgba(34,211,238,0)');
+          qx.fillStyle=grad; qx.fill();
+          qx.beginPath(); qx.moveTo(0,h-(pts[0]/100)*h);
+          for(let i=1;i<pts.length;i++) qx.lineTo(i*step,h-(pts[i]/100)*h);
+          qx.strokeStyle='#00F0FF'; qx.lineWidth=2.5; qx.shadowColor='#00F0FF'; qx.shadowBlur=10; qx.stroke(); qx.shadowBlur=0;
+          pts.shift();
+          let bump=0;
+          if(self.calls && self.calls[0] && self.calls[0].latency_ms) bump=Math.min(45,self.calls[0].latency_ms/40);
+          pts.push(Math.min(95,Math.sin(Date.now()/800)*18+42+Math.random()*14+bump));
+          setTimeout(draw,320);
+        };
+        draw();
+      }
+    },
+  };
+}
+</script>
+</body>
+</html>
