@@ -5,7 +5,6 @@ import {
   BookOpen,
   Clapperboard,
   Camera,
-  Cpu,
   Film,
   FolderOpen,
   Headphones,
@@ -104,7 +103,6 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "自动化",
     items: [
       { to: "/workflows", label: "工作流编排", short: "工作流", icon: Workflow, mobile: false },
-      { to: "/skills", label: "技能库", short: "技能", icon: Cpu, mobile: false },
     ],
   },
   {

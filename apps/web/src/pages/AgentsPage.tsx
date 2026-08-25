@@ -12,7 +12,6 @@ import { Field, Input, Textarea } from "@/components/ui/Field";
 import { EmptyState, ErrorState } from "@/components/ui/States";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { AgentDirectoryPage } from "@/pages/AgentDirectoryPage";
-import { SkillsPage } from "@/pages/SkillsPage";
 import { WorkflowsPage } from "@/pages/WorkflowsPage";
 import { apiClient } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
@@ -53,7 +52,7 @@ export function AgentsPage() {
   const [editing, setEditing] = useState<Agent | null>(null);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Agent | null>(null);
-  const [section, setSection] = useState<"agents" | "skills" | "workflows" | "directory">("agents");
+  const [section, setSection] = useState<"agents" | "workflows" | "directory">("agents");
 
   const catsQ = useQuery({
     queryKey: ["agents", "categories"],
@@ -112,15 +111,9 @@ export function AgentsPage() {
           </Button>
         }
       >
-        {/* 同级功能入口：技能库 / 工作流 / Agent 目录（原孤儿路由，补导航） */}
+        {/* 同级功能入口：工作流 / Agent 目录 */}
         <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-muted-foreground">关联：</span>
-          <Link
-            to="/skills"
-            className="rounded-full border border-border px-2.5 py-1 text-muted-foreground hover:border-primary hover:text-foreground"
-          >
-            🧩 技能库
-          </Link>
           <Link
             to="/workflows"
             className="rounded-full border border-border px-2.5 py-1 text-muted-foreground hover:border-primary hover:text-foreground"
@@ -164,7 +157,6 @@ export function AgentsPage() {
         {(
           [
             ["agents", "我的 Agent"],
-            ["skills", "技能库"],
             ["workflows", "工作流"],
             ["directory", "外部目录"],
           ] as const
@@ -182,13 +174,7 @@ export function AgentsPage() {
       </div>
       {section !== "agents" && (
         <div className="p-4 md:p-6">
-          {section === "skills" ? (
-            <SkillsPage />
-          ) : section === "workflows" ? (
-            <WorkflowsPage />
-          ) : (
-            <AgentDirectoryPage />
-          )}
+          {section === "workflows" ? <WorkflowsPage /> : <AgentDirectoryPage />}
         </div>
       )}
       <div className={section === "agents" ? "space-y-4 p-4 md:p-6" : "hidden"}>
@@ -411,6 +397,16 @@ function AgentEditor({
         }
       : EMPTY,
   );
+  // v2：技能库并入——技能 instructions 作为 system_prompt 模板来源
+  const skillsQ = useQuery({
+    queryKey: ["agent-editor-skill-templates"],
+    queryFn: () =>
+      apiClient.get<{
+        items: { id: string; name: string; instructions: string; skill_type: string }[];
+        total?: number;
+      }>("/skills/?page=1&page_size=50"),
+    staleTime: 60_000,
+  });
   const mut = useMutation({
     mutationFn: () => {
       const body = {
@@ -460,6 +456,31 @@ function AgentEditor({
             />
           )}
         </Field>
+        {/* v2：技能模板选择（原技能库数据并入 Agent system_prompt） */}
+        {(skillsQ.data?.items ?? []).length > 0 && (
+          <Field label="从技能模板开始（可选）" hint="选中后自动填入下方系统提示词，可再修改">
+            {(p) => (
+              <select
+                {...p}
+                value=""
+                onChange={(e) => {
+                  const sk = (skillsQ.data?.items ?? []).find((s) => s.id === e.target.value);
+                  if (sk?.instructions) {
+                    setForm((f) => ({ ...f, system_prompt: sk.instructions }));
+                  }
+                }}
+                className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm"
+              >
+                <option value="">— 选择技能模板 —</option>
+                {(skillsQ.data?.items ?? []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}（{s.skill_type}）
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+        )}
         <Field label="系统提示词" required>
           {(p) => (
             <Textarea

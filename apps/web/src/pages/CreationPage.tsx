@@ -97,7 +97,24 @@ export function CreationPage() {
   const [theme, setTheme] = useState("");
   const [busy, setBusy] = useState(false);
   const [setupBusy, setSetupBusy] = useState(false);
-  const [plan, setPlan] = useState<CreationPlan | null>(null);
+  // v2：计划/剧本持久化到 localStorage，刷新不丢（规格遗留项：计划落库防刷新丢）
+  const [plan, setPlanState] = useState<CreationPlan | null>(() => {
+    try {
+      const raw = localStorage.getItem("aigc-creation-plan");
+      return raw ? (JSON.parse(raw) as CreationPlan) : null;
+    } catch {
+      return null;
+    }
+  });
+  const setPlan = (p: CreationPlan | null) => {
+    setPlanState(p);
+    try {
+      if (p) localStorage.setItem("aigc-creation-plan", JSON.stringify(p));
+      else localStorage.removeItem("aigc-creation-plan");
+    } catch {
+      /* 存储满等异常忽略 */
+    }
+  };
   const [script, setScript] = useState<ScriptPlan | null>(null);
   const [scriptVariants, setScriptVariants] = useState<ScriptPlan[] | null>(null);
   const [variantIdx, setVariantIdx] = useState(0);

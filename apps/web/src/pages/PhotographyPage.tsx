@@ -261,7 +261,7 @@ export function PhotographyPage() {
     <div>
       <PageHeader
         title="写真摄影"
-        description="管理写真参考图集，后续可直接用于风格参考与生成"
+        description="写真参考图集素材管理：整理相册与参考图，可导出用于外部绘图工具"
         actions={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" aria-hidden />
@@ -299,7 +299,7 @@ export function PhotographyPage() {
         ) : query.data.items.length === 0 ? (
           <EmptyState
             title={mineOnly || search ? "没有匹配的相册" : "还没有写真相册"}
-            description="先建一个相册，再把参考图集上传进去。后续可接图生图 / 风格参考。"
+            description="先建一个相册，再把参考图集上传进去，集中管理你的写真素材。"
             action={
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4" aria-hidden />
@@ -595,7 +595,7 @@ export function PhotographyAlbumPage() {
             title="相册还是空的"
             description={
               canEdit
-                ? "把你的写真参考图上传进来，后续可直接作为风格参考。"
+                ? "把你的写真参考图上传进来，统一整理成风格相册。"
                 : "作者还没有上传图片。"
             }
             action={

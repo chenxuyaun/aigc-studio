@@ -20,9 +20,6 @@ const InspirationGalleryPage = lazy(() =>
 const DashboardPage = lazy(() =>
   import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })),
 );
-const TextGenPage = lazy(() =>
-  import("@/pages/TextGenPage").then((m) => ({ default: m.TextGenPage })),
-);
 const ImageGenPage = lazy(() =>
   import("@/pages/ImageGenPage").then((m) => ({ default: m.ImageGenPage })),
 );
@@ -60,10 +57,6 @@ const PromptsPage = lazy(() => import("@/pages/PromptsPage").then((m) => ({ defa
 const AgentsPage = lazy(() => import("@/pages/AgentsPage").then((m) => ({ default: m.AgentsPage })));
 const AgentChatPage = lazy(() =>
   import("@/pages/AgentChatPage").then((m) => ({ default: m.AgentChatPage })),
-);
-const SkillsPage = lazy(() => import("@/pages/SkillsPage").then((m) => ({ default: m.SkillsPage })));
-const SkillChatPage = lazy(() =>
-  import("@/pages/SkillChatPage").then((m) => ({ default: m.SkillChatPage })),
 );
 const KnowledgePage = lazy(() =>
   import("@/pages/KnowledgePage").then((m) => ({ default: m.KnowledgePage })),
@@ -146,8 +139,9 @@ export function AppRoutes() {
         <Route path="/story/:projectId" element={<Page><StoryProjectPage /></Page>} />
         <Route path="/search" element={<Page><SearchPage /></Page>} />
         <Route path="/asmr" element={<Page><AsmrPage /></Page>} />
-        <Route path="/create/text" element={<Page><TextGenPage /></Page>} />
         <Route path="/create/image" element={<Page><ImageGenPage /></Page>} />
+        {/* v2：长文写作并入 AI 助手，TextGen 独立页下线 */}
+        <Route path="/create/text" element={<Navigate to="/" replace />} />
         <Route path="/create/comic" element={<Page><ComicGenPage /></Page>} />
         <Route path="/create/character-card" element={<Page><CharacterCardPage /></Page>} />
         {/* v2：上游状态并入数据看板，旧路由 301 兼容 */}
@@ -163,8 +157,9 @@ export function AppRoutes() {
         <Route path="/prompts" element={<Page><PromptsPage /></Page>} />
         <Route path="/agents" element={<Page><AgentsPage /></Page>} />
         <Route path="/agents/:id/chat" element={<Page><AgentChatPage /></Page>} />
-        <Route path="/skills" element={<Page><SkillsPage /></Page>} />
-        <Route path="/skills/:id/chat" element={<Page><SkillChatPage /></Page>} />
+        {/* v2：技能库砍独立页（模板并入 Agent 表单），旧路由兼容跳转 */}
+        <Route path="/skills" element={<Navigate to="/agents" replace />} />
+        <Route path="/skills/:id/chat" element={<Navigate to="/agents" replace />} />
         <Route path="/workflows" element={<Page><WorkflowsPage /></Page>} />
         <Route path="/knowledge" element={<Page><KnowledgePage /></Page>} />
         <Route path="/workflows/new" element={<Page><WorkflowCanvasEditor /></Page>} />
