@@ -27,6 +27,8 @@ class AgentChatRequest(BaseModel):
     tools: list[str] | None = Field(default=None, max_length=50)  # 省略 = 全部工具
     # saiOS v2 P1：@ 引用真注入——[{type: "knowledge"|"prompt"|..., title, content}]
     context_blocks: list[dict[str, object]] | None = Field(default=None, max_length=10)
+    # 批8+9：前端会话 id（s-xxx）——流结束后后台反思生成成长日记/记忆用
+    session_id: str = Field(default="", max_length=40)
 
 
 class ImageGenerationRequest(BaseModel):

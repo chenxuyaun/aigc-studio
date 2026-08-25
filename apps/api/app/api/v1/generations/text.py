@@ -184,10 +184,19 @@ async def agent_chat(
     """智能体对话：模型工具调用循环（SSE：tool 事件 + chunk）。"""
     from app.services.agent_chat import agent_chat_stream
 
+    session_id = (req.session_id or "").strip()
+
     async def gen() -> AsyncIterator[str]:
         async for ev in agent_chat_stream(
-            req.messages, req.model, db, req.tools, req.context_blocks
+            req.messages, req.model, db, req.tools, req.context_blocks, str(user.id)
         ):
             yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+        # 批8+9：流正常结束后台反思（成长日记 + 长期记忆），失败静默
+        if session_id:
+            import asyncio
+
+            from app.services.growth_service import reflect_session_bg
+
+            asyncio.create_task(reflect_session_bg(str(user.id), session_id))
 
     return StreamingResponse(gen(), media_type="text/event-stream")

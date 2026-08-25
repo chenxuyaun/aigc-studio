@@ -443,6 +443,8 @@ export function AssistantHomePage() {
           { role: "user" as const, content: text },
         ],
         ...(contextBlocks ? { context_blocks: contextBlocks } : {}),
+        // 批8+9：带会话 id——后端流结束自动反思（成长日记 + 长期记忆）
+        session_id: currentId ?? "",
       };
       await streamSse(
         "/generations/text/agent/chat",

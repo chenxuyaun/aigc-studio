@@ -26,6 +26,7 @@ async def agent_chat_stream(
     db: AsyncSession,
     tools: list[str] | None = None,
     context_blocks: list[dict[str, Any]] | None = None,
+    user_id: str = "",
 ) -> AsyncIterator[dict[str, Any]]:
     """工具循环 + 最终回复，产出 SSE 事件：
 
@@ -35,11 +36,23 @@ async def agent_chat_stream(
 
     context_blocks（saiOS v2 P1 @ 引用真注入）：[{type,title,content}]，
     会被结构化注入提示词头部，模型可实际读到引用资源的内容。
+    批8+9：user_id 非空时把该用户的长期记忆注入 system prompt。
     """
     provider, resolved_model = await _resolve_provider(db, model)
     all_tools = _openai_tools()
     if tools:
         all_tools = [t for t in all_tools if t["function"]["name"] in set(tools)]
+
+    # 批8+9：长期记忆注入（「AI 记得你」）——失败静默，绝不影响对话
+    if user_id:
+        try:
+            from app.services.growth_service import build_memory_injection
+
+            memory_text = await build_memory_injection(db, user_id)
+            if memory_text:
+                messages = [{"role": "system", "content": memory_text}, *messages]
+        except Exception:  # noqa: BLE001
+            pass
 
     # @引用内容 → 系统级上下文块（放在对话消息之前，明确标注来源）
     if context_blocks:

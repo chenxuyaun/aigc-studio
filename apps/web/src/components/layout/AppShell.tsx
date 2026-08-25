@@ -33,6 +33,7 @@ import {
   Wand2,
   Workflow,
   Sparkles,
+  Sprout,
   BarChart3,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
@@ -119,6 +120,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "系统",
     items: [
       { to: "/dashboard", label: "数据看板", short: "看板", icon: BarChart3, mobile: false },
+      { to: "/growth", label: "AI 成长足迹", short: "成长", icon: Sprout, mobile: false },
       {
         to: "/settings/providers",
         label: "模型中心",

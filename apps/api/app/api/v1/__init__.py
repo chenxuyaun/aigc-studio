@@ -12,6 +12,7 @@ from app.api.v1 import (
     creation,
     dashboard,
     goals,
+    growth,
     health,
     knowledge,
     logs,
@@ -45,6 +46,7 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
 router.include_router(creation.router, prefix="/creation", tags=["creation"])
 router.include_router(goals.router, prefix="/goals", tags=["goals"])
+router.include_router(growth.router, prefix="/growth", tags=["growth"])
 router.include_router(schedules.router, prefix="/schedules", tags=["schedules"])
 router.include_router(users.router, prefix="/users", tags=["users"])
 router.include_router(prompts.router, prefix="/prompts", tags=["prompts"])

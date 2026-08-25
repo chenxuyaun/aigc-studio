@@ -16,6 +16,7 @@ from app.models.creative_models import (
     StoryStateSnapshot,
 )
 from app.models.generation_task import GenerationTask
+from app.models.growth import GrowthDiary, MemoryEntry
 from app.models.scheduled_creation import ScheduledCreation
 from app.models.inspection_report import InspectionReport
 from app.models.mission_lesson import MissionLesson
@@ -65,9 +66,11 @@ __all__ = [
     "CreativeRun",
     "CreationGoal",
     "GenerationTask",
+    "GrowthDiary",
     "InspectionReport",
     "MissionLesson",
     "MissionRun",
+    "MemoryEntry",
     "MusicWork",
     "Photo",
     "PhotoAlbum",
