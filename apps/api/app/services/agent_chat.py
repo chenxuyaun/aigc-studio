@@ -31,6 +31,7 @@ async def agent_chat_stream(
 
     - {"type": "tool", "name", "status": "running"|"done", "summary"?}
     - {"type": "chunk", "content"}
+    - {"type": "reasoning", "content"}   # v2 批7：思维链（上游给才有）
 
     context_blocks（saiOS v2 P1 @ 引用真注入）：[{type,title,content}]，
     会被结构化注入提示词头部，模型可实际读到引用资源的内容。
@@ -73,6 +74,9 @@ async def agent_chat_stream(
             }
             return
         calls = result.tool_calls or []
+        # v2 批7：思维链透传——上游给 reasoning 就先发（前端折叠展示「思考过程」）
+        if result.reasoning:
+            yield {"type": "reasoning", "content": result.reasoning}
         if not calls:
             yield {"type": "chunk", "content": result.content}
             return

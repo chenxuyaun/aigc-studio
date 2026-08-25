@@ -12,6 +12,10 @@ export interface PersistedChatMessage {
   media?: "image" | "audio" | "comic";
   /** v2 P1 结构化命令卡：/image /music 等解析结果，可推送 Studio 带参执行 */
   dispatch?: { kind: "image" | "music" | "tts" | "comic"; args: string; target: string };
+  /** v2 批7：思维链（上游 reasoning），折叠展示、随消息持久化 */
+  thinking?: string;
+  /** v2 批7：本轮工具调用留痕——回答结束后不再被清空，刷新可回看 */
+  toolCalls?: { name: string; status: "running" | "done" }[];
 }
 
 /**

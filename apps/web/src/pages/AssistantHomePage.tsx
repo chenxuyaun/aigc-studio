@@ -146,6 +146,7 @@ export function AssistantHomePage() {
     currentId,
     messages,
     createSession,
+    branchSession,
     switchSession,
     deleteSession,
     updateCurrentMessages,
@@ -423,6 +424,7 @@ export function AssistantHomePage() {
     abortRef.current = controller;
 
     let assistantText = "";
+    let thinkingText = "";
     setToolLog([]);
     updateCurrentMessages((prev) => [...prev, { role: "assistant", content: "" }]);
     try {
@@ -461,6 +463,21 @@ export function AssistantHomePage() {
                   t.name === toolName ? { ...t, status: "done" as const } : t,
                 ),
               );
+              // v2 批7：工具留痕持久进消息（回答结束后仍可回看）
+              updateCurrentMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last && last.role === "assistant") {
+                  next[next.length - 1] = {
+                    ...last,
+                    toolCalls: [
+                      ...(last.toolCalls ?? []),
+                      { name: toolName, status: "done" as const },
+                    ],
+                  };
+                }
+                return next;
+              });
               // 工具返回多模态结果（生图/音频/漫画）→ 追加媒体消息回显
               const rd = (event as { result_data?: unknown }).result_data;
               const data =
@@ -487,11 +504,26 @@ export function AssistantHomePage() {
                 ]);
               }
             }
+          } else if (event.type === "reasoning" && typeof event.content === "string") {
+            // v2 批7：思维链流式累积（上游 reasoning → Think 折叠行）
+            thinkingText += event.content;
+            updateCurrentMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last && last.role === "assistant") {
+                next[next.length - 1] = { ...last, thinking: thinkingText };
+              }
+              return next;
+            });
           } else if (event.type === "chunk" && typeof event.content === "string") {
             assistantText += event.content;
             updateCurrentMessages((prev) => {
               const next = [...prev];
-              next[next.length - 1] = { role: "assistant", content: assistantText };
+              const last = next[next.length - 1];
+              if (last && last.role === "assistant") {
+                // spread 旧值：保留已累积的 thinking / toolCalls
+                next[next.length - 1] = { ...last, content: assistantText };
+              }
               return next;
             });
           }
@@ -1282,6 +1314,7 @@ export function AssistantHomePage() {
                         : "ai-bubble-ai rounded-tl-sm",
                     )}
                   >
+                    {m.role === "assistant" && m.thinking && <ThinkBlock text={m.thinking} />}
                     {m.role === "user" && i === editingIdx ? (
                       <div className="max-w-md">
                         <textarea
@@ -1392,6 +1425,17 @@ export function AssistantHomePage() {
                       <MarkdownContent content={m.content} />
                     ) : (
                       <span className="whitespace-pre-wrap text-slate-300">{m.content || "思考中…"}</span>
+                    )}
+                    {m.role === "assistant" && !!m.toolCalls?.length && (
+                      <ToolCallsBlock calls={m.toolCalls} />
+                    )}
+                    {m.role === "assistant" && !!m.content && !(streaming && i === messages.length - 1) && (
+                      <AssistantMsgActions
+                        sessionId={currentId}
+                        idx={i}
+                        text={m.content}
+                        onBranch={() => branchSession(messages, i)}
+                      />
                     )}
                   </div>
                   {m.role === "user" && i !== editingIdx && (
@@ -1707,6 +1751,161 @@ export function AssistantHomePage() {
         .ai-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:4px}
         .ai-scroll::-webkit-scrollbar-thumb:hover{background:rgba(0,242,254,.4)}
       `}</style>
+    </div>
+  );
+}
+
+/** v2 批7：思维链折叠行（🧠 思考过程 + 单行摘要，点击展开全文）。 */
+function ThinkBlock({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const firstLine = text.split("\n").find((l) => l.trim()) ?? "";
+  const summary = firstLine.length > 64 ? `${firstLine.slice(0, 64)}…` : firstLine;
+  return (
+    <div className="mb-2 rounded-xl border border-indigo-500/25 bg-indigo-500/5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-indigo-300 hover:text-indigo-200"
+      >
+        <span aria-hidden>🧠</span>
+        <span className="font-medium">思考过程</span>
+        <span className="min-w-0 flex-1 truncate text-indigo-400/70">{summary}</span>
+        <span className="shrink-0 text-indigo-400">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap border-t border-indigo-500/20 px-3 py-2 text-xs leading-relaxed text-slate-300">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** v2 批7：工具调用留痕折叠行（回答结束后仍可回看本轮用了哪些工具）。 */
+function ToolCallsBlock({ calls }: { calls: { name: string; status: "running" | "done" }[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-[11px] text-cyan-400/80 hover:text-cyan-300"
+      >
+        <span aria-hidden>🛠️</span>
+        本轮调用了 {calls.length} 个工具
+        <span className="text-cyan-500/60">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {calls.map((t, k) => (
+            <li key={`${t.name}-${k}`} className="font-mono text-[10px] text-cyan-300/70">
+              {t.status === "done" ? "✓" : "⏳"} {t.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const RATING_KEY = "aigc-msg-rating-v1";
+
+function readRating(sessionId: string | null, idx: number): "up" | "down" | null {
+  if (!sessionId) return null;
+  try {
+    const raw = localStorage.getItem(RATING_KEY);
+    if (!raw) return null;
+    const map = JSON.parse(raw) as Record<string, string>;
+    const v = map[`${sessionId}:${idx}`];
+    return v === "up" || v === "down" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeRating(sessionId: string | null, idx: number, val: "up" | "down" | null) {
+  if (!sessionId) return;
+  try {
+    const raw = localStorage.getItem(RATING_KEY);
+    const map = (raw ? (JSON.parse(raw) as Record<string, string>) : {}) ?? {};
+    const k = `${sessionId}:${idx}`;
+    if (val === null) delete map[k];
+    else map[k] = val;
+    localStorage.setItem(RATING_KEY, JSON.stringify(map));
+  } catch {
+    /* 存储不可用静默降级 */
+  }
+}
+
+/** v2 批7：AI 回答操作栏——复制 / 点赞点踩 / 在新会话中分支。 */
+function AssistantMsgActions(props: {
+  sessionId: string | null;
+  idx: number;
+  text: string;
+  onBranch: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [rating, setRating] = useState<"up" | "down" | null>(() =>
+    readRating(props.sessionId, props.idx),
+  );
+  function toggleRate(val: "up" | "down") {
+    const next = rating === val ? null : val;
+    writeRating(props.sessionId, props.idx, next);
+    setRating(next);
+  }
+  async function copy() {
+    // http 环境（如公网 IP 直访）无 navigator.clipboard，降级 execCommand
+    const okLegacy = (() => {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = props.text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        return ok;
+      } catch {
+        return false;
+      }
+    })();
+    if (!okLegacy && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(props.text);
+      } catch {
+        return; // 两种方式都失败：不给假反馈
+      }
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }
+  const btn =
+    "rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-200";
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <button type="button" onClick={() => void copy()} className={btn}>
+        {copied ? "✓ 已复制" : "📋 复制"}
+      </button>
+      <button
+        type="button"
+        onClick={() => toggleRate("up")}
+        title="好的回答"
+        className={cn(btn, rating === "up" && "!bg-emerald-500/20 !text-emerald-300")}
+      >
+        👍 {rating === "up" ? "已赞" : ""}
+      </button>
+      <button
+        type="button"
+        onClick={() => toggleRate("down")}
+        title="有问题的回答"
+        className={cn(btn, rating === "down" && "!bg-rose-500/20 !text-rose-300")}
+      >
+        👎 {rating === "down" ? "已标记" : ""}
+      </button>
+      <button type="button" onClick={props.onBranch} className={btn} title="把到此为止的对话复制成一个新会话">
+        🌿 分支新会话
+      </button>
     </div>
   );
 }

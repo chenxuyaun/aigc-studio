@@ -13,6 +13,8 @@ class TextResult(BaseModel):
     input_tokens: int | None = None
     output_tokens: int | None = None
     tool_calls: list[dict[str, object]] | None = None
+    # v2 批7：思维链透传（delta.reasoning_content / delta.reasoning），空串=上游没给
+    reasoning: str = ""
 
 
 class TextProvider(ABC):

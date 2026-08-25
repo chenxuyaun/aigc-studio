@@ -215,6 +215,24 @@ export function useChatSessions() {
     return session.id;
   }, []);
 
+  /** v2 批7：从某条回答分支新会话——截断到该条(含)的消息作为新会话初始内容，原子完成建+切。 */
+  const branchSession = useCallback(
+    (fromMessages: PersistedChatMessage[], upToIdx: number) => {
+      const clipped = fromMessages.slice(0, upToIdx + 1);
+      if (clipped.length === 0) return null;
+      const session: ChatSession = {
+        id: newId(),
+        name: `分支 · ${sessionName(clipped)}`,
+        messages: clipped,
+        updatedAt: Date.now(),
+      };
+      setSessions((prev) => [...prev, session].slice(-MAX_SESSIONS));
+      setCurrentId(session.id);
+      return session.id;
+    },
+    [],
+  );
+
   const switchSession = useCallback((id: string) => {
     setCurrentId(id);
   }, []);
@@ -343,6 +361,7 @@ export function useChatSessions() {
     /** 云端首拉是否完成（调用方应等它为 true 再 ensureSession，避免误建新会话）。 */
     cloudReady,
     createSession,
+branchSession,
     switchSession,
     deleteSession,
     renameSession,

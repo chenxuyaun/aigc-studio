@@ -46,6 +46,7 @@ def _parse_sse_json(text: str) -> dict[str, object]:
     输出与一次非流式 chat.completion 相同的 {choices:[{message:{content, tool_calls}}]} 结构。
     """
     content_parts: list[str] = []
+    reasoning_parts: list[str] = []
     tool_calls: dict[int, dict[str, object]] = {}
     for line in text.splitlines():
         line = line.strip()
@@ -64,6 +65,12 @@ def _parse_sse_json(text: str) -> dict[str, object]:
         delta = choices[0].get("delta") if isinstance(choices[0], dict) else None
         if not isinstance(delta, dict):
             continue
+        # v2 批7：思维链透传——DeepSeek 系字段名 reasoning_content，OpenRouter 系 reasoning
+        for rk in ("reasoning_content", "reasoning"):
+            rv = delta.get(rk)
+            if isinstance(rv, str) and rv:
+                reasoning_parts.append(rv)
+                break
         c = delta.get("content")
         if isinstance(c, str) and c:
             content_parts.append(c)
@@ -96,6 +103,7 @@ def _parse_sse_json(text: str) -> dict[str, object]:
             {
                 "message": {
                     "content": "".join(content_parts),
+                    "reasoning": "".join(reasoning_parts),
                     "tool_calls": ordered_tool_calls or None,
                 }
             }
@@ -255,6 +263,10 @@ class OpenAICompatibleTextProvider(TextProvider):
                     model=model,
                     provider="openai_compatible",
                     tool_calls=tool_calls,
+                    # 非 SSE 单 JSON 路径：DeepSeek 系 message.reasoning_content / OpenRouter 系 reasoning
+                    reasoning=str(
+                        msg.get("reasoning_content") or msg.get("reasoning") or ""
+                    ),
                 )
         except ProviderError:
             raise
