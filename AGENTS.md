@@ -672,4 +672,11 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - **🔴 AppShell header 曾缺定位属性**：z-20 对 static 元素无效，下拉被页面级堆叠上下文（如 Studio z-30 header）盖住；需 relative + z-40。
 - **🔴 SPA 内静态资源勿拼 /saios 前缀**：nginx 正则 location 已把 gallery/static/api 等前缀直接路由给 saiOS 容器；fetch("/saios/gallery/x") 被 SPA fallback 吃掉返回 index.html（200 text/html 极迷惑）。公共静态资源一律根绝对路径。
 - **🔴 vite-pwa precache >4MB 文件 build 直接失败**：批量图片用 workbox.globIgnores 排除（gallery/**），按需加载不进离线缓存。
-- gpt-image2 资产：canghe.ai=awesome-gpt-image-2 同源部署零差异；export/（529 案例 jsonl）入库，图片本体 gitignore 仅留本地。
+## saiOS v2 遗留处置清零（2026-08-25 goal 完成）
+
+锚点 374aade(批1)→1735bdb(批2)→f651ce3(批3)→40938a3(批4)，公网 E2E 全绿。
+- 批1 作品库：WorksPage 双 tab（创作产物=/generations/recent 墙+筛选+进行中轮询+再创作→/studio?rehydrate=；音乐圆桌保留）；recent.py 增强 task_type/status=active；画布假运行接真 POST /workflows/{id}/run，假模型下拉换 catalog。
+- 批2 Dashboard 瘦身 1226→374 行：Mission 全家迁调度大厅，回归纯看板。删大块 JSX 用 ReadAllLines 行号切割后必 tsc 验孤儿括号。
+- 批3：Roleplay 右栏七 tab 收三常用+⚙️高级抽屉（世界书/正则/记忆/设置）；SillyTavernPage 删并入 ST 接入引导卡，/sillytavern→/roleplay；PromptStudio 双 tab 合并生成器+优化器。
+- 批4：Users 行内编辑（邮箱/重置密码）；Dashboard admin 上游状态卡替代 UpstreamPage（已删），/settings/upstream→/dashboard。
+- 经验：PS -replace 处理多行 JSX 不可靠；E2E 断言断交互元素而非纯文案。
