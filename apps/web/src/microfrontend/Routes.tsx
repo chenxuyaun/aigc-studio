@@ -22,6 +22,7 @@ const DashboardPage = lazy(() =>
 );
 const GrowthPage = lazy(() => import("@/pages/GrowthPage"));
 const TeamPage = lazy(() => import("@/pages/TeamPage"));
+const CommunityPage = lazy(() => import("@/pages/CommunityPage"));
 const ImageGenPage = lazy(() =>
   import("@/pages/ImageGenPage").then((m) => ({ default: m.ImageGenPage })),
 );
@@ -133,6 +134,7 @@ export function AppRoutes() {
       <Route path="/dashboard" element={<Page><DashboardPage /></Page>} />
         <Route path="/growth" element={<Page><GrowthPage /></Page>} />
         <Route path="/team" element={<Page><TeamPage /></Page>} />
+        <Route path="/community" element={<Page><CommunityPage /></Page>} />
       {/* AI 创作已与工作台合一（目标框 + 引擎直控）；/create 直达重定向 */}
       <Route path="/create" element={<Navigate to="/" replace />} />
       {/* v2：SillyTavern 独立页并入角色扮演页引导卡，旧链接 301 兼容 */}

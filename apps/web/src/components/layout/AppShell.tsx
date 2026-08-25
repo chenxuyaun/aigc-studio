@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ComponentType, type Form
 import {
   Bot,
   BookOpen,
+  Globe,
   Clapperboard,
   Camera,
   Film,
@@ -115,6 +116,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { to: "/asmr", label: "ASMR 库", short: "ASMR", icon: Headphones, mobile: false },
       { to: "/agents", label: "Agent 库", short: "Agent", icon: Bot, mobile: false },
       { to: "/search", label: "全域搜索", short: "搜索", icon: Search, mobile: false },
+      { to: "/community", label: "分享墙", short: "分享墙", icon: Globe, mobile: false },
     ],
   },
   {

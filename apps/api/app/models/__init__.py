@@ -8,6 +8,7 @@ from app.models.asmr_netdisk_item import AsmrNetdiskItem
 from app.models.asmr_work import AsmrWork
 from app.models.asset import Asset
 from app.models.chat_session import ChatSession
+from app.models.community_post import CommunityPost
 from app.models.creation_goal import CreationGoal
 from app.models.creative_models import (
     CreativePrompt,
