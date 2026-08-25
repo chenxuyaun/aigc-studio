@@ -236,14 +236,14 @@ export function WorkflowCanvasEditor() {
   const saveMutationRef = useRef(saveMutation);
   saveMutationRef.current = saveMutation;
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (): Promise<string | null> => {
     if (viewMode === "json") {
       // Validate JSON before saving
       try {
         const parsed = JSON.parse(jsonText);
         if (!isValidWorkflowGraph(parsed)) {
           setJsonError("JSON 格式不正确，需要包含 nodes 和 edges 数组");
-          return;
+          return null;
         }
         const { nodes: rfNodes, edges: rfEdges } = toReactFlow(parsed);
         setNodes(rfNodes);
@@ -251,11 +251,16 @@ export function WorkflowCanvasEditor() {
         setJsonError(null);
       } catch {
         setJsonError("JSON 格式错误，无法保存");
-        return;
+        return null;
       }
     }
-    saveMutationRef.current.mutate();
-  }, [viewMode, jsonText, setNodes, setEdges]);
+    try {
+      const data = await saveMutationRef.current.mutateAsync();
+      return data?.id ?? id ?? null;
+    } catch {
+      return null;
+    }
+  }, [viewMode, jsonText, setNodes, setEdges, id]);
 
   // ── Track dirty state ──────────────────────────────────────────────
   useEffect(() => {
@@ -372,6 +377,38 @@ export function WorkflowCanvasEditor() {
     executionAbortRef.current = true;
   }, []);
 
+  // v2：文本模型列表直连 catalog（替代硬编码假模型名）；空值 = hub 默认链自动选择
+  const [catalogModels, setCatalogModels] = useState<Array<{ value: string; label: string }>>([]);
+  useEffect(() => {
+    let alive = true;
+    apiClient
+      .get<
+        { id: string; name?: string; default_model?: string }[] | { items?: { id: string; name?: string; default_model?: string }[] }
+      >("/providers/catalog")
+      .then((r) => {
+        if (!alive) return;
+        const raw = Array.isArray(r) ? r : (r.items ?? []);
+        const list = raw
+          .filter((p) => (p.default_model || p.id) && p.id !== "mock")
+          .map((p) => ({
+            value: p.default_model || p.id,
+            label: `${p.name || p.id}（${p.default_model || p.id}）`,
+          }));
+        setCatalogModels(list);
+      })
+      .catch(() => {
+        /* catalog 失败时仅保留「自动」选项 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const modelOptions = useMemo(
+    () => [{ value: "", label: "自动（模型中心默认链）" }, ...catalogModels],
+    [catalogModels],
+  );
+
   const runWorkflow = useCallback(async () => {
     if (nodes.length === 0) return;
     executionAbortRef.current = false;
@@ -384,7 +421,7 @@ export function WorkflowCanvasEditor() {
       setExecutionLogs((prev) => [...prev, { level, message, time }]);
     };
 
-    // Build adjacency from edges
+    // 前端快速反馈：环检测（后端同样校验）
     const nodeIds = new Set(nodes.map((n) => n.id));
     const successors = new Map<string, string[]>();
     const inDegree = new Map<string, number>();
@@ -398,53 +435,74 @@ export function WorkflowCanvasEditor() {
         inDegree.set(e.target, (inDegree.get(e.target) ?? 0) + 1);
       }
     }
-
-    // Topological order (Kahn's)
     const queue: string[] = [];
-    for (const [id, deg] of inDegree) {
-      if (deg === 0) queue.push(id);
+    for (const [nid, deg] of inDegree) {
+      if (deg === 0) queue.push(nid);
     }
 
-    const topoOrder: string[] = [];
+    let reachable = 0;
     while (queue.length > 0) {
-      const id = queue.shift()!;
-      topoOrder.push(id);
-      for (const succ of successors.get(id) ?? []) {
+      const nid = queue.shift()!;
+      reachable += 1;
+      for (const succ of successors.get(nid) ?? []) {
         inDegree.set(succ, (inDegree.get(succ) ?? 1) - 1);
         if ((inDegree.get(succ) ?? 0) === 0) queue.push(succ);
       }
     }
 
-    if (topoOrder.length < nodes.length) {
+    if (reachable < nodes.length) {
       log("error", "检测到循环依赖，无法执行");
       setIsRunning(false);
       return;
     }
 
-    log("info", `开始执行工作流（${topoOrder.length} 个节点）`);
-
-    for (const nodeId of topoOrder) {
-      if (executionAbortRef.current) {
-        log("error", "执行已中止");
-        break;
-      }
-      const node = nodes.find((n) => n.id === nodeId);
-      if (!node) continue;
-      setActiveExecutionNodeId(nodeId);
-      const name = String(node.data?.name ?? nodeId);
-      log("info", `▶ 执行节点: ${name}`);
-      // 节点动画间隔（真实结果由后端执行）
-      await new Promise((r) => setTimeout(r, 600));
-      if (executionAbortRef.current) break;
-      log("success", `✓ 完成: ${name}`);
+    // v2：先保存画布，再走后端真实执行链（每节点一次真 LLM 调用，上游输出作下游输入）
+    log("info", `保存画布并提交后端执行（${nodes.length} 个节点）…`);
+    const savedId = await handleSave();
+    if (!savedId) {
+      log("error", "保存失败（未登录或网络错误），无法运行");
+      setIsRunning(false);
+      return;
     }
-
-    setActiveExecutionNodeId(null);
-    if (!executionAbortRef.current) {
-      log("info", "工作流执行完毕");
+    try {
+      const res = await apiClient.post<{
+        success: boolean;
+        data: {
+          results: Record<string, string>;
+          story_results: Record<string, { output?: string; error?: string }>;
+          order: string[];
+          node_names: Record<string, string>;
+        };
+      }>(`/workflows/${savedId}/run`);
+      const d = res.data;
+      for (const execId of d.order) {
+        if (executionAbortRef.current) {
+          log("error", "前端已停止展示（后端继续完成本次运行）");
+          break;
+        }
+        setActiveExecutionNodeId(execId);
+        const name = d.node_names[execId] ?? execId;
+        const out =
+          d.results[execId] ??
+          (d.story_results[execId] ? String(d.story_results[execId]?.output ?? "") : "");
+        const failed =
+          out.startsWith("（生成失败") || Boolean(d.story_results[execId]?.error);
+        log(
+          failed ? "error" : "success",
+          `${failed ? "✗" : "✓"} ${name} → ${out.slice(0, 160)}${out.length > 160 ? "…" : ""}`,
+        );
+        await new Promise((r) => setTimeout(r, 120));
+      }
+      setActiveExecutionNodeId(null);
+      if (!executionAbortRef.current) {
+        log("info", "工作流执行完毕（以上为真实模型输出）");
+      }
+    } catch (e) {
+      setActiveExecutionNodeId(null);
+      log("error", `执行失败：${e instanceof Error ? e.message : String(e)}`);
     }
     setIsRunning(false);
-  }, [nodes, edges]);
+  }, [nodes, edges, handleSave]);
 
   const clearExecutionLogs = useCallback(() => {
     setExecutionLogs([]);
@@ -709,6 +767,7 @@ export function WorkflowCanvasEditor() {
         onPaneClick={onPaneClick}
         saveStatusText={saveStatusText}
         saveStatusColor={saveStatusColor}
+        modelOptions={modelOptions}
       />
     </ReactFlowProvider>
   );
@@ -744,7 +803,7 @@ interface CanvasEditorInnerProps {
   undo: () => void;
   redo: () => void;
   pushHistory: (n: Node[], e: Edge[]) => void;
-  handleSave: () => Promise<void>;
+  handleSave: () => Promise<string | null>;
   saveMutation: { isPending: boolean; isError: boolean };
   addNode: (type: "skill" | "prompt" | "agent") => void;
   deleteSelectedNode: () => void;
@@ -754,6 +813,7 @@ interface CanvasEditorInnerProps {
   runWorkflow: () => void;
   stopExecution: () => void;
   executionLogs: Array<{ level: "info" | "success" | "error"; message: string; time: string }>;
+  modelOptions: Array<{ value: string; label: string }>;
   clearExecutionLogs: () => void;
   switchToJson: () => void;
   switchToCanvas: () => void;
@@ -809,6 +869,7 @@ function CanvasEditorInner({
   onPaneClick,
   saveStatusText,
   saveStatusColor,
+  modelOptions,
 }: CanvasEditorInnerProps) {
   const { screenToFlowPosition, fitView } = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -1337,10 +1398,12 @@ function CanvasEditorInner({
                             onChange={(e) => updateSelectedNodeData({ model: e.target.value })}
                             className="h-8 w-full cursor-pointer rounded-md border border-border bg-surface px-2 pr-6 text-sm text-foreground outline-none transition-colors hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary"
                           >
-                            <option value="">选择模型…</option>
-                            <option value="gpt-4o">GPT-4o</option>
-                            <option value="claude-3.5-sonnet">Claude 3.5 Sonnet</option>
-                            <option value="gemini-pro">Gemini Pro</option>
+                            <option value="">自动（模型中心默认链）</option>
+                            {modelOptions.slice(1).map((m) => (
+                              <option key={m.value} value={m.value}>
+                                {m.label}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <div>
@@ -1372,10 +1435,12 @@ function CanvasEditorInner({
                             onChange={(e) => updateSelectedNodeData({ model: e.target.value })}
                             className="h-8 w-full cursor-pointer rounded-md border border-border bg-surface px-2 pr-6 text-sm text-foreground outline-none transition-colors hover:border-primary/50 focus:border-primary focus:ring-1 focus:ring-primary"
                           >
-                            <option value="">选择模型…</option>
-                            <option value="gpt-4o">GPT-4o</option>
-                            <option value="claude-3.5-sonnet">Claude 3.5 Sonnet</option>
-                            <option value="gemini-pro">Gemini Pro</option>
+                            <option value="">自动（模型中心默认链）</option>
+                            {modelOptions.slice(1).map((m) => (
+                              <option key={m.value} value={m.value}>
+                                {m.label}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <div>

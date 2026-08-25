@@ -65,6 +65,7 @@ def _to_preview(t: GenerationTask) -> dict[str, Any]:
         return out
     if not isinstance(r, dict):
         return out
+    out["progress"] = r.get("progress") if isinstance(r.get("progress"), (int, float)) else None
     # 主资产：顶层 result 直接含 asset_id + url（非嵌套 dict），需分开处理
     aid = r.get("asset_id")
     if isinstance(aid, str) and aid:
@@ -88,24 +89,44 @@ def _to_preview(t: GenerationTask) -> dict[str, Any]:
     return out
 
 
+_ACTIVE_STATUSES = ("queued", "processing")
+
+
 @router.get("/recent")
 async def recent_works(
-    limit: int = Query(default=12, ge=1, le=60),
+    limit: int = Query(default=12, ge=1, le=120),
+    task_type: str | None = Query(default=None, description="逗号分隔多选，如 image,comic"),
+    status: str | None = Query(
+        default="succeeded",
+        description="succeeded(默认) | active(queued+processing) | failed | all",
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    """当前用户最近的成功媒体作品（图片/漫画走 url，音频带可播放地址）。"""
+    """当前用户最近媒体生成任务（作品库数据源，支持类型/状态过滤）。
+
+    - status=succeeded（默认）：仅成功产物（兼容旧行为）
+    - status=active：进行中任务（作品库「进行中」视图，供前端轮询）
+    - status=all：全部状态；status=failed：仅失败
+    """
+    stmt = select(GenerationTask).where(
+        GenerationTask.user_id == user.id,
+        GenerationTask.task_type.in_(_MEDIA_TYPES),
+    )
+    s = (status or "succeeded").strip().lower()
+    if s == "active":
+        stmt = stmt.where(GenerationTask.status.in_(_ACTIVE_STATUSES))
+    elif s == "failed":
+        stmt = stmt.where(GenerationTask.status == "failed")
+    elif s != "all":
+        stmt = stmt.where(GenerationTask.status == "succeeded")
+    types = [t.strip() for t in (task_type or "").split(",") if t.strip()]
+    if types:
+        stmt = stmt.where(GenerationTask.task_type.in_(types))
     rows = (
         (
             await db.execute(
-                select(GenerationTask)
-                .where(
-                    GenerationTask.user_id == user.id,
-                    GenerationTask.status == "succeeded",
-                    GenerationTask.task_type.in_(_MEDIA_TYPES),
-                )
-                .order_by(GenerationTask.created_at.desc())
-                .limit(limit)
+                stmt.order_by(GenerationTask.created_at.desc()).limit(limit)
             )
         )
         .scalars()
