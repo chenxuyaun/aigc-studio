@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
 
 import {
-  Activity,
   Bot,
   BookOpen,
   Clapperboard,
@@ -143,14 +142,6 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         label: "运行日志",
         short: "日志",
         icon: ScrollText,
-        mobile: false,
-        adminOnly: true,
-      },
-      {
-        to: "/settings/upstream",
-        label: "上游状态",
-        short: "上游",
-        icon: Activity,
         mobile: false,
         adminOnly: true,
       },

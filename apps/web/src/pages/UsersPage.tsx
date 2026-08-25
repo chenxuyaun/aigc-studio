@@ -26,6 +26,10 @@ export function UsersPage() {
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<UserCreateForm>(EMPTY);
+  // v2：编辑用户（邮箱 / 重置密码）
+  const [editing, setEditing] = useState<UserRow | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
 
   const users = useQuery({
     queryKey: ["users"],
@@ -56,6 +60,21 @@ export function UsersPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "操作失败，请重试"),
   });
 
+  // v2：保存编辑（邮箱必填可改，密码留空=不重置）
+  const updateUser = useMutation({
+    mutationFn: () =>
+      apiClient.put<UserRow>(`/users/${editing!.id}`, {
+        email: editEmail.trim(),
+        ...(editPassword ? { password: editPassword } : {}),
+      }),
+    onSuccess: () => {
+      toast.success(`已更新用户 ${editing?.username ?? ""}`);
+      setEditing(null);
+      setEditPassword("");
+      void qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "保存失败，请重试"),
+  });
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!form.username.trim() || !form.password) {
@@ -107,6 +126,17 @@ export function UsersPage() {
                       {u.email} · {u.role === "admin" ? "管理员" : "普通用户"}
                     </p>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditing(u);
+                      setEditEmail(u.email ?? "");
+                      setEditPassword("");
+                    }}
+                  >
+                    编辑
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -185,6 +215,57 @@ export function UsersPage() {
             </Button>
             <Button type="submit" loading={createUser.isPending}>
               创建
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* v2：编辑用户（邮箱 / 重置密码） */}
+      <Dialog open={editing !== null} onClose={() => setEditing(null)} title={`编辑用户：${editing?.username ?? ""}`}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!editEmail.trim()) {
+              toast.error("邮箱不能为空");
+              return;
+            }
+            if (editPassword && editPassword.length < 6) {
+              toast.error("新密码至少 6 位");
+              return;
+            }
+            updateUser.mutate();
+          }}
+          className="flex flex-col gap-4"
+        >
+          <Field label="邮箱" required>
+            {({ id }) => (
+              <Input
+                id={id}
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="user@example.com"
+              />
+            )}
+          </Field>
+          <Field label="重置密码" hint="留空表示不修改密码">
+            {({ id }) => (
+              <Input
+                id={id}
+                type="text"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                placeholder="至少 6 位，留空不改"
+                minLength={6}
+              />
+            )}
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setEditing(null)}>
+              取消
+            </Button>
+            <Button type="submit" loading={updateUser.isPending}>
+              保存
             </Button>
           </div>
         </form>

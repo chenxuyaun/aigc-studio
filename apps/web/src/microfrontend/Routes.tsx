@@ -35,9 +35,6 @@ const CharacterCardPage = lazy(() =>
 const ComicGenPage = lazy(() =>
   import("@/pages/ComicGenPage").then((m) => ({ default: m.ComicGenPage })),
 );
-const UpstreamPage = lazy(() =>
-  import("@/pages/UpstreamPage").then((m) => ({ default: m.UpstreamPage })),
-);
 const VideoGenPage = lazy(() =>
   import("@/pages/VideoGenPage").then((m) => ({ default: m.VideoGenPage })),
 );
@@ -153,7 +150,8 @@ export function AppRoutes() {
         <Route path="/create/image" element={<Page><ImageGenPage /></Page>} />
         <Route path="/create/comic" element={<Page><ComicGenPage /></Page>} />
         <Route path="/create/character-card" element={<Page><CharacterCardPage /></Page>} />
-        <Route path="/settings/upstream" element={<Page><UpstreamPage /></Page>} />
+        {/* v2：上游状态并入数据看板，旧路由 301 兼容 */}
+        <Route path="/settings/upstream" element={<Navigate to="/dashboard" replace />} />
         <Route path="/create/video" element={<Page><VideoGenPage /></Page>} />
         <Route path="/create/audio" element={<Page><AudioGenPage /></Page>} />
         <Route path="/create/music" element={<Page><MusicGenPage /></Page>} />

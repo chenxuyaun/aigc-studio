@@ -92,6 +92,19 @@ export function DashboardPage() {
     enabled: isAdmin,
   });
 
+  // v2：上游状态并入看板（原 /settings/upstream 独立页收敛，admin 可见）
+  const upstream = useQuery({
+    queryKey: ["dashboard", "upstream"],
+    queryFn: () =>
+      apiClient.get<{
+        grok_pool: { total: number; active: number; error?: string };
+        grok_image: { ok: boolean; error?: string };
+        cpa: { reachable: boolean; error?: string };
+      }>("/upstream/status"),
+    refetchInterval: 30_000,
+    enabled: isAdmin,
+  });
+
   function generate() {
     navigate(ROUTE[type], { state: { prompt: idea } });
   }
@@ -244,6 +257,47 @@ export function DashboardPage() {
                       ? "bg-destructive/10 ring-1 ring-destructive/40"
                       : "bg-muted/40"
                   }`}
+                >
+                  <p className="text-xs text-muted-foreground">{item.label}</p>
+                  <p className="mt-0.5 truncate font-display text-lg font-semibold tabular-nums">
+                    {item.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
+
+      {/* v2：上游状态条（原独立 Upstream 页并入看板，admin 可见） */}
+      {isAdmin && upstream.data && (
+        <section className="animate-enter mt-6" style={{ "--stagger": "80ms" } as CSSProperties}>
+          <Card className="p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold">上游状态</h2>
+              <span className="text-[11px] text-muted-foreground">每 30 秒自动刷新 · 模型中心 :8511 管理供应商</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {[
+                {
+                  label: "Grok 账号池",
+                  value: `${upstream.data.grok_pool.active}/${upstream.data.grok_pool.total} active`,
+                  warn: Boolean(upstream.data.grok_pool.error),
+                },
+                {
+                  label: "生图能力",
+                  value: upstream.data.grok_image.ok ? "正常" : "异常",
+                  warn: !upstream.data.grok_image.ok,
+                },
+                {
+                  label: "文本通道 (cpa)",
+                  value: upstream.data.cpa.reachable ? "可达" : "不可达",
+                  warn: !upstream.data.cpa.reachable,
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-lg p-3 ${item.warn ? "bg-destructive/10 ring-1 ring-destructive/40" : "bg-muted/40"}`}
                 >
                   <p className="text-xs text-muted-foreground">{item.label}</p>
                   <p className="mt-0.5 truncate font-display text-lg font-semibold tabular-nums">
