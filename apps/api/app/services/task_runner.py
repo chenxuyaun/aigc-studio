@@ -379,6 +379,10 @@ async def _try_real_media(
                             model,
                             **_provider_kwargs(None, include_default_model=False),
                         )
+                    elif (conf[3] or "").lower() == "comfyui":
+                        from app.providers.comfyui import ComfyUIProvider
+
+                        video_provider = ComfyUIProvider(**_provider_kwargs(conf))
                     else:
                         from app.providers.openai_compatible import OpenAICompatibleVideoProvider
 
@@ -431,6 +435,11 @@ async def _try_real_media(
                         # 请求 schema 默认 voice="default" 视为未指定
                         if conf[2] and str(params.get("voice") or "") in ("", "default"):
                             params = {**params, "voice": str(conf[2])}
+                    elif conf and ptype == "musicgen":
+                        from app.providers.musicgen import MusicGenProvider
+
+                        # 16GB GPU 节点经 frp 隧道提供 MusicGen（音乐长文本用 duration 参数）
+                        speech_provider = MusicGenProvider(**_provider_kwargs(conf))
                     else:
                         # registry 兜底：get_speech_provider 只收 name，
                         # 不能传 base_url 等构造参数（历史 TypeError 隐患）
