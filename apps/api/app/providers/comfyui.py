@@ -163,7 +163,7 @@ class ComfyUIProvider(VideoProvider):
                     hist = resp.json()
                 rec = (hist or {}).get(task_id)
                 if not rec:
-                    return {"status": "running", "progress": 10}
+                    continue  # 记录尚未出现，等下一轮
                 if rec.get("status", {}).get("completed") or rec.get("outputs"):
                     # 找首个媒体输出（videos > gifs > images 兼容 ComfyUI 版本差异）
                     outs = rec.get("outputs") or {}
@@ -180,16 +180,15 @@ class ComfyUIProvider(VideoProvider):
                                     ),
                                 }
                     return {"status": "failed", "error": "ComfyUI 无媒体输出"}
-                err = (rec.get("status") or {}).get("messages") or rec.get("status", {}).get("status_str")
-                if isinstance(err, list):
-                    for m in err:
-                        if isinstance(m, list) and m and m[0] == "execution_error":
-                            return {"status": "failed", "error": str(m[1].get("exception_message") or m[1])[:200]}
-                    err = "执行中" if (rec.get("status") or {}).get("status_str") == "running" else str(err)[:200]
                 if (rec.get("status") or {}).get("status_str") == "running":
-                    return {"status": "running", "progress": 10}
-                return {"status": "failed", "error": str(err)[:200] or "ComfyUI 输出未知"}
-            except Exception as exc:  # noqa: BLE001 — 隧道抖动重试下一轮
-                last_exc = exc
+                    continue  # 生成中，继续等
+                # 失败诊断（execution_error / 其他终态）
+                msgs = (rec.get("status") or {}).get("messages") or []
+                for m in msgs:
+                    if isinstance(m, list) and m and m[0] == "execution_error":
+                        return {"status": "failed", "error": str(m[1].get("exception_message") or m[1])[:200]}
+                return {"status": "failed", "error": "ComfyUI 执行未成功"}
+            except Exception:  # noqa: BLE001 — 隧道抖动重试下一轮
+                pass
             await asyncio.sleep(8)
         return {"status": "failed", "error": f"ComfyUI 生成超时({timeout}s)"}
