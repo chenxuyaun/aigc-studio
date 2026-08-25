@@ -104,6 +104,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "自动化",
     items: [
       { to: "/workflows", label: "工作流编排", short: "工作流", icon: Workflow, mobile: false },
+      { to: "/team", label: "Agent 团队", short: "团队", icon: Users, mobile: false },
     ],
   },
   {

@@ -44,6 +44,7 @@ from app.models.story_chapter import StoryChapter
 from app.models.story_chapter_version import StoryChapterVersion
 from app.models.story_character import StoryCharacter
 from app.models.story_project import StoryProject
+from app.models.team_run import TeamRun
 from app.models.text_document import TextDocument
 from app.models.user import User
 from app.models.workflow import Workflow
@@ -95,6 +96,7 @@ __all__ = [
     "StoryChapterVersion",
     "StoryCharacter",
     "StoryProject",
+    "TeamRun",
     "StoryStateRow",
     "StoryStateSnapshot",
     "TextDocument",

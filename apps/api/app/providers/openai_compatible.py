@@ -187,6 +187,10 @@ class OpenAICompatibleTextProvider(TextProvider):
                 resp = await client.post(url, headers=self._headers(), json=payload)
                 last_resp = resp
                 retryable = resp.status_code in (429, 500, 502, 503, 504)
+                # 批10：200 但空 body（cpa antigravity 偶发返回纯空行）也值得重试——
+                # 团队/反思等长链路曾因这种「假 200」连环失败
+                if not retryable and resp.status_code == 200 and not resp.text.strip():
+                    retryable = True
                 if not retryable or attempt >= _MAX_RETRIES - 1:
                     return resp
             except httpx.TransportError:
