@@ -670,5 +670,5 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - 批2 Dashboard 瘦身 1226→374 行：Mission 全家迁调度大厅，回归纯看板。删大块 JSX 用 ReadAllLines 行号切割后必 tsc 验孤儿括号。
 - 批3：Roleplay 右栏七 tab 收三常用+⚙️高级抽屉（世界书/正则/记忆/设置）；SillyTavernPage 删并入 ST 接入引导卡，/sillytavern→/roleplay；PromptStudio 双 tab 合并生成器+优化器。
 - 批4：Users 行内编辑（邮箱/重置密码）；Dashboard admin 上游状态卡替代 UpstreamPage（已删），/settings/upstream→/dashboard。
-- 批5 小尾巴(57c312b)：Skills 砍独立页 /skills→/agents+AgentEditor 技能模板 select 填 system_prompt；TextGen 下线 /create/text→/；Photography 空叙事改如实；Creation 计划 localStorage 防刷新丢；不做 ASMR 播放（无音频资产）/Knowledge 分页（量小）。🔴 Docker Hub DNS 污染→Dockerfile FROM 直连 docker.m.daocloud.io，勿配 daemon mirror。
+- 批5 小尾巴(57c312b)：Skills 砍独立页 /skills→/agents+AgentEditor 技能模板 select 填 system_prompt；TextGen 下线 /create/text→/；Photography 空叙事改如实；Creation 计划 localStorage 防刷新丢；不做 ASMR 播放（无音频资产）/Knowledge 分页（量小）。🔴 Docker Hub DNS 污染→Dockerfile FROM 直连 docker.m.daocloud.io，勿配 daemon mirror。批6(498d539)：Knowledge 真分页（/documents 带 page 返 envelope，不带保持数组兼容；前端 useInfiniteQuery 加载更多），E2E 14/14 含十页回归扫。
 
