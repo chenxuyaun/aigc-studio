@@ -38,38 +38,50 @@ _WAN_T2V_TEMPLATE = {
     "inputs": {"text": "", "clip": ["2", 0]},
   },
   "4": {
-    "class_type": "EmptyLatentVideo",
-    "inputs": {"length": 81, "batch_size": 1, "width": 832, "height": 480},
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留",
+      "clip": ["2", 0],
+    },
   },
   "5": {
-    "class_type": "KSamplerAdvanced",
+    "class_type": "EmptyHunyuanLatentVideo",
+    "inputs": {"width": 832, "height": 480, "length": 33, "batch_size": 1},
+  },
+  "6": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {"model": ["1", 0], "shift": 8.0},
+  },
+  "7": {
+    "class_type": "KSampler",
     "inputs": {
-      "model": ["1", 0],
+      "model": ["6", 0],
       "positive": ["3", 0],
-      "negative": ["3", 0],
-      "latent_image": ["4", 0],
-      "add_noise": "enable",
-      "noise_seed": 0,
+      "negative": ["4", 0],
+      "latent_image": ["5", 0],
+      "seed": 82628696717253,
       "steps": 30,
       "cfg": 6.0,
       "sampler_name": "uni_pc",
       "scheduler": "simple",
-      "start_at_step": 0,
-      "end_at_step": 30,
-      "return_with_leftover_noise": "disable",
+      "denoise": 1.0,
     },
   },
-  "6": {
+  "8": {
     "class_type": "VAEDecode",
-    "inputs": {"samples": ["5", 0], "vae": ["7", 0]},
+    "inputs": {"samples": ["7", 0], "vae": ["9", 0]},
   },
-  "7": {
+  "9": {
     "class_type": "VAELoader",
     "inputs": {"vae_name": "wan_2.1_vae.safetensors"},
   },
-  "8": {
+  "10": {
+    "class_type": "CreateVideo",
+    "inputs": {"images": ["8", 0], "fps": 16},
+  },
+  "11": {
     "class_type": "SaveVideo",
-    "inputs": {"images": ["6", 0], "filename_prefix": "saios_wan"},
+    "inputs": {"video": ["10", 0], "filename_prefix": "saios_wan", "format": "auto"},
   },
 }
 
@@ -133,32 +145,51 @@ class ComfyUIProvider(VideoProvider):
         except Exception as exc:  # noqa: BLE001
             return {"task_id": "", "status": "failed", "error": str(exc)[:200]}
 
-    async def poll(self, task_id: str) -> dict[str, object]:
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.get(f"{self.base_url}/history/{task_id}")
-                resp.raise_for_status()
-                hist = resp.json()
-            rec = (hist or {}).get(task_id)
-            if not rec:
-                return {"status": "running", "progress": 10}
-            if rec.get("status", {}).get("completed") or rec.get("outputs"):
-                # 找首个媒体输出（videos > gifs > images 图标兼容 ComfyUI 版本差异）
-                outs = rec.get("outputs") or {}
-                for node_out in outs.values():
-                    for key in ("videos", "gifs", "images"):
-                        items = node_out.get(key) or []
-                        if items:
-                            f = items[0]
-                            return {
-                                "status": "succeeded",
-                                "video_url": (
-                                    f"{self.base_url}/view?filename={f['filename']}"
-                                    f"&subfolder={f.get('subfolder','')}&type={f.get('type','output')}"
-                                ),
-                            }
-                return {"status": "failed", "error": "ComfyUI 无媒体输出"}
-            err = (rec.get("status") or {}).get("messages") or rec.get("status", {}).get("status_str")
-            return {"status": "failed", "error": str(err)[:200] or "ComfyUI 输出未知"}
-        except Exception as exc:  # noqa: BLE001
-            return {"status": "failed", "error": str(exc)[:200]}
+    async def poll(self, task_id: str, timeout: float = 720.0) -> dict[str, object]:
+        """阻塞轮询到生成完成（task_runner 的视频分支只 poll 一次）。
+
+        ComfyUI 是异步任务：提交后需持续查 /history 直到 completed。
+        轮询间隔 8s；超时/失败如实返回。
+        """
+        import asyncio
+        import time as _time
+
+        deadline = _time.monotonic() + timeout
+        while _time.monotonic() < deadline:
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.get(f"{self.base_url}/history/{task_id}")
+                    resp.raise_for_status()
+                    hist = resp.json()
+                rec = (hist or {}).get(task_id)
+                if not rec:
+                    return {"status": "running", "progress": 10}
+                if rec.get("status", {}).get("completed") or rec.get("outputs"):
+                    # 找首个媒体输出（videos > gifs > images 兼容 ComfyUI 版本差异）
+                    outs = rec.get("outputs") or {}
+                    for node_out in outs.values():
+                        for key in ("videos", "gifs", "images"):
+                            items = node_out.get(key) or []
+                            if items:
+                                f = items[0]
+                                return {
+                                    "status": "succeeded",
+                                    "video_url": (
+                                        f"{self.base_url}/view?filename={f['filename']}"
+                                        f"&subfolder={f.get('subfolder','')}&type={f.get('type','output')}"
+                                    ),
+                                }
+                    return {"status": "failed", "error": "ComfyUI 无媒体输出"}
+                err = (rec.get("status") or {}).get("messages") or rec.get("status", {}).get("status_str")
+                if isinstance(err, list):
+                    for m in err:
+                        if isinstance(m, list) and m and m[0] == "execution_error":
+                            return {"status": "failed", "error": str(m[1].get("exception_message") or m[1])[:200]}
+                    err = "执行中" if (rec.get("status") or {}).get("status_str") == "running" else str(err)[:200]
+                if (rec.get("status") or {}).get("status_str") == "running":
+                    return {"status": "running", "progress": 10}
+                return {"status": "failed", "error": str(err)[:200] or "ComfyUI 输出未知"}
+            except Exception as exc:  # noqa: BLE001 — 隧道抖动重试下一轮
+                last_exc = exc
+            await asyncio.sleep(8)
+        return {"status": "failed", "error": f"ComfyUI 生成超时({timeout}s)"}
