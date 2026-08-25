@@ -6,7 +6,6 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Field, Input, Textarea } from "@/components/ui/Field";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { RoundtablePanel } from "@/components/creation/RoundtablePanel";
 import { AppError, apiClient } from "@/lib/apiClient";
 import { copyText } from "@/lib/clipboard";
@@ -32,7 +31,7 @@ const MODELS = [
   { v: "code", label: "编程模型" },
 ];
 
-export function PromptGeneratorPage() {
+export function PromptGeneratorPanel() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
     idea: "",
@@ -88,7 +87,7 @@ export function PromptGeneratorPage() {
 
   return (
     <div>
-      <PageHeader title="提示词生成器" description="填写想法，生成结构化提示词" />
+      {/* v2：并入 PromptStudio 双 tab，页头由壳提供 */}
       {/* 模式切换：单次生成 / 创作圆桌 */}
       <div className="flex gap-1 border-b border-border px-4 pt-2 md:px-6" role="tablist">
         {(

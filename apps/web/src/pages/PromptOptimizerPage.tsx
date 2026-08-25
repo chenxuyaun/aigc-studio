@@ -5,7 +5,6 @@ import { Check, Copy, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Field, Textarea } from "@/components/ui/Field";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { AppError, apiClient } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
@@ -43,7 +42,7 @@ function barColor(level: string): string {
   return "bg-danger";
 }
 
-export function PromptOptimizerPage() {
+export function PromptOptimizerPanel() {
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +68,7 @@ export function PromptOptimizerPage() {
 
   return (
     <div>
-      <PageHeader title="提示词优化器" description="粘贴已有提示词，诊断并优化" />
+      {/* v2：并入 PromptStudio 双 tab，页头由壳提供 */}
       <div className="grid gap-4 p-4 md:grid-cols-2 md:p-6">
         <div className="flex flex-col gap-4">
           <Field label="原始提示词" required>

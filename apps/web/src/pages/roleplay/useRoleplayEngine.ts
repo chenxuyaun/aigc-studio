@@ -63,10 +63,8 @@ export function useRoleplayEngine() {
   const [autoMode, setAutoMode] = useState(false);
   const [autoInterval, setAutoInterval] = useState(8);
 
-  // 右侧标签
-  const [rightTab, setRightTab] = useState<
-    "lore" | "character" | "regex" | "settings" | "memory" | "book" | "market"
-  >("lore");
+  // 右侧标签（v2：高级项世界书/正则/记忆/设置收进「⚙️ 高级」抽屉，右栏只留常用三页）
+  const [rightTab, setRightTab] = useState<"character" | "book" | "market">("character");
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const busyRef = useRef(false);

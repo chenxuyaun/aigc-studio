@@ -29,9 +29,6 @@ const ImageGenPage = lazy(() =>
 const RoleplayPage = lazy(() =>
   import("@/pages/RoleplayPage").then((m) => ({ default: m.RoleplayPage })),
 );
-const SillyTavernPage = lazy(() =>
-  import("@/pages/SillyTavernPage").then((m) => ({ default: m.SillyTavernPage })),
-);
 const CharacterCardPage = lazy(() =>
   import("@/pages/CharacterCardPage").then((m) => ({ default: m.CharacterCardPage })),
 );
@@ -59,11 +56,8 @@ const WorksPage = lazy(() =>
 const SharedMusicPage = lazy(() =>
   import("@/pages/SharedMusicPage").then((m) => ({ default: m.SharedMusicPage })),
 );
-const PromptGeneratorPage = lazy(() =>
-  import("@/pages/PromptGeneratorPage").then((m) => ({ default: m.PromptGeneratorPage })),
-);
-const PromptOptimizerPage = lazy(() =>
-  import("@/pages/PromptOptimizerPage").then((m) => ({ default: m.PromptOptimizerPage })),
+const PromptStudioPage = lazy(() =>
+  import("@/pages/PromptStudioPage").then((m) => ({ default: m.PromptStudioPage })),
 );
 const PromptsPage = lazy(() => import("@/pages/PromptsPage").then((m) => ({ default: m.PromptsPage })));
 const AgentsPage = lazy(() => import("@/pages/AgentsPage").then((m) => ({ default: m.AgentsPage })));
@@ -147,7 +141,8 @@ export function AppRoutes() {
       <Route path="/dashboard" element={<Page><DashboardPage /></Page>} />
       {/* AI 创作已与工作台合一（目标框 + 引擎直控）；/create 直达重定向 */}
       <Route path="/create" element={<Navigate to="/" replace />} />
-        <Route path="/sillytavern" element={<Page><SillyTavernPage /></Page>} />
+      {/* v2：SillyTavern 独立页并入角色扮演页引导卡，旧链接 301 兼容 */}
+        <Route path="/sillytavern" element={<Navigate to="/roleplay" replace />} />
         <Route path="/roleplay" element={<Page><RoleplayPage /></Page>} />
         <Route path="/story" element={<Page><StoryStudioPage /></Page>} />
         <Route path="/agent-directory" element={<Page><AgentDirectoryPage /></Page>} />
@@ -164,8 +159,9 @@ export function AppRoutes() {
         <Route path="/create/music" element={<Page><MusicGenPage /></Page>} />
         <Route path="/create/studio" element={<Page><CreationPage /></Page>} />
         <Route path="/works" element={<Page><WorksPage /></Page>} />
-        <Route path="/create/prompt" element={<Page><PromptGeneratorPage /></Page>} />
-        <Route path="/create/prompt-optimize" element={<Page><PromptOptimizerPage /></Page>} />
+        {/* v2：生成器+优化器合并双 tab 工坊；旧优化器路由 301 兼容 */}
+        <Route path="/create/prompt" element={<Page><PromptStudioPage /></Page>} />
+        <Route path="/create/prompt-optimize" element={<Navigate to="/create/prompt?tab=optimize" replace />} />
         <Route path="/prompts" element={<Page><PromptsPage /></Page>} />
         <Route path="/agents" element={<Page><AgentsPage /></Page>} />
         <Route path="/agents/:id/chat" element={<Page><AgentChatPage /></Page>} />

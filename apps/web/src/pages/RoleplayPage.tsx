@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { BookOpen, Bot, ExternalLink, Plus, Search, Send, SlidersHorizontal, Wand2 } from "lucide-react";
+import { BookOpen, Bot, Check, Copy, ExternalLink, Plus, Search, Send, SlidersHorizontal, Wand2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -68,6 +68,10 @@ export function RoleplayPage() {
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // v2 高级抽屉（世界书/正则/记忆/设置）
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedTab, setAdvancedTab] = useState<"lore" | "regex" | "memory" | "settings">("lore");
+  const [stOpen, setStOpen] = useState(false);
 
   const kickMember = async (uid: string) => {
     if (!groupInfo) return;
@@ -119,14 +123,17 @@ export function RoleplayPage() {
     <div className="space-y-4">
       <PageHeader
         title="角色扮演"
-        description="SillyTavern 功能融入：角色卡 / 世界书 / 会话 / 宏 / 情绪 / 好感度"
+        description="角色卡 / 世界书 / 会话 / 宏 / 情绪 / 好感度 · 兼容 SillyTavern"
         actions={
-          <Button variant="outline" onClick={() => window.open("/sillytavern", "_blank", "noopener")}>
+          <Button variant="outline" onClick={() => setStOpen((v) => !v)}>
             <ExternalLink className="mr-1.5 h-4 w-4" />
-            打开 SillyTavern 独立窗口
+            🔌 SillyTavern 接入
           </Button>
         }
       />
+
+      {/* v2：SillyTavern 独立页并入此引导卡（环境自适应地址 + 网关 token） */}
+      {stOpen && <StGuideCard />}
 
       <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_300px]">
         {/* 左栏：角色卡 + 会话 */}
@@ -585,16 +592,12 @@ export function RoleplayPage() {
           </div>
         </div>
 
-        {/* 右栏：世界书 / 角色卡 / 正则 */}
+        {/* 右栏：常用三页（角色卡/状态账本/卡库）；高级项收「⚙️ 高级」抽屉 */}
         <div className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
-          <div className="mb-3 flex gap-1 border-b border-border pb-2 text-xs">
+          <div className="mb-3 flex items-center gap-1 border-b border-border pb-2 text-xs">
             {(
               [
-                ["lore", "世界书"],
                 ["character", "角色卡"],
-                ["regex", "正则"],
-                ["settings", "设置"],
-                ["memory", "记忆"],
                 ["book", "状态账本"],
                 ["market", "卡库"],
               ] as const
@@ -609,10 +612,20 @@ export function RoleplayPage() {
                 {label}
               </button>
             ))}
+            <button
+              onClick={() => setAdvancedOpen(true)}
+              className={`ml-auto flex items-center gap-1 rounded-lg px-2.5 py-1 transition-colors ${
+                advancedOpen
+                  ? "bg-primary/10 text-primary-text"
+                  : "border border-border text-muted-foreground hover:border-primary hover:text-foreground"
+              }`}
+              title="世界书 / 正则 / 记忆 / 设置"
+            >
+              ⚙️ 高级
+            </button>
           </div>
 
           <div className="max-h-[540px] overflow-y-auto">
-            {rightTab === "lore" && <LorePanel characterName={charsForBinding} />}
             {rightTab === "character" &&
               (selected ? (
                 <CharacterPanel
@@ -627,23 +640,6 @@ export function RoleplayPage() {
               ) : (
                 <p className="py-4 text-center text-xs text-muted-foreground">请先选择角色卡</p>
               ))}
-            {rightTab === "regex" && <RegexPanel characterName={charsForBinding} />}
-            {rightTab === "memory" &&
-              (selected ? (
-                <MemoryPanel assetId={selected.asset_id} />
-              ) : (
-                <p className="py-4 text-center text-xs text-muted-foreground">请先选择角色卡</p>
-              ))}
-            {rightTab === "settings" && (
-              <SettingsPanel
-                noteContent={noteContent}
-                noteInterval={noteInterval}
-                onNoteChange={setNoteContent}
-                onNoteIntervalChange={setNoteInterval}
-                onPersonasChanged={setPersonas}
-                onQuickRepliesChanged={setQuickReplies}
-              />
-            )}
             {rightTab === "book" && <StatusBookPanel chatId={sessionId} />}
             {rightTab === "market" && <CardMarketPanel />}
           </div>
@@ -655,11 +651,57 @@ export function RoleplayPage() {
             </p>
             <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
               <Wand2 className="h-3 w-3" aria-hidden />
-              会话可导出为 SillyTavern JSONL，也可导入回放
+              会话可导出为 SillyTavern JSONL，也可导入回放 · 世界书/正则/记忆在「高级」抽屉
             </p>
           </div>
         </div>
       </div>
+
+      {/* v2 高级抽屉：世界书 / 正则 / 记忆 / 设置（从右栏七 tab 收敛） */}
+      <Dialog open={advancedOpen} onClose={() => setAdvancedOpen(false)} title="高级设置" className="max-w-2xl">
+        <div className="mb-3 flex gap-1 border-b border-border pb-2 text-xs">
+          {(
+            [
+              ["lore", "📖 世界书"],
+              ["regex", "🔧 正则"],
+              ["memory", "🧠 记忆"],
+              ["settings", "⚙️ 设置"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setAdvancedTab(key)}
+              className={`rounded-lg px-2.5 py-1 transition-colors ${
+                advancedTab === key
+                  ? "bg-primary/10 text-primary-text"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto pr-1">
+          {advancedTab === "lore" && <LorePanel characterName={charsForBinding} />}
+          {advancedTab === "regex" && <RegexPanel characterName={charsForBinding} />}
+          {advancedTab === "memory" &&
+            (selected ? (
+              <MemoryPanel assetId={selected.asset_id} />
+            ) : (
+              <p className="py-4 text-center text-xs text-muted-foreground">请先选择角色卡</p>
+            ))}
+          {advancedTab === "settings" && (
+            <SettingsPanel
+              noteContent={noteContent}
+              noteInterval={noteInterval}
+              onNoteChange={setNoteContent}
+              onNoteIntervalChange={setNoteInterval}
+              onPersonasChanged={setPersonas}
+              onQuickRepliesChanged={setQuickReplies}
+            />
+          )}
+        </div>
+      </Dialog>
       <Dialog open={groupInfoOpen} onClose={() => setGroupInfoOpen(false)} title={groupInfo?.name ?? "群信息"}>
         {groupInfo && (
           <div className="space-y-3">
@@ -718,6 +760,77 @@ export function RoleplayPage() {
           </div>
         )}
       </Dialog>
+    </div>
+  );
+}
+
+/* v2：SillyTavern 接入引导卡（原独立 /sillytavern 页并入，环境自适应地址） */
+function StGuideCard() {
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const [copied, setCopied] = useState(false);
+
+  const isPublic = (() => {
+    const h = window.location.hostname;
+    return !/^(\d{1,3}\.){3}\d{1,3}$/.test(h) && h !== "localhost" && h !== "127.0.0.1";
+  })();
+  const stUrl = isPublic
+    ? `${window.location.origin}/silly`
+    : `http://${window.location.hostname}:8001`;
+  const gatewayUrl = isPublic
+    ? `${window.location.origin}/model-hub/proxy/v1`
+    : `http://${window.location.hostname}:8511/proxy/v1`;
+
+  async function copyToken() {
+    if (!accessToken) return;
+    await copyText(accessToken);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="grid gap-3 rounded-[var(--radius-card)] border border-border bg-surface p-4 text-sm md:grid-cols-3">
+      <div>
+        <p className="text-xs font-semibold">① 打开 SillyTavern</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+          独立应用新窗口打开，首次访问按引导设置管理员密码。
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <a href={stUrl} target="_blank" rel="noreferrer">
+            <Button size="sm">
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+              打开
+            </Button>
+          </a>
+          <code className="truncate rounded-lg border border-border bg-background px-2 py-1 font-mono text-[10px] text-muted-foreground">
+            {stUrl}
+          </code>
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-semibold">② 复制网关 API Key</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+          即工作台登录凭证。粘贴到 ST 的 API Key 栏。
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <code className="flex-1 truncate rounded-lg border border-border bg-background px-2 py-1 font-mono text-[10px] text-muted-foreground select-none">
+            {accessToken ? "••••••••（点击复制）" : "（未登录）"}
+          </code>
+          <Button variant="outline" size="sm" onClick={() => void copyToken()} disabled={!accessToken}>
+            {copied ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+            {copied ? "已复制" : "复制"}
+          </Button>
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-semibold">③ ST 内配置连接</p>
+        <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-[11px] leading-relaxed text-muted-foreground">
+          <li>设置 → API 连接 → Custom (OpenAI)</li>
+          <li>
+            源填 <code className="font-mono text-[10px]">{gatewayUrl}</code>
+          </li>
+          <li>Key 粘贴第②步 · 模型 gpt-oss-120b-medium</li>
+        </ol>
+      </div>
     </div>
   );
 }

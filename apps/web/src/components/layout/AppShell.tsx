@@ -82,7 +82,6 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { to: "/create/character-card", label: "角色捏卡", short: "捏卡", icon: UserPlus, mobile: false },
       { to: "/create/studio", label: "AI 导演", short: "导演", icon: Film, mobile: false },
       { to: "/create/prompt", label: "提示词工坊", short: "造词", icon: Wand2, mobile: false },
-      { to: "/create/prompt-optimize", label: "提示词优化", short: "优词", icon: Wand2, mobile: false },
     ],
   },
   {
