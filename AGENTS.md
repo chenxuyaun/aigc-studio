@@ -639,15 +639,6 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 直接用文字回答、绝不调用生图/音频工具」，只有用户明确要图片/音频才调工具。避免文本创作被模型误路由到走 grok 的媒体工具(403)，
 确保写歌/写文稳定走 cpa 文本通道。
 
-## 文档索引
-
-- `docs/PROJECT_SUMMARY.md` — 全景总结（结构/模块/数据/部署经验/优化候选）
-- `docs/zcode-design-guide.md` — ZCode 产品设计范式学习笔记（对话中枢改造依据）
-- `docs/ideas-dedup-analysis.md` — ideas 目录重复度整合去重分析报告
-- `docs/grok2api-troubleshooting.md` — grok2api 排障
-- `scripts/` — 剧本生成器等工具
-- `backups/` — 每日自动备份（2:00）
-
 ## saiOS v2 重设计规格（2026-08-24 审计完成，待用户拍板动工）
 
 - 全量审计：38 条路由 × 3 子代理逐页核查，规格书 = `docs/saios-v2-redesign.md`（六宗罪/五大决策/P0-P3 分期）。
@@ -679,4 +670,5 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - 批2 Dashboard 瘦身 1226→374 行：Mission 全家迁调度大厅，回归纯看板。删大块 JSX 用 ReadAllLines 行号切割后必 tsc 验孤儿括号。
 - 批3：Roleplay 右栏七 tab 收三常用+⚙️高级抽屉（世界书/正则/记忆/设置）；SillyTavernPage 删并入 ST 接入引导卡，/sillytavern→/roleplay；PromptStudio 双 tab 合并生成器+优化器。
 - 批4：Users 行内编辑（邮箱/重置密码）；Dashboard admin 上游状态卡替代 UpstreamPage（已删），/settings/upstream→/dashboard。
-- 经验：PS -replace 处理多行 JSX 不可靠；E2E 断言断交互元素而非纯文案。
+- 批5 小尾巴(57c312b)：Skills 砍独立页 /skills→/agents+AgentEditor 技能模板 select 填 system_prompt；TextGen 下线 /create/text→/；Photography 空叙事改如实；Creation 计划 localStorage 防刷新丢；不做 ASMR 播放（无音频资产）/Knowledge 分页（量小）。🔴 Docker Hub DNS 污染→Dockerfile FROM 直连 docker.m.daocloud.io，勿配 daemon mirror。
+
