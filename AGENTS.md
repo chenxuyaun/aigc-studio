@@ -589,41 +589,35 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
   - 工具调用过程从单行文字 → **toolLog 事件卡**（⏳ 进行中脉冲 / ✅ 完成），流式中可见 AI 在干什么。
   - 升级 `toolLine:string` → `toolLog:{name,status}[]`。
 
-**P1+ 待办**（见规格文档）：斜杠命令面板(`/`)、`@`资源引用、编辑历史消息、"AI 记得你"欢迎语、会话分组/归档/搜索、能力中心抽屉、生成画廊/再生成等。
+**各期待办清单**：见 `docs/assistant-enhance-spec.md`（P1-P4 全量，以下仅记已上线）。
 
 **P1-1 已完成并上线（2026-08-20）：斜杠命令面板**。
 - `AssistantHomePage.tsx`：输入 `/` 触发**命令建议面板**（COMMANDS 常量映射 MCP 能力：/画图 /写文 /写歌 /语音 /漫画 /角色 /故事），
   按输入实时筛选，点选回填示例提示词（含 `____` 占位让用户补）；Escape 关闭；placeholder 提示"输入 / 选择能力"。
 
-**P2+ 待办**：编辑历史消息（悬停铅笔重发）、`@`资源引用、"AI 记得你"欢迎语、会话分组/归档/搜索、能力中心抽屉、生成画廊/再生成、目标模式、定时创作。
 
 **P2-1 已完成并上线（2026-08-20）：编辑历史消息**。
 - `AssistantHomePage.tsx`：每条用户消息下方「✏️ 编辑此问题」→ 气泡变 textarea（可改）+「编辑重发/取消」；
   编辑重发 = 截断该条之后的上下文、以新文本重发（`send(text, editIdx)`：history 取 `messages.slice(0,editIdx)`、消息列表截断到该条前+新user+assistant占位）。
 
-**P2-2+ 待办**：`@`资源引用、"AI 记得你"欢迎语、会话分组/归档/搜索、能力中心抽屉、生成画廊/再生成、目标模式、定时创作。
 
 **P2-2 已完成并上线（2026-08-20）：媒体结果再生成**。
 - `AssistantHomePage.tsx`：图片/音频媒体卡加「🔄 再生成」按钮——找到该媒体消息前最近的一条 user 消息 prompt，
   调用 `send(prompt)` 重发，形成"生成→调整→再生成"闭环。
 
-**P2-3+ 待办**：`@`资源引用、"AI 记得你"欢迎语、会话分组/归档/搜索、能力中心抽屉、生成画廊时间线、目标模式、定时创作。
 
 **P2-3 已完成并上线（2026-08-20）：AI 记得你欢迎语**。
 - `AssistantHomePage.tsx`：欢迎态按历史会话个性化——有会话显示「欢迎回来 👋 上次在聊「XX」」+「回到最近会话/开启新对话」按钮；
   无会话显示首次问候。
 
-**P2-4+ 待办**：`@`资源引用、会话分组/归档/搜索、能力中心抽屉、生成画廊时间线、目标模式、定时创作。
 
 **P2-4 已完成并上线（2026-08-20）：能力中心抽屉**。
 - `AssistantHomePage.tsx`：侧栏「新对话」下新增「🧭 能力中心」按钮 → 左侧覆盖抽屉（280px），按能力分组列出全部能力，
   点击某项把示例提示词放入输入框；顶部提示「输入 / 打开命令面板」。
 
-**P2-5+ 待办**：`@`资源引用、会话分组/归档/搜索、生成画廊时间线、目标模式、定时创作。
 
 **P2-5~P2-8 已完成并上线（2026-08-20）**：会话摘要条/时间分组/搜索/生成画廊（均 AssistantHomePage.tsx 迭代，细节略）。
 
-**P2-9+ 待办**：`@`资源引用、会话自定义分组/归档、目标模式、定时创作。
 
 **✅ saiOS 收敛改造（2026-08-20，用户授权鲸鱼做决定）**：
 - **决策**：定位 = **A·创作 AI 助手**（一句话驱动创作，深层功能收纳，治"功能太多太乱太平凡"）。
@@ -670,5 +664,5 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - 批2 Dashboard 瘦身 1226→374 行：Mission 全家迁调度大厅，回归纯看板。删大块 JSX 用 ReadAllLines 行号切割后必 tsc 验孤儿括号。
 - 批3：Roleplay 右栏七 tab 收三常用+⚙️高级抽屉（世界书/正则/记忆/设置）；SillyTavernPage 删并入 ST 接入引导卡，/sillytavern→/roleplay；PromptStudio 双 tab 合并生成器+优化器。
 - 批4：Users 行内编辑（邮箱/重置密码）；Dashboard admin 上游状态卡替代 UpstreamPage（已删），/settings/upstream→/dashboard。
-- 批5 小尾巴(57c312b)：Skills 砍独立页 /skills→/agents+AgentEditor 技能模板 select 填 system_prompt；TextGen 下线 /create/text→/；Photography 空叙事改如实；Creation 计划 localStorage 防刷新丢；不做 ASMR 播放（无音频资产）/Knowledge 分页（量小）。🔴 Docker Hub DNS 污染→Dockerfile FROM 直连 docker.m.daocloud.io，勿配 daemon mirror。批6(498d539)：Knowledge 真分页（/documents 带 page 返 envelope，不带保持数组兼容；前端 useInfiniteQuery 加载更多），E2E 14/14 含十页回归扫。批7(02064d7)：调度大厅对话补齐——思维链（reasoning 透传 SSE+Think 折叠行）、回答操作栏（复制 execCommand 降级/👍👎 localStorage/🌿分支 branchSession）、工具调用留痕进消息不再清空，E2E 13/13。
+- 批5 小尾巴(57c312b)：Skills 砍独立页 /skills→/agents+AgentEditor 技能模板 select 填 system_prompt；TextGen 下线 /create/text→/；Photography 空叙事改如实；Creation 计划 localStorage 防刷新丢；不做 ASMR 播放（无音频资产）/Knowledge 分页（量小）。🔴 Docker Hub DNS 污染→Dockerfile FROM 直连 docker.m.daocloud.io，勿配 daemon mirror。批6(498d539)：Knowledge 真分页（/documents 带 page 返 envelope，不带保持数组兼容；前端 useInfiniteQuery 加载更多），E2E 14/14。批7(02064d7)：调度大厅补思维链（reasoning SSE+Think 折叠行）、回答操作栏（复制 execCommand 降级/👍👎 localStorage/🌿分支 branchSession）、工具留痕进消息不清空，E2E 13/13。
 
