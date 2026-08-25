@@ -63,9 +63,8 @@ async def test_musicgen_submit_returns_data_url() -> None:
 
 async def test_musicgen_submit_no_base_url() -> None:
     p = MusicGenProvider(base_url="")
-    r = await p.submit("x")
-    assert r["status"] == "failed"
-    assert "未配置" in r["error"]
+    with pytest.raises(RuntimeError, match="未配置"):
+        await p.submit("x")
 
 
 async def test_comfyui_submit_and_poll_success() -> None:

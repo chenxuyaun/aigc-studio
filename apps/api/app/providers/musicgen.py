@@ -30,7 +30,7 @@ class MusicGenProvider(SpeechProvider):
         self, text: str, model: str = "", **kwargs: object
     ) -> dict[str, object]:
         if not self.base_url:
-            return {"task_id": "", "status": "failed", "error": "未配置 MusicGen 服务地址"}
+            raise RuntimeError("未配置 MusicGen 服务地址")
         try:
             duration = float(kwargs.get("duration") or 10.0)
             duration = max(1.0, min(30.0, duration))
@@ -40,17 +40,20 @@ class MusicGenProvider(SpeechProvider):
                     json={"prompt": text, "duration": duration},
                     headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key not in ("", "none") else None,
                 )
-                resp.raise_for_status()
+                if resp.status_code != 200:
+                    raise RuntimeError(f"MusicGen 上游返回 {resp.status_code}: {resp.text[:200]}")
                 audio = resp.content
             if not audio:
-                return {"task_id": "", "status": "failed", "error": "MusicGen 未返回音频"}
+                raise RuntimeError("MusicGen 未返回音频")
             return {
                 "task_id": str(uuid.uuid4()),
                 "status": "succeeded",
                 "audio_url": DATA_URL_PREFIX + base64.b64encode(audio).decode(),
             }
-        except Exception as exc:  # noqa: BLE001 — 隧道/上游抖动交给候选链降级
-            return {"task_id": "", "status": "failed", "error": str(exc)[:200]}
+        except RuntimeError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — 隧道/上游抖动抛出让候选链降级
+            raise RuntimeError(f"MusicGen 调用失败: {exc!s}") from exc
 
     async def poll(self, task_id: str) -> dict[str, object]:
         return {"status": "succeeded", "progress": 100}
