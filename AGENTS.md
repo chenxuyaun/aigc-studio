@@ -424,12 +424,7 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
   （succeeded/failed 终态，`notify_event()` 工具，失败静默）。lotto 容器需 `extra_hosts: host.docker.internal:host-gateway` + httpx 依赖
 - **待办**：企业微信 webhook（`WECOM_WEBHOOK_URL` 进 `.deploy-env` + config.toml `enabled=true`）——用户提供后启用
 
-**saiOS 生图链路（grok，2026-08-20 全通）**：
-- 账号池 73 个（1643 失效已清，批量注册 73 新号，quota_fast=30/个）
-- 生图用 `grok-imagine-image-lite`（basic 账号可用；标准 `grok-imagine-image` 要 super）
-- **下载防盗链**：grok2api `config.defaults.toml` 设 `imagine_public_image_proxy=true` +
-  `app_url="http://host.docker.internal:8003"` → 返回本地 URL，worker 从本地拉（绕开 assets.grok.com 403）
-- worker 需 `-P solo` + `DB_POOL_CLASS=null` + `HTTPS_PROXY`（Clash 认证 `yuncai:密码@`）
+**saiOS 生图链路（grok，2026-08-20 全通）**：账号池 73 号 quota_fast=30/天；用 `grok-imagine-image-lite`；防盗链：grok2api `imagine_public_image_proxy=true`+`app_url=http://host.docker.internal:8003` 返本地 URL worker 本地拉；worker 需 `-P solo`+`DB_POOL_CLASS=null`+`HTTPS_PROXY`。
 
 ## Clash 代理（Mihomo，2026-08-19 装）
 
@@ -515,19 +510,7 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - **经验**：⚠️ 改后端代码后 SeScp 到服务器还不够，必须 `--build`（源码在镜像构建时 COPY 进去），只 recreate 不生效；
   空 model 自动选 provider = priority asc 第一个 enable 的，改模型要同时改 .env + DB provider_configs 两处。
 
-**🔴 对话中枢仍不可用：grok.com 对服务器出口 IP 风控 403（2026-08-20，用户持续"思考中"）**：
-- **现象**：对话中枢实际调用仍失败，前端/日志见 `Chat upstream returned 403` / `status=403 body=-`；
-  连续多次文本生成全部失败。生图（grok-imagine-image-lite）能通、文本（grok-4.20-fast）不能。
-- **根因**：grok2api 经 Clash 代理访问 `https://grok.com/rest/app-chat/conversations/new` 返回 **403**
-  （xAI anti-bot 风控当前机场出口 IP）。这是**外部服务风控**，非 saiOS 代码 bug。
-- **已排查确认**：① saiOS API/前端/对话中枢代码链路正常（模型名已改、SSE 已兼容，直连测出过"你好！我是 Grok 4.5"）；
-  ② grok2api 账号池 `last_fail_reason=rate_limited`；③ Clash 30 个节点逐一测试 **全部 403**（非单一节点问题）；
-  ④ 更新 Clash 订阅后节点仍 30 个、grok 仍 403。
-- **错误提示已优化**：`openai_compatible.py` 新增 `_extract_sse_error`——识别 grok2api 返回的 `event: error\ndata:{json}`
-  SSE 错误帧，前端显示「上游错误: Chat upstream returned 403 (code=upstream_error)」而非笼统的「非 JSON」。
-- **未解决的根本**：需要 ① 换一个**未被 grok.com 风控**的新机场订阅/节点；或 ② 走**不走 grok.com 的文本通道**——
-  saiOS 里已配 `GPT-OSS(cpa) → gpt-oss-120b-medium`（cpa 85531，更稳），但需提供 cpa 可用 api key（DB 里加密存着）来启用默认文本。
-- **候选方案**：文本走 cpa(GPT-OSS)、生图继续走 grok2api(grok-imagine-image-lite)，各用其长。
+**🔴 grok.com IP 风控 403 事故（2026-08-20，已解决）**：grok2api 出口 IP 被 xAI 风控（CLASH 30 节点全 403）→ 文本改走 cpa(GPT-OSS) 解决；`openai_compatible._extract_sse_error` 识别 SSE error 帧回显友好错误。
 
 **✅ 文本已切到 cpa（2026-08-20，对话正常可用）**：
 - **动作**：① `.env` 的 `OPENAI_COMPATIBLE_BASE_URL` → `http://host.docker.internal:8317/v1`（cpa）、
@@ -624,6 +607,5 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - 批5 小尾巴(57c312b)：Skills 砍独立页 /skills→/agents+AgentEditor 技能模板 select 填 system_prompt；TextGen 下线 /create/text→/；Photography 空叙事改如实；Creation 计划 localStorage 防刷新丢；不做 ASMR 播放（无音频资产）/Knowledge 分页（量小）。🔴 Docker Hub DNS 污染→Dockerfile FROM 直连 docker.m.daocloud.io，勿配 daemon mirror。批6(498d539)：Knowledge 真分页（/documents 带 page 返 envelope，不带保持数组兼容；前端 useInfiniteQuery 加载更多），E2E 14/14。批7(02064d7)：调度大厅补思维链（reasoning SSE+Think 折叠行）、回答操作栏（复制 execCommand 降级/👍👎 localStorage/🌿分支 branchSession）、工具留痕进消息不清空，E2E 13/13。批8+9(93e370a)：AI 生命体——成长日记 ai_growth_diary + 长期记忆 ai_memory_entries（反思服务节流+静默降级，记忆注入 agent_chat 跨会话记住用户），/growth 足迹页，E2E 7/7；坑：nginx SPA 白名单正则要加新路由、apiClient 勿带 /api/v1 前缀、E2E 直访须打 /saios/xxx（basename）。批10(b366d89)：Agent 团队 team_runs 规划→串行接力→汇总报告（后台 AsyncSessionLocal 自开会话），/team 页轮询实时看产出，真实交付实证；坑：MySQL TEXT 列不能 server_default（曾致 api 循环重启）、gpt-oss 推理吃 token 不能压 max_tokens、cpa 偶发 200 空 body→_post_retry 补空响应重试。批11(454dfe0)：分享墙 community_posts 登录用户发布/浏览/❤️去重点赞/作者删，/community 页，E2E 6/6。批12(f238a80)：团队韧性（成员环节上游失败→标 skipped 跳过续跑，仅全败才 failed；test_teams 增用例）+ 作品库一键分享到墙（成品卡 🌍 分享→POST /community/posts，图片帖带 prompt 介绍），E2E 6/6。
 📦 工具箱归一(2026-08-25)：四工具箱审计后主线=**tools**(155 commits 全栈超集)，toolbox(20 commits 平行前身,含 303 dirty 改动**未固化 commit** 连 .git 原样归档)/tools-v2(零实现脚手架 34 文件) 归档至 _archive/，tool_box(Tauri 桌面线) 独立保留；tools 内误嵌的 list/wxapp/chats 外来目录移出至 _archive/embedded-in-tools。⚠️ toolbox 的 git add 会挂起留 index.lock（疑似仓库损坏/超大暂存），勿强行 commit，可直接移动归档。
 📋 新项目评估(2026-08-25 子代理审计)：gaokao-advisor=可较快上线附条件（FastAPI+SQLite 轻量，但真实录取数据仅 10/31 省+非 git 仓库+数据文件缺失，只能以 AI 分析演示定位，需补数据或降级）；zg(此止观)=不建议上 saiOS（Taro 微信小程序形态+无后端+停滞，与 saiOS Web 形态错配，最多入口页外链）。
-🎯 GPU 节点接入(2026-08-25 ✅ 音乐+视频全链路打通)：用户家 RTX 4080SUPER 16G 麒麟 V10(172.168.10.160, root 密码 SSH, 已授权接管)。frps --network host(0.0.0.0:7000 + 服务口绑 172.17.0.1); token 在 .build-tmp/_frp_token.txt; 配置 /home/ubuntu/frps/frps.toml。GPU 端 /root/gpu-node/ docker-compose：comfyui(7865 自建镜像)+musicgen(8010)+frpc，隧道已通。hub 注册 provider **必须传 provider_type 字段**(传 type 被忽略成 openai_compatible)。坑八连：① Windows CRLF 拆坏命令→sed 's/\\r$//' ② 麒麟机只有 docker-compose(无 compose 插件) ③ frps 容器内 172.17.0.1 是容器自己的网关→必须 host 网络 ④ comfyanonymous/comfyui 不在 daocloud 白名单→自建 Dockerfile ⑤ ComfyUI torch>=2.4(custom_op)/MusicGen torch>=2.6(CVE-2025-32434 torch.load weights_only 限制 .bin 权重；safetensors 不受限)→基镜像 2.4.1/2.6.0 ⑥ GitHub 直连/ghproxy 全挂→云服务器经 Clash 认证代理 clone 打包传入 ⑦ frpc localPort 用容器内端口 ⑧ 麒麟机 8000 已有 Myolotrain，宿主端口避开。 完成：music 槽=MusicGen(torch2.6)→wav 落库(c7c31c88)；video 槽=ComfyUI0.33 Wan2.1→mp4 落库(338985a5, ftyp 323KB)。ComfyUI0.33 附加坑：EmptyLatentVideo 已移除→官方模板 EmptyHunyuanLatentVideo+ModelSamplingSD3+CreateVideo+SaveVideo(format=auto, VIDEO 类型输入)；模型挂载 /app/ComfyUI/models(WORKDIR 相对路径)；comfy_kitchen 0.2.31 的 list[int] 注解与 torch2.6 infer_schema 不兼容→ck_patch.py 改 typing.List；triton JIT 需 gcc；poll 须阻塞轮询(首次无记录 continue, running 也 continue)。用户提供家中 4060Ti16G(172.168.10.160, Linux)。服务器已装 frps(docker, snowdreamtech/frps:0.61.1, 控制口公网 0.0.0.0:7000, proxyBindAddr=172.17.0.1 服务口仅内网网关可达, auth.token 在 .build-tmp/_frp_token.txt, 配置 /home/ubuntu/frps/frps.toml, allowPorts 7001-7010)。GPU 端一键包 .build-tmp/gpu-kit/(docker-compose: comfyui:7860→7001 + musicgen:8000→7002 + frpc token 预填; up.sh 自检+下 Wan2.1 模型; musicgen/server.py = MusicGen FastAPI)。saiOS 桥接骨架已提交 bc0a255(providers/comfyui.py submit/poll 走 /prompt+/history+/view; providers/musicgen.py data URL 同 edge_tts 约定; task_runner video=comfyui、audio/music=musicgen 分支; test_gpu_node 4 用例绿但**未部署**)。⚠️ 待办：① 腾讯云安全组放行 TCP 7000(用户) ② 用户在 GPU 机执行 up.sh ③ 验证隧道 ④ 部署 saiOS 桥接 + hub 注册 provider(comfyui→video槽 base_url=http://host.docker.internal:7001; musicgen→music槽 :7002) ⑤ 联调 E2E(视频/音乐真产出)。视频 workflow 用内置 Wan2.1-T2V 模板(节点名需连调校准)。
-⚠️ video/music 槽=外部资源硬约束（2GB 无 GPU 跑不动 Wan2.1 等本地模型，Suno/免费音乐 API 均需注册付费），如实保持槽空+UI 诚实报拒绝，不硬上。
+🎯 GPU 节点接入(2026-08-25 ✅ 音乐+视频全链路打通)：用户家 RTX 4080SUPER 16G 麒麟 V10(172.168.10.160, root 密码 SSH, 已授权接管)。frps --network host(0.0.0.0:7000 + 服务口绑 172.17.0.1); token 在 .build-tmp/_frp_token.txt; 配置 /home/ubuntu/frps/frps.toml。GPU 端 /root/gpu-node/ docker-compose：comfyui(7865 自建镜像)+musicgen(8010)+frpc，隧道已通。hub 注册 provider **必须传 provider_type 字段**(传 type 被忽略成 openai_compatible)。坑八连：① Windows CRLF 拆坏命令→sed 's/\\r$//' ② 麒麟机只有 docker-compose(无 compose 插件) ③ frps 容器内 172.17.0.1 是容器自己的网关→必须 host 网络 ④ comfyanonymous/comfyui 不在 daocloud 白名单→自建 Dockerfile ⑤ ComfyUI torch>=2.4(custom_op)/MusicGen torch>=2.6(CVE-2025-32434 torch.load weights_only 限制 .bin 权重；safetensors 不受限)→基镜像 2.4.1/2.6.0 ⑥ GitHub 直连/ghproxy 全挂→云服务器经 Clash 认证代理 clone 打包传入 ⑦ frpc localPort 用容器内端口 ⑧ 麒麟机 8000 已有 Myolotrain，宿主端口避开。 完成：music 槽=MusicGen(torch2.6)→wav 落库(c7c31c88)；video 槽=ComfyUI0.33 Wan2.1→mp4 落库(338985a5, ftyp 323KB)。ComfyUI0.33 附加坑：EmptyLatentVideo 已移除→官方模板 EmptyHunyuanLatentVideo+ModelSamplingSD3+CreateVideo+SaveVideo(format=auto, VIDEO 类型输入)；模型挂载 /app/ComfyUI/models(WORKDIR 相对路径)；comfy_kitchen 0.2.31 的 list[int] 注解与 torch2.6 infer_schema 不兼容→ck_patch.py 改 typing.List；triton JIT 需 gcc；poll 须阻塞轮询(首次无记录 continue, running 也 continue)。⚠️ video/music 槽=外部资源硬约束（2GB 无 GPU 跑不动 Wan2.1 等本地模型，Suno/免费音乐 API 均需注册付费），如实保持槽空+UI 诚实报拒绝，不硬上。
 
