@@ -43,14 +43,9 @@ cd apps/web && E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test --project=
 
 ## 当前状态（2026-08-07 更新）
 
-**已完成的待办**（均含自动化测试）：
-1. ✅ 前端 GUI 测试：`apps/web/e2e/`（global-setup 登录 + core-modules 4 测试 + smoke 5 测试，`--grep-invert @heavy` 跑默认套件）
-2. ✅ 推理框架资料入库：知识库 `推理框架·vllm/ollama/llamacpp/selection` 4 篇
-3. ✅ 连载告警：每日巡检 `serial_project_alerts`（`SERIAL_STALL_DAYS` 默认 7 天）+ Dashboard 高亮
-4. ✅ 提示词库治理：清理 168 垃圾 + 382 重复（剩 13,464 条）；`content_hash` 去重机制已启用
-5. ✅ 图片/视频生成真实链路修复（provider_configs 需含 grok-imagine-* 匹配行）
-6. ✅ 图片生成页「从提示词库选择」入口
-7. ✅ AI 导演工作室：`/create/studio`（主题→AI 选角→一键建组→群聊共创），后端 `POST /creation/plan|setup` + `tests/test_creation.py`
+**已完成的待办**（均含自动化测试）：前端 GUI 测试（core-modules 4 + smoke 5）；推理框架资料入库 4 篇；
+连载告警 serial_project_alerts；提示词库治理（168 垃圾+382 重复已清，剩 13,464 条，content_hash 去重）；图片/视频真实链路；
+图片页「从提示词库选择」；AI 导演工作室 /create/studio（POST /creation/plan|setup）。
 
 **注意**：
 - E2E 登录态文件 `apps/web/e2e/.auth/` 含 token，已在 .gitignore
@@ -367,17 +362,9 @@ cpa 下轮自动刷新即恢复（gpt-oss 秒通）。脚本 `.build-tmp/_clash_
 `tests/test_provider_tools.py` 的 _FakeResp 补 `.text`（SSE 兼容改造后的测试债）；
 `tests/test_provider_settings.py` 解包对齐 4 元组。全量 pytest 绿。
 
-## saiOS 服务器生图状态（2026-08-19 更新）
-
-- **历史图片正常**：DB↔volume 116/116，access-url → content 公网全 200（`_server_verify_assets.py` 体检）。
-- **文本生成已解锁**：cpa（cli-proxy-api :8317）部署成功 + HTTPS_PROXY 走 Clash 后，saiOS 文本走
-  gpt-oss-120b-medium **实测端到端流式输出正常**（DeepSeek 仍可用作备选）。
-- **生图状态**：grok2api（:8003）已部署 + 导入 accounts_cli.txt 的 **1643 个账号**（rc4 accounts.db，
-  pool=basic，quota 需 grok 刷新）。账号是 2026-07 注册的旧 token，quota remaining=0，
-  **刷新成功后 grok-imagine-image 即可生图**；当前卡在批量刷新（`POST /admin/api/batch/refresh`
-  需 tokens 参数格式待定，或等 24h 定时刷新，或重跑注册机出新鲜号）。
-  cpa 不支持 gemini 生图（antigravity 仅聊天模型）。
-- **代理前置**：Clash 7897 已通（api.x.ai 401/grok.com 200），grok2api/cpa 都走 `host.docker.internal:7897`。
+## saiOS 服务器生图状态（2026-08-19，大部分已被 Model Hub v3 链取代，仅存档）
+历史图片 DB↔volume 116/116 公网 200（_server_verify_assets.py 体检）；grok2api 早期 1643 号
+已清理换 73 新号（见「Grok2API 生图复活」节）；cpa 不支持 gemini 生图；Clash 7897 为 cpa/grok 必经代理。
 
 ## 全量服务迁移（2026-08-19：本地 Docker → 服务器）
 
@@ -472,9 +459,7 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 **动作**：23 个重复/半成品项目**移动归档**到 `D:\software\code\ideas\_archive\`（保留 git 历史，零删除，可回滚）。
 **清单**：`_archive/_ARCHIVE_MANIFEST.md`；分析报告 `docs/ideas-dedup-analysis.md`（工件 ideas-dedup-analysis）。
 **保留不动的核心**：`list`(saiOS)/`writers`/`ten`（都在服务器）、`kaiyuan`(服务器 grok2api)、`ComfyUI`、`waoowaoo`/`xf`/`zg`/`zhiguan`/`gaokao-advisor`/`study`(活跃)、
-`ai_lh`/`muai`/`PandaWiki`/`moto`(评估保留)、`tools`/`tools-v2`/`tool_box`/`toolbox`(工具箱簇，待归一未动)。
-**后续待办**：① 4 个工具箱(tools/tools-v2/tool_box/toolbox)归一到 1 个（待用户定 tools vs tools-v2 主路线）；
-② 可评估上线 gaokao-advisor、zg 进平台；③ 归档工具 `scripts/_archive_dedup.ps1`（注意：PS 5.1 下脚本文件 UTF-8 无 BOM 会解析报错，改用 shell 内联执行 Move-Item 成功）。
+`ai_lh`/`muai`/`PandaWiki`/`moto`(评估保留)、`tool_box`(桌面线，独立保留)。**后续待办均已完结（2026-08-25）**：工具箱归一→见文末「📦 工具箱归一」（主线 tools）；gaokao/zg 评估→见文末「📋 新项目评估」；归档工具 = `scripts/_archive_dedup.ps1`（PS 5.1 无 BOM 解析报错，用 shell 内联 Move-Item）。
 
 ## 首页改造为 AI 助手中枢（2026-08-20，P0 已完成并上线）
 
