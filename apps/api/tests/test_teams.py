@@ -111,3 +111,34 @@ async def test_list_runs_order(sqlite_db) -> None:
     # 同秒插入 created_at 相同（DATETIME 秒级），uuid 序不稳定 → 只验集合与用户隔离
     goals = {r.goal for r in rows}
     assert {"第一个", "第二个"} <= goals
+
+@pytest.mark.asyncio
+async def test_team_member_failure_skips_not_fails(sqlite_db) -> None:
+    """批12 韧性：写手环节上游炸 → 该步标 skipped，团队仍 done 出报告。"""
+    db = sqlite_db
+    calls: list[str] = []
+
+    async def flaky_generate(prompt, model, **kw):
+        calls.append(prompt)
+        if "只输出 JSON" in prompt and "members" in prompt:
+            return _llm_result(_PLAN)
+        if "最终交付报告" in prompt:
+            return _llm_result("【最终报告】写手缺席，其余环节已尽力补位。")
+        if "按策划写出文案" in prompt:
+            raise RuntimeError("429 Rate exceeded")
+        return _llm_result(f"[{len(calls)}号成员产出] 内容……")
+
+    resolved = type("R", (), {})()
+    resolved.provider = AsyncMock()
+    resolved.provider.generate = AsyncMock(side_effect=flaky_generate)
+    resolved.model = "mock-model"
+    with patch("app.services.team_service.resolve_text_provider", return_value=resolved):
+        row = await team_service.start_team_run(db, "uX", "做一份海报文案")
+        await team_service.execute_team_run(db, row.id)
+        await db.refresh(row)
+        fresh = row
+    assert fresh.status == "done", (fresh.status, fresh.error)
+    steps = fresh.steps or []
+    skipped = [s for s in steps if s.get("skipped")]
+    assert len(skipped) == 1 and skipped[0]["name"] == "写手"
+    assert "已跳过" in fresh.final_report or "写手缺席" in fresh.final_report

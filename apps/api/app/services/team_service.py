@@ -98,19 +98,34 @@ async def execute_team_run(db: AsyncSession, run_id: str) -> None:
                 prev_text = "已完成的前序产出：\n" + "\n\n".join(
                     f"[{s['name']}·{s['role']}]\n{s['output'][:1200]}" for s in steps[-2:]
                 )
-            out = await _llm(
-                db,
-                _MEMBER_PROMPT.format(
-                    name=m["name"], role=m["role"], task=m["task"], goal=row.goal, prev=prev_text
-                ),
-            )
-            steps.append({"name": m["name"], "role": m["role"], "output": out[:4000]})
+            # 批12 韧性：单成员上游失败 → 标记跳过并继续（cpa 偶发限流/空响应
+            # 不应让整场协作报废）；仅当全部成员都失败才整体 failed
+            try:
+                out = await _llm(
+                    db,
+                    _MEMBER_PROMPT.format(
+                        name=m["name"], role=m["role"], task=m["task"], goal=row.goal, prev=prev_text
+                    ),
+                )
+                steps.append({"name": m["name"], "role": m["role"], "output": out[:4000]})
+            except Exception as exc:  # noqa: BLE001 — 单环节降级
+                logger.warning("team_member_skipped", extra={"run_id": run_id, "member": m["name"]})
+                steps.append({
+                    "name": m["name"],
+                    "role": m["role"],
+                    "output": f"（此环节上游暂不可用，已跳过：{str(exc)[:120]}）",
+                    "skipped": True,
+                })
             row.steps = list(steps)  # 每步落库，前端轮询可见
             await db.commit()
 
-        # ── 汇总 ──
+        if all(s.get("skipped") for s in steps):
+            raise RuntimeError("所有成员环节均因上游不可用而跳过")
+
+        # ── 汇总 ──（跳过的环节如实标注，不冒充产出）
         steps_text = "\n\n".join(
-            f"【{s['name']} · {s['role']}】\n{s['output'][:1500]}" for s in steps
+            f"【{s['name']} · {s['role']}】{'（已跳过）' if s.get('skipped') else ''}\n{s['output'][:1500]}"
+            for s in steps
         )
         report = await _llm(db, _SUMMARY_PROMPT.format(goal=row.goal, steps=steps_text))
         row.final_report = report[:8000]

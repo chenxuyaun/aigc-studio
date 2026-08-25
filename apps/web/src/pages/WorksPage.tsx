@@ -155,6 +155,29 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
   const [limit, setLimit] = useState(PAGE_STEP);
   const [detail, setDetail] = useState<WorkPreview | null>(null);
   const [busyId, setBusyId] = useState("");
+  const [sharingId, setSharingId] = useState("");
+  const [shareTip, setShareTip] = useState("");
+
+  /** 批12：一键把成品发布到社区分享墙（图片帖，带 prompt 作为介绍） */
+  async function shareToCommunity(w: WorkPreview) {
+    const url = (w.asset_url || w.cover_url) as string;
+    setSharingId(w.id);
+    try {
+      await apiClient.post("/community/posts", {
+        title: (w.title?.trim() || w.prompt?.slice(0, 60) || "我的 AI 作品").slice(0, 120),
+        content: w.prompt?.slice(0, 2000) ?? "",
+        kind: "image",
+        image_url: url,
+      });
+      setShareTip("✓ 已发布到分享墙");
+      setTimeout(() => setShareTip(""), 2500);
+    } catch {
+      setShareTip("分享失败，请稍后再试");
+      setTimeout(() => setShareTip(""), 2500);
+    } finally {
+      setSharingId("");
+    }
+  }
 
   const load = useCallback(
     async (lim = limit) => {
@@ -240,6 +263,15 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
 
   return (
     <div className="p-4 md:p-6">
+      {shareTip && (
+        <div className="mb-2">
+          <span
+            className={`text-xs ${shareTip.startsWith("✓") ? "text-emerald-500" : "text-destructive"}`}
+          >
+            {shareTip}
+          </span>
+        </div>
+      )}
       {/* 筛选行 */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1.5">
@@ -323,10 +355,12 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
                 key={w.id}
                 work={w}
                 busy={busyId === w.id}
+                sharing={sharingId === w.id}
                 onCancel={() => void cancelTask(w.id)}
                 onRetry={() => void retryTask(w.id)}
                 onDelete={() => void removeTask(w.id)}
                 onOpen={() => setDetail(w)}
+                onShare={() => void shareToCommunity(w)}
               />
             ))}
           </div>
@@ -363,17 +397,21 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
 function WorkCard({
   work,
   busy,
+  sharing,
   onOpen,
   onCancel,
   onRetry,
   onDelete,
+  onShare,
 }: {
   work: WorkPreview;
   busy: boolean;
+  sharing: boolean;
   onOpen: () => void;
   onCancel: () => void;
   onRetry: () => void;
   onDelete: () => void;
+  onShare: () => void;
 }) {
   const Icon = TYPE_ICONS[work.task_type] ?? ImageIcon;
   const active = ACTIVE_STATUSES.has(work.status);
@@ -489,6 +527,16 @@ function WorkCard({
               ✨ 再创作
             </button>
           )}
+        {work.status === "succeeded" && (work.asset_url || work.cover_url) && (
+          <button
+            disabled={sharing}
+            onClick={() => void onShare()}
+            className="hidden text-[11px] text-primary-text group-hover:inline hover:underline disabled:opacity-50"
+            title="发布到社区分享墙"
+          >
+            {sharing ? "分享中…" : "🌍 分享"}
+          </button>
+        )}
         {active && (
           <button
             disabled={busy}
