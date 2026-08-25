@@ -25,39 +25,49 @@ from app.providers.base import VideoProvider
 
 _WAN_T2V_TEMPLATE = {
   "1": {
-    "class_type": "CheckpointLoaderSimple",
-    "inputs": {"ckpt_name": "wan2.1_t2v_1.3B_fp16.safetensors"},
-  },
-  "2": {
     "class_type": "UNETLoader",
     "inputs": {"unet_name": "wan2.1_t2v_1.3B_fp16.safetensors", "weight_dtype": "default"},
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default"},
   },
   "3": {
     "class_type": "CLIPTextEncode",
     "_meta": {"title": "prompt"},
-    "inputs": {"text": "", "clip": ["1", 1]},
+    "inputs": {"text": "", "clip": ["2", 0]},
   },
   "4": {
     "class_type": "EmptyLatentVideo",
     "inputs": {"length": 81, "batch_size": 1, "width": 832, "height": 480},
   },
   "5": {
-    "class_type": "KVideoSampler",
+    "class_type": "KSamplerAdvanced",
     "inputs": {
-      "model": ["2", 0],
+      "model": ["1", 0],
       "positive": ["3", 0],
       "negative": ["3", 0],
       "latent_image": ["4", 0],
-      "sampler_name": "uni_pc",
+      "add_noise": "enable",
+      "noise_seed": 0,
       "steps": 30,
       "cfg": 6.0,
+      "sampler_name": "uni_pc",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 30,
+      "return_with_leftover_noise": "disable",
     },
   },
   "6": {
     "class_type": "VAEDecode",
-    "inputs": {"samples": ["5", 0], "vae": ["1", 2]},
+    "inputs": {"samples": ["5", 0], "vae": ["7", 0]},
   },
   "7": {
+    "class_type": "VAELoader",
+    "inputs": {"vae_name": "wan_2.1_vae.safetensors"},
+  },
+  "8": {
     "class_type": "SaveVideo",
     "inputs": {"images": ["6", 0], "filename_prefix": "saios_wan"},
   },
