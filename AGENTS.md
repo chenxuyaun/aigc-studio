@@ -576,35 +576,7 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 
 **各期待办清单**：见 `docs/assistant-enhance-spec.md`（P1-P4 全量，以下仅记已上线）。
 
-**P1-1 已完成并上线（2026-08-20）：斜杠命令面板**。
-- `AssistantHomePage.tsx`：输入 `/` 触发**命令建议面板**（COMMANDS 常量映射 MCP 能力：/画图 /写文 /写歌 /语音 /漫画 /角色 /故事），
-  按输入实时筛选，点选回填示例提示词（含 `____` 占位让用户补）；Escape 关闭；placeholder 提示"输入 / 选择能力"。
-
-
-**P2-1 已完成并上线（2026-08-20）：编辑历史消息**。
-- `AssistantHomePage.tsx`：每条用户消息下方「✏️ 编辑此问题」→ 气泡变 textarea（可改）+「编辑重发/取消」；
-  编辑重发 = 截断该条之后的上下文、以新文本重发（`send(text, editIdx)`：history 取 `messages.slice(0,editIdx)`、消息列表截断到该条前+新user+assistant占位）。
-
-
-**P2-2 已完成并上线（2026-08-20）：媒体结果再生成**。
-- `AssistantHomePage.tsx`：图片/音频媒体卡加「🔄 再生成」按钮——找到该媒体消息前最近的一条 user 消息 prompt，
-  调用 `send(prompt)` 重发，形成"生成→调整→再生成"闭环。
-
-
-**P2-3 已完成并上线（2026-08-20）：AI 记得你欢迎语**。
-- `AssistantHomePage.tsx`：欢迎态按历史会话个性化——有会话显示「欢迎回来 👋 上次在聊「XX」」+「回到最近会话/开启新对话」按钮；
-  无会话显示首次问候。
-
-
-**P2-4 已完成并上线（2026-08-20）：能力中心抽屉**。
-- `AssistantHomePage.tsx`：侧栏「新对话」下新增「🧭 能力中心」按钮 → 左侧覆盖抽屉（280px），按能力分组列出全部能力，
-  点击某项把示例提示词放入输入框；顶部提示「输入 / 打开命令面板」。
-
-
-**P2-5~P2-8 已完成并上线（2026-08-20）**：会话摘要条/时间分组/搜索/生成画廊（均 AssistantHomePage.tsx 迭代，细节略）。
-
-
-**✅ saiOS 收敛改造（2026-08-20，用户授权鲸鱼做决定）**：
+**P1-1~P2-8 已完成（斜杠命令面板/编辑历史/媒体再生成/记得你欢迎语/能力中心抽屉/会话摘要·分组·搜索·画廊）——详见 git log，均在 AssistantHomePage.tsx 迭代。****✅ saiOS 收敛改造（2026-08-20，用户授权鲸鱼做决定）**：
 - **决策**：定位 = **A·创作 AI 助手**（一句话驱动创作，深层功能收纳，治"功能太多太乱太平凡"）。
 - 规格：`docs/saios-consolidation-spec.md`。
 - **P-A1 已上线**：AppShell 侧栏**默认只展开「创作」组(3项)主入口**，资源/角色/系统组**折叠收纳**（点组标题展开、不删功能、激活组自动展开），用 useLocation 判激活。
@@ -652,6 +624,6 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 - 批5 小尾巴(57c312b)：Skills 砍独立页 /skills→/agents+AgentEditor 技能模板 select 填 system_prompt；TextGen 下线 /create/text→/；Photography 空叙事改如实；Creation 计划 localStorage 防刷新丢；不做 ASMR 播放（无音频资产）/Knowledge 分页（量小）。🔴 Docker Hub DNS 污染→Dockerfile FROM 直连 docker.m.daocloud.io，勿配 daemon mirror。批6(498d539)：Knowledge 真分页（/documents 带 page 返 envelope，不带保持数组兼容；前端 useInfiniteQuery 加载更多），E2E 14/14。批7(02064d7)：调度大厅补思维链（reasoning SSE+Think 折叠行）、回答操作栏（复制 execCommand 降级/👍👎 localStorage/🌿分支 branchSession）、工具留痕进消息不清空，E2E 13/13。批8+9(93e370a)：AI 生命体——成长日记 ai_growth_diary + 长期记忆 ai_memory_entries（反思服务节流+静默降级，记忆注入 agent_chat 跨会话记住用户），/growth 足迹页，E2E 7/7；坑：nginx SPA 白名单正则要加新路由、apiClient 勿带 /api/v1 前缀、E2E 直访须打 /saios/xxx（basename）。批10(b366d89)：Agent 团队 team_runs 规划→串行接力→汇总报告（后台 AsyncSessionLocal 自开会话），/team 页轮询实时看产出，真实交付实证；坑：MySQL TEXT 列不能 server_default（曾致 api 循环重启）、gpt-oss 推理吃 token 不能压 max_tokens、cpa 偶发 200 空 body→_post_retry 补空响应重试。批11(454dfe0)：分享墙 community_posts 登录用户发布/浏览/❤️去重点赞/作者删，/community 页，E2E 6/6。批12(f238a80)：团队韧性（成员环节上游失败→标 skipped 跳过续跑，仅全败才 failed；test_teams 增用例）+ 作品库一键分享到墙（成品卡 🌍 分享→POST /community/posts，图片帖带 prompt 介绍），E2E 6/6。
 📦 工具箱归一(2026-08-25)：四工具箱审计后主线=**tools**(155 commits 全栈超集)，toolbox(20 commits 平行前身,含 303 dirty 改动**未固化 commit** 连 .git 原样归档)/tools-v2(零实现脚手架 34 文件) 归档至 _archive/，tool_box(Tauri 桌面线) 独立保留；tools 内误嵌的 list/wxapp/chats 外来目录移出至 _archive/embedded-in-tools。⚠️ toolbox 的 git add 会挂起留 index.lock（疑似仓库损坏/超大暂存），勿强行 commit，可直接移动归档。
 📋 新项目评估(2026-08-25 子代理审计)：gaokao-advisor=可较快上线附条件（FastAPI+SQLite 轻量，但真实录取数据仅 10/31 省+非 git 仓库+数据文件缺失，只能以 AI 分析演示定位，需补数据或降级）；zg(此止观)=不建议上 saiOS（Taro 微信小程序形态+无后端+停滞，与 saiOS Web 形态错配，最多入口页外链）。
-🎯 GPU 节点接入(2026-08-25，隧道已通/精灵重建中)：用户家里银河麒麟 V10 + **RTX 4080 SUPER 16G**(172.168.10.160, root SSH 密码登录, 用户授权接管)。服务器 frps 已 host 网络运行(0.0.0.0:7000 控制口 + proxyBindAddr=172.17.0.1 服务口仅内网, 配置 /home/ubuntu/frps/frps.toml, token 在 .build-tmp/_frp_token.txt)。GPU 端 gpu-kit docker-compose: comfyui(自建镜像, 端口 7865)+ musicgen(端口 8010)+ frpc。隧道已通: frpc login success + MusicGen health 经 172.17.0.1:7002 返回 ok。saiOS 侧 provider 已部署(comfyui/musicgen)+ music 槽已挂(provider_type 必须用 **provider_type** 字段, 传 type 会被 hub 忽略成 openai_compatible!)。实战坑：① Windows tar/脚本 CRLF 会拆坏 docker compose 命令→GPU 机 sed 's/\\r$//' ② GPU 机只有 docker-compose 无 docker compose 插件 ③ frps 容器内 172.17.0.1 是容器自己的网关→必须 --network host ④ comfyanonymous/comfyui 不在 daocloud 白名单→自建 Dockerfile ⑤ ComfyUI 需 torch>=2.4(custom_op)+MusicGen 需 torch>=2.5(新 transformers)→基础镜像 pytorch:2.4.1/2.5.1 ⑥ GitHub 直连/ghproxy 全挂→云服务器经 Clash 认证代理 clone 打包传入 ⑦ frpc localPort 用 compose 容器内端口(7860/8000)非 host 映射端口 ⑧ 麒麟机 8000 已有 Myolotrain 系统, 宿主端口避开。用户提供家中 4060Ti16G(172.168.10.160, Linux)。服务器已装 frps(docker, snowdreamtech/frps:0.61.1, 控制口公网 0.0.0.0:7000, proxyBindAddr=172.17.0.1 服务口仅内网网关可达, auth.token 在 .build-tmp/_frp_token.txt, 配置 /home/ubuntu/frps/frps.toml, allowPorts 7001-7010)。GPU 端一键包 .build-tmp/gpu-kit/(docker-compose: comfyui:7860→7001 + musicgen:8000→7002 + frpc token 预填; up.sh 自检+下 Wan2.1 模型; musicgen/server.py = MusicGen FastAPI)。saiOS 桥接骨架已提交 bc0a255(providers/comfyui.py submit/poll 走 /prompt+/history+/view; providers/musicgen.py data URL 同 edge_tts 约定; task_runner video=comfyui、audio/music=musicgen 分支; test_gpu_node 4 用例绿但**未部署**)。⚠️ 待办：① 腾讯云安全组放行 TCP 7000(用户) ② 用户在 GPU 机执行 up.sh ③ 验证隧道 ④ 部署 saiOS 桥接 + hub 注册 provider(comfyui→video槽 base_url=http://host.docker.internal:7001; musicgen→music槽 :7002) ⑤ 联调 E2E(视频/音乐真产出)。视频 workflow 用内置 Wan2.1-T2V 模板(节点名需连调校准)。
+🎯 GPU 节点接入(2026-08-25)：用户家 RTX 4080SUPER 16G 麒麟 V10(172.168.10.160, root 密码 SSH, 已授权接管)。frps --network host(0.0.0.0:7000 + 服务口绑 172.17.0.1); token 在 .build-tmp/_frp_token.txt; 配置 /home/ubuntu/frps/frps.toml。GPU 端 /root/gpu-node/ docker-compose：comfyui(7865 自建镜像)+musicgen(8010)+frpc，隧道已通。hub 注册 provider **必须传 provider_type 字段**(传 type 被忽略成 openai_compatible)。坑八连：① Windows CRLF 拆坏命令→sed 's/\\r$//' ② 麒麟机只有 docker-compose(无 compose 插件) ③ frps 容器内 172.17.0.1 是容器自己的网关→必须 host 网络 ④ comfyanonymous/comfyui 不在 daocloud 白名单→自建 Dockerfile ⑤ ComfyUI torch>=2.4(custom_op)/MusicGen torch>=2.6(CVE-2025-32434 torch.load weights_only 限制 .bin 权重；safetensors 不受限)→基镜像 2.4.1/2.6.0 ⑥ GitHub 直连/ghproxy 全挂→云服务器经 Clash 认证代理 clone 打包传入 ⑦ frpc localPort 用容器内端口 ⑧ 麒麟机 8000 已有 Myolotrain，宿主端口避开。用户提供家中 4060Ti16G(172.168.10.160, Linux)。服务器已装 frps(docker, snowdreamtech/frps:0.61.1, 控制口公网 0.0.0.0:7000, proxyBindAddr=172.17.0.1 服务口仅内网网关可达, auth.token 在 .build-tmp/_frp_token.txt, 配置 /home/ubuntu/frps/frps.toml, allowPorts 7001-7010)。GPU 端一键包 .build-tmp/gpu-kit/(docker-compose: comfyui:7860→7001 + musicgen:8000→7002 + frpc token 预填; up.sh 自检+下 Wan2.1 模型; musicgen/server.py = MusicGen FastAPI)。saiOS 桥接骨架已提交 bc0a255(providers/comfyui.py submit/poll 走 /prompt+/history+/view; providers/musicgen.py data URL 同 edge_tts 约定; task_runner video=comfyui、audio/music=musicgen 分支; test_gpu_node 4 用例绿但**未部署**)。⚠️ 待办：① 腾讯云安全组放行 TCP 7000(用户) ② 用户在 GPU 机执行 up.sh ③ 验证隧道 ④ 部署 saiOS 桥接 + hub 注册 provider(comfyui→video槽 base_url=http://host.docker.internal:7001; musicgen→music槽 :7002) ⑤ 联调 E2E(视频/音乐真产出)。视频 workflow 用内置 Wan2.1-T2V 模板(节点名需连调校准)。
 ⚠️ video/music 槽=外部资源硬约束（2GB 无 GPU 跑不动 Wan2.1 等本地模型，Suno/免费音乐 API 均需注册付费），如实保持槽空+UI 诚实报拒绝，不硬上。
 
