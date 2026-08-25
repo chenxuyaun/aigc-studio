@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 
 import type { CatalogItem } from "@aigc/shared-types";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, FileUp, MessageSquareText, Plus, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -51,10 +51,19 @@ export function KnowledgePage() {
   const [showPendingOnly, setShowPendingOnly] = useState(false); // 候选确认区：只看 AI 待确认
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const docs = useQuery({
+  // v2：真分页（后端 page/page_size envelope）——加载更多累积，规格遗留项收尾
+  const docs = useInfiniteQuery({
     queryKey: ["knowledge", "documents"],
-    queryFn: () => apiClient.get<KnowledgeDoc[]>("/knowledge/documents"),
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      apiClient.get<{ items: KnowledgeDoc[]; total: number; page: number; page_size: number }>(
+        `/knowledge/documents?page=${pageParam}&page_size=50`,
+      ),
+    getNextPageParam: (last) =>
+      last.page * last.page_size < last.total ? last.page + 1 : undefined,
   });
+  const docItems: KnowledgeDoc[] = docs.data?.pages.flatMap((p) => p.items) ?? [];
+  const docTotal: number = docs.data?.pages[0]?.total ?? 0;
 
   const catalog = useQuery({
     queryKey: ["providers", "catalog"],
@@ -212,7 +221,7 @@ export function KnowledgePage() {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h3 className="flex items-center gap-2 text-sm font-medium">
                 <BookOpen className="h-4 w-4" aria-hidden />
-                文档列表（{docs.data?.length ?? 0}）
+                文档列表（{docTotal}）
               </h3>
               <div className="ml-auto flex items-center gap-1 rounded-full bg-muted p-0.5 text-xs">
                 <button
@@ -227,7 +236,7 @@ export function KnowledgePage() {
                   onClick={() => setShowPendingOnly(true)}
                   className={`rounded-full px-3 py-1 ${showPendingOnly ? "bg-surface font-medium shadow-sm" : "text-muted-foreground"}`}
                 >
-                  🕐 待确认（{docs.data?.filter((d) => d.status === "pending").length ?? 0}）
+                  🕐 待确认（{docItems.filter((d) => d.status === "pending").length}）
                 </button>
               </div>
             </div>
@@ -238,13 +247,13 @@ export function KnowledgePage() {
             )}
             {docs.isLoading ? (
               <p className="py-4 text-center text-sm text-muted-foreground">加载中…</p>
-            ) : !docs.data?.length ? (
+            ) : !docItems.length ? (
               <p className="py-4 text-center text-sm text-muted-foreground">
                 还没有文档，先新建或上传一个
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {docs.data
+                {docItems
                   .filter((doc) => (showPendingOnly ? doc.status === "pending" : true))
                   .map((doc) => (
                   <li key={doc.id} className="rounded-lg border border-border">
@@ -294,6 +303,29 @@ export function KnowledgePage() {
                   </li>
                 ))}
               </ul>
+            )}
+            {/* v2：分页加载更多 */}
+            {!docs.isLoading && docItems.length > 0 && (
+              <div className="mt-3 flex items-center justify-center gap-2">
+                {docItems.length < docTotal ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={docs.isFetchingNextPage}
+                    onClick={() => void docs.fetchNextPage()}
+                  >
+                    {docs.isFetchingNextPage
+                      ? "加载中…"
+                      : `加载更多（已载 ${docItems.length}/${docTotal}）`}
+                  </Button>
+                ) : (
+                  docTotal > 50 && (
+                    <span className="text-xs text-muted-foreground">
+                      已全部加载（{docTotal} 条）
+                    </span>
+                  )
+                )}
+              </div>
             )}
           </div>
         </div>

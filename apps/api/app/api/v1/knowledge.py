@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import time
 from pathlib import PurePath
+from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -92,18 +93,44 @@ async def upload_document(
     return doc
 
 
-@router.get("/documents", response_model=list[KnowledgeDocumentSummary])
+@router.get("/documents", response_model=None)
 async def list_documents(
+    page: int | None = Query(None, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-) -> list[TextDocument]:
-    result = await db.execute(
+) -> Any:
+    """文档列表。
+
+    不带 ``page`` 参数时返回数组（向后兼容，旧前端/测试直接消费）；
+    带 ``page`` 时返回分页 envelope ``{items, total, page, page_size}``。
+    """
+    base = (
         select(TextDocument)
         .where(TextDocument.user_id == user.id)
         .order_by(TextDocument.updated_at.desc(), TextDocument.created_at.desc())
-        .limit(200)
     )
-    return list(result.scalars().all())
+
+    def _summaries(rows: list[TextDocument]) -> list[dict[str, Any]]:
+        return [
+            KnowledgeDocumentSummary.model_validate(r).model_dump(mode="json")
+            for r in rows
+        ]
+
+    if page is None:
+        result = await db.execute(base.limit(200))
+        return _summaries(list(result.scalars().all()))
+
+    total_result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = int(total_result.scalar() or 0)
+    result = await db.execute(base.offset((page - 1) * page_size).limit(page_size))
+    items = list(result.scalars().all())
+    return {
+        "items": _summaries(items),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.get("/documents/{doc_id}", response_model=KnowledgeDocumentDetail)

@@ -1,5 +1,6 @@
 # 与 pyproject requires-python >=3.14 对齐：3.12 会立即求值类内自引用注解（PEP 649 仅 3.14+ 默认开启）
-FROM python:3.14-slim
+# v2：FROM 直连国内 mirror——registry-1.docker.io 服务器侧 DNS 污染（08-25 实战）
+FROM docker.m.daocloud.io/library/python:3.14-slim
 
 WORKDIR /app
 
