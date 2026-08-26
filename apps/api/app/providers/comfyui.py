@@ -85,6 +85,66 @@ _WAN_T2V_TEMPLATE = {
   },
 }
 
+# 批15：MiniMax H3 文生视频（本地 GPU 节点，ComfyUI ≥ 前沿版内置 nodes_minimax_h3）。
+# 权重（ModelScope 官方镜像）：diffusion fp8 + qwen3vl TE nvfp4 + video vae + turbo8step lora。
+# 16G 显存属极限负载：靠 ComfyUI smart offload；画布压到 768x512、124 帧(~5s)起步。
+_H3_T2V_TEMPLATE = {
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {"unet_name": "minimax_h3_fl2va_pruned_fp8_scaled.safetensors", "weight_dtype": "default"},
+  },
+  "2": {
+    "class_type": "LoraLoader",
+    "inputs": {"lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+               "strength_model": 1.0, "strength_clip": 0.0, "model": ["1", 0]},
+  },
+  "3": {
+    "class_type": "CLIPLoader",
+    "inputs": {"clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", "type": "minimax", "device": "default"},
+  },
+  "4": {
+    "class_type": "MiniMaxH3ImageToVideo",
+    "_meta": {"title": "prompt-h3"},
+    "inputs": {"clip": ["3", 0], "vae": ["8", 0], "prompt": "", "width": 768, "height": 512, "length": 124},
+  },
+  # H3 无负向词机制：官方姿势是零化负向条件
+  "5": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {"conditioning": ["4", 0]},
+  },
+  "6": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["2", 0],
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "latent_image": ["4", 1],
+      "seed": 98712340123,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0,
+    },
+  },
+  "8": {
+    "class_type": "VAELoader",
+    "inputs": {"vae_name": "minimax_h3_video_vae_fp16.safetensors"},
+  },
+  "7": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["6", 0], "vae": ["8", 0]},
+  },
+  "9": {
+    "class_type": "CreateVideo",
+    "inputs": {"images": ["7", 0], "fps": 24},
+  },
+  "10": {
+    "class_type": "SaveVideo",
+    "inputs": {"video": ["9", 0], "filename_prefix": "saios_h3", "format": "auto"},
+  },
+}
+
 
 class ComfyUIProvider(VideoProvider):
     def __init__(self, base_url: str = "", api_key: str = "", default_model: str = "") -> None:
@@ -93,7 +153,10 @@ class ComfyUIProvider(VideoProvider):
         self.default_model = default_model or ""
 
     def _load_workflow(self) -> dict[str, object]:
-        """读 workflow：优先环境变量/默认模型指定路径，否则内置 Wan 模板。"""
+        """读 workflow：default_model 含 h3/minimax 用 H3 模板；env/路径指定次之；否则 Wan 模板。"""
+        m = (self.default_model or "").lower()
+        if "h3" in m or "minimax" in m:
+            return json.loads(json.dumps(_H3_T2V_TEMPLATE))
         path = os.environ.get("COMFYUI_WORKFLOW_PATH", "")
         if not path and self.default_model:
             # 允许以 default_model 存 JSON 路径（不便时忽略）
@@ -105,20 +168,34 @@ class ComfyUIProvider(VideoProvider):
         return json.loads(json.dumps(_WAN_T2V_TEMPLATE))
 
     def _inject_prompt(self, workflow: dict[str, object], prompt: str) -> dict[str, object]:
+        """按 title 约定注入提示词：Wan=CLIPTextEncode.text；H3=MiniMaxH3ImageToVideo.prompt。"""
         injected = False
         for node in workflow.values():
             if not isinstance(node, dict):
                 continue
-            meta = node.get("_meta") or {}
-            title = str(meta.get("title") or "")
-            if node.get("class_type") == "CLIPTextEncode" and title.lower().startswith("prompt"):
-                node["inputs"]["text"] = prompt
+            inputs = node.get("inputs")
+            if not isinstance(inputs, dict):
+                continue
+            title = str((node.get("_meta") or {}).get("title") or "")
+            field = "text" if "text" in inputs else ("prompt" if "prompt" in inputs else "")
+            if not field:
+                continue
+            hit = title.lower().startswith("prompt") or (
+                node.get("class_type") == "CLIPTextEncode" and not title
+            )
+            if hit:
+                inputs[field] = prompt
                 injected = True
         if not injected:
-            # 兜底：第一个 CLIPTextEncode
+            # 兜底：第一个带 text/prompt 输入的节点
             for node in workflow.values():
-                if isinstance(node, dict) and node.get("class_type") == "CLIPTextEncode":
-                    node["inputs"]["text"] = prompt
+                if isinstance(node, dict) and isinstance(node.get("inputs"), dict):
+                    for f in ("text", "prompt"):
+                        if f in node["inputs"]:
+                            node["inputs"][f] = prompt
+                            injected = True
+                            break
+                if injected:
                     break
         return workflow
 
