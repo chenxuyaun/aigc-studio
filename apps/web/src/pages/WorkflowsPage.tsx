@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { apiClient } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
+import { copyText } from "@/lib/clipboard";
 
 const PAGE_SIZE = 24;
 
@@ -227,7 +228,7 @@ export function WorkflowsPage() {
                     size="sm"
                     className="mt-1.5"
                     onClick={() => {
-                      void navigator.clipboard.writeText(runResult.data.results[nodeId] ?? "");
+                      void copyText(runResult.data.results[nodeId] ?? "");
                       toast.success("已复制节点输出");
                     }}
                   >

@@ -714,7 +714,7 @@ export function RoleplayPage() {
               <button
                 type="button"
                 className="ml-auto text-xs text-primary-text hover:underline"
-                onClick={() => void navigator.clipboard?.writeText(groupInfo.invite_code)}
+                onClick={() => void copyText(groupInfo.invite_code)}
               >
                 复制
               </button>

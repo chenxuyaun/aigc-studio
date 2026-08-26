@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { apiClient } from "@/lib/apiClient";
 import { MusicRoundtablePanel } from "@/components/creation/MusicRoundtablePanel";
 import { cn } from "@/lib/cn";
+import { copyText } from "@/lib/clipboard";
 
 interface ComposeResult {
   title?: string;
@@ -122,7 +123,7 @@ export function MusicGenPage() {
 
   async function copy(text: string, label: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyText(text);
       setCopied(label);
       setTimeout(() => setCopied(""), 2000);
     } catch {

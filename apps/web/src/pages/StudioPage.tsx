@@ -27,6 +27,7 @@ import { apiClient } from "@/lib/apiClient";
 import { useMediaTask } from "@/hooks/useMediaTask";
 import { useThemeStore, type SkinName } from "@/stores/theme";
 import { cn } from "@/lib/cn";
+import { copyText } from "@/lib/clipboard";
 
 /**
  * saiOS v2 P2 —— 统一 Studio 五域引擎面板（设计稿 saios_v2 (1).html 落地）。
@@ -341,7 +342,7 @@ export function StudioPage() {
 
   function copyPrompt() {
     const t = activePrompt();
-    if (t) void navigator.clipboard.writeText(t);
+    if (t) void copyText(t);
   }
 
   // 推送助手：带 prompt 回调度大厅

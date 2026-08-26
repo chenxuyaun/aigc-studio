@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Textarea } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { apiClient } from "@/lib/apiClient";
+import { copyText } from "@/lib/clipboard";
 
 interface CastCharacter {
   name: string;
@@ -206,7 +207,7 @@ export function CreationPage() {
   async function copyScript() {
     if (!script) return;
     try {
-      await navigator.clipboard.writeText(scriptToMarkdown(script));
+      await copyText(scriptToMarkdown(script));
       setCopied("script");
       setTimeout(() => setCopied(""), 2000);
     } catch {

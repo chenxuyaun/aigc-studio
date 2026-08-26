@@ -21,6 +21,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { apiClient } from "@/lib/apiClient";
 import { copyShareUrl } from "@/lib/share";
 import type { ChatSession } from "@/pages/roleplay/types";
+import { copyText } from "@/lib/clipboard";
 
 /* ------------------------------------------------------------------ */
 /* 类型                                                                */
@@ -641,7 +642,7 @@ function WorkDetail({ work, onRehydrate }: { work: WorkPreview; onRehydrate: () 
           )}
         <button
           onClick={() => {
-            if (work.prompt) void navigator.clipboard.writeText(work.prompt);
+            if (work.prompt) void copyText(work.prompt);
           }}
           className="rounded-full border border-border px-3 py-1.5 text-xs hover:border-primary"
         >

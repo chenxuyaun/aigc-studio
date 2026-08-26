@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { EmptyState, ErrorState } from "@/components/ui/States";
+import { copyText } from "@/lib/clipboard";
 
 /**
  * saiOS v2 —— 灵感画廊（/inspiration）
@@ -179,7 +180,7 @@ export function InspirationGalleryPage() {
   }
 
   function copy(text: string, tag: string) {
-    void navigator.clipboard.writeText(text);
+    void copyText(text);
     setCopied(tag);
     setTimeout(() => setCopied(""), 1600);
   }
