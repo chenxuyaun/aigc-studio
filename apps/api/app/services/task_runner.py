@@ -383,6 +383,11 @@ async def _try_real_media(
                         from app.providers.comfyui import ComfyUIProvider
 
                         video_provider = ComfyUIProvider(**_provider_kwargs(conf))
+                    elif (conf[3] or "").lower() == "minimax_video":
+                        # 批14：MiniMax Hailuo（H3）云 API——GPU 节点离线时的第二候选
+                        from app.providers.minimax_video import MinimaxVideoProvider
+
+                        video_provider = MinimaxVideoProvider(**_provider_kwargs(conf))
                     else:
                         from app.providers.openai_compatible import OpenAICompatibleVideoProvider
 

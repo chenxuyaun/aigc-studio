@@ -5,6 +5,7 @@ import { Check, ClipboardCopy, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, Textarea } from "@/components/ui/Field";
 import { streamSse } from "@/lib/apiClient";
+import { copyText } from "@/lib/clipboard";
 
 interface CastMember {
   name: string;
@@ -118,7 +119,7 @@ export function RoundtablePanel({
 
   async function copyResult(label: string, text: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyText(text);
       setCopied(label);
       setTimeout(() => setCopied(""), 2000);
     } catch {

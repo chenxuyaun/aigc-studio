@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Textarea } from "@/components/ui/Field";
 import { streamSse } from "@/lib/apiClient";
 import { shareUrl } from "@/lib/share";
+import { copyText } from "@/lib/clipboard";
 
 // ---------- 类型（原 MusicGenPage 内联） ----------
 
@@ -232,7 +233,7 @@ export function MusicRoundtablePanel({ onSendToDiscuss, incomingStyle, incomingT
 
   async function copy(text: string, label: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyText(text);
       setCopied(label);
       setTimeout(() => setCopied(""), 2000);
     } catch {
@@ -494,7 +495,7 @@ export function MusicRoundtablePanel({ onSendToDiscuss, incomingStyle, incomingT
                       onClick={async () => {
                         if (!rtWorkId) return;
                         try {
-                          await navigator.clipboard.writeText(shareUrl("music", rtWorkId));
+                          await copyText(shareUrl("music", rtWorkId));
                           setCopied("share");
                         } catch {
                           /* 忽略 */

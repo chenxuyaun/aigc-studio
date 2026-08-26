@@ -37,6 +37,7 @@ import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { useChatSessions } from "@/hooks/useChatSessions";
 import { AppError, apiClient, streamSse } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
+import { copyText } from "@/lib/clipboard";
 import { useNavigate } from "react-router-dom";
 
 /**
@@ -1856,29 +1857,9 @@ function AssistantMsgActions(props: {
     setRating(next);
   }
   async function copy() {
-    // http 环境（如公网 IP 直访）无 navigator.clipboard，降级 execCommand
-    const okLegacy = (() => {
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = props.text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        const ok = document.execCommand("copy");
-        document.body.removeChild(ta);
-        return ok;
-      } catch {
-        return false;
-      }
-    })();
-    if (!okLegacy && navigator.clipboard) {
-      try {
-        await navigator.clipboard.writeText(props.text);
-      } catch {
-        return; // 两种方式都失败：不给假反馈
-      }
-    }
+    // 批14：统一走 lib/clipboard（http 公网直访 navigator.clipboard 为 undefined）
+    const ok = await copyText(props.text);
+    if (!ok) return; // 失败不给假反馈
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   }
