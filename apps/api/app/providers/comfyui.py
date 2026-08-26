@@ -96,7 +96,7 @@ _H3_T2V_TEMPLATE = {
   "2": {
     "class_type": "LoraLoader",
     "inputs": {"lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
-               "strength_model": 1.0, "strength_clip": 0.0, "model": ["1", 0]},
+               "strength_model": 1.0, "strength_clip": 0.0, "model": ["1", 0], "clip": ["3", 0]},
   },
   "3": {
     "class_type": "CLIPLoader",
