@@ -102,13 +102,42 @@ async def test_comfyui_submit_and_poll_success() -> None:
         assert poll["video_url"].startswith("http://172.17.0.1:7001/view?filename=")
 
 
-async def test_comfyui_poll_still_running() -> None:
+async def test_comfyui_poll_running_then_completed() -> None:
+    """批13：poll 是阻塞轮询——首轮 running 继续等，次轮拿到产出即成功。"""
     fake = AsyncMock()
     fake.__aenter__ = AsyncMock(return_value=fake)
     fake.__aexit__ = AsyncMock(return_value=False)
-    fake.get.return_value = _resp(200, json_data={"abc123": {}})  # 无 outputs → running
+    fake.get.side_effect = [
+        _resp(200, json_data={"abc123": {}}),  # 第一轮：记录未完成 → continue
+        _resp(
+            200,
+            json_data={
+                "abc123": {
+                    "status": {"completed": True},
+                    "outputs": {"7": {"videos": [{"filename": "saios_wan_0001.mp4", "subfolder": "", "type": "output"}]}},
+                }
+            },
+        ),
+    ]
+    fake.post.return_value = _resp(200, json_data={"prompt_id": "abc123"})
 
     p = ComfyUIProvider(base_url="http://172.17.0.1:7001")
     with patch("app.providers.comfyui.httpx.AsyncClient", return_value=fake):
+        await p.submit("一只猫", width=480)
         r = await p.poll("abc123")
-    assert r["status"] == "running"
+    assert r["status"] == "succeeded"
+    assert r["video_url"].startswith("http://172.17.0.1:7001/view?filename=")
+
+
+async def test_comfyui_poll_timeout_reports_failed() -> None:
+    """一直 running → 阻塞到 timeout 如实返回失败（不再无限挂起）。"""
+    fake = AsyncMock()
+    fake.__aenter__ = AsyncMock(return_value=fake)
+    fake.__aexit__ = AsyncMock(return_value=False)
+    fake.get.return_value = _resp(200, json_data={"abc123": {}})
+
+    p = ComfyUIProvider(base_url="http://172.17.0.1:7001")
+    with patch("app.providers.comfyui.httpx.AsyncClient", return_value=fake):
+        r = await p.poll("abc123", timeout=0.05)
+    assert r["status"] == "failed"
+    assert "超时" in (r.get("error") or "")

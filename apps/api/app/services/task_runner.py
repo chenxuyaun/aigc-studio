@@ -641,7 +641,18 @@ async def _run_media_task_locked(task_id: str) -> None:
                 elif task.task_type in ("audio", "music"):
                     model_name = settings.DEFAULT_SPEECH_PROVIDER or ""
                 else:
-                    model_name = ""
+                    # 批13 修复：video 等类型无环境默认——此前直接拒绝导致 hub
+                    # video 槽（本地GPU·ComfyUI）永远走不到。改为问模型中心
+                    # 对应槽位链首：有真实候选（带 default_model）即放行。
+                    try:
+                        from app.services.model_hub_client import get_active_chain
+
+                        slot = _SLOT_BY_TASK.get((task.task_type or "").lower())
+                        chain = await get_active_chain(slot) if slot else []
+                        if chain and (chain[0].get("base_url") or (chain[0].get("provider_type") or "").lower() == "edge_tts"):
+                            model_name = str(chain[0].get("default_model") or "hub-candidate")
+                    except Exception:
+                        pass
             # 显式 "mock" 仅保留为测试/开发隔离通道；生产界面不暴露
             use_real = bool(model_name and model_name != "mock")
             if not use_real and model_name != "mock":
