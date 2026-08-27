@@ -85,18 +85,14 @@ _WAN_T2V_TEMPLATE = {
   },
 }
 
-# 批15：MiniMax H3 文生视频（本地 GPU 节点，ComfyUI ≥ 前沿版内置 nodes_minimax_h3）。
-# 权重（ModelScope 官方镜像）：diffusion fp8 + qwen3vl TE nvfp4 + video vae + turbo8step lora。
-# 16G 显存属极限负载：靠 ComfyUI smart offload；画布压到 768x512、124 帧(~5s)起步。
+# 批15改：MiniMax H3 文生视频改走用户 8188 官方 ComfyUI 0.30（frp 7003）。
+# 实测可跑组合（魔改容器 7860 的 offload 调度对 H3 失败，勿回退）：
+#   int8_convrot 扩散 + qwen3vl TE nvfp4 + video vae，**无 turbo lora**（8188 未装），
+#   20 步 cfg1.0 euler/simple，864x480x96 帧(~4s)。文件名必须是 8188 /data 模型库的。
 _H3_T2V_TEMPLATE = {
   "1": {
     "class_type": "UNETLoader",
-    "inputs": {"unet_name": "minimax_h3_fl2va_pruned_fp8_scaled.safetensors", "weight_dtype": "default"},
-  },
-  "2": {
-    "class_type": "LoraLoader",
-    "inputs": {"lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
-               "strength_model": 1.0, "strength_clip": 0.0, "model": ["1", 0], "clip": ["3", 0]},
+    "inputs": {"unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors", "weight_dtype": "default"},
   },
   "3": {
     "class_type": "CLIPLoader",
@@ -105,7 +101,7 @@ _H3_T2V_TEMPLATE = {
   "4": {
     "class_type": "MiniMaxH3ImageToVideo",
     "_meta": {"title": "prompt-h3"},
-    "inputs": {"clip": ["3", 0], "vae": ["8", 0], "prompt": "", "width": 768, "height": 512, "length": 124},
+    "inputs": {"clip": ["3", 0], "vae": ["8", 0], "prompt": "", "width": 864, "height": 480, "length": 96},
   },
   # H3 无负向词机制：官方姿势是零化负向条件
   "5": {
@@ -115,12 +111,12 @@ _H3_T2V_TEMPLATE = {
   "6": {
     "class_type": "KSampler",
     "inputs": {
-      "model": ["2", 0],
+      "model": ["1", 0],
       "positive": ["4", 0],
       "negative": ["5", 0],
       "latent_image": ["4", 1],
       "seed": 98712340123,
-      "steps": 8,
+      "steps": 20,
       "cfg": 1.0,
       "sampler_name": "euler",
       "scheduler": "simple",
@@ -141,7 +137,7 @@ _H3_T2V_TEMPLATE = {
   },
   "10": {
     "class_type": "SaveVideo",
-    "inputs": {"video": ["9", 0], "filename_prefix": "saios_h3", "format": "auto"},
+    "inputs": {"video": ["9", 0], "filename_prefix": "saios_h3", "format": "auto", "codec": "auto"},
   },
 }
 
