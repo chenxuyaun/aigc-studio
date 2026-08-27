@@ -189,6 +189,10 @@ def _build_image_provider(conf: tuple[str, str, str, str] | None) -> Any | None:
         from app.providers.chat_image import ChatCompletionsImageProvider
 
         return ChatCompletionsImageProvider(**_provider_kwargs(conf))
+    if conf[3] == "comfyui_image":
+        from app.providers.comfyui import ComfyUIImageProvider
+
+        return ComfyUIImageProvider(**_provider_kwargs(conf))
     from app.providers.openai_compatible import OpenAICompatibleImageProvider
 
     return OpenAICompatibleImageProvider(**_provider_kwargs(conf, include_default_model=False))

@@ -21,7 +21,7 @@ import uuid
 
 import httpx
 
-from app.providers.base import VideoProvider
+from app.providers.base import ImageProvider, VideoProvider
 
 _WAN_T2V_TEMPLATE = {
   "1": {
@@ -265,3 +265,163 @@ class ComfyUIProvider(VideoProvider):
                 pass
             await asyncio.sleep(8)
         return {"status": "failed", "error": f"ComfyUI 生成超时({timeout}s)"}
+
+
+# ── FLUX.1-schnell 文生图（图片走本地 GPU）───────────────────────────
+# 依赖文件（ModelScope AI-ModelScope 镜像）：
+#   diffusion_models/flux1-schnell.safetensors (23.8G)
+#   text_encoders/t5xxl_fp8_e4m3fn.safetensors + clip_l.safetensors
+#   vae/ae.safetensors
+# schnell 是蒸馏模型：4 步、cfg 1.0、euler/simple，负向用空文本。
+_FLUX_T2I_TEMPLATE = {
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {"unet_name": "flux1-schnell.safetensors", "weight_dtype": "default"},
+  },
+  "2": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "t5xxl_fp8_e4m3fn.safetensors",
+      "clip_name2": "clip_l.safetensors",
+      "type": "flux",
+      "device": "default",
+    },
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {"title": "prompt"},
+    "inputs": {"text": "", "clip": ["2", 0]},
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {"text": "", "clip": ["2", 0]},
+  },
+  "5": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": {"width": 1024, "height": 1024, "batch_size": 1},
+  },
+  "6": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["1", 0],
+      "positive": ["3", 0],
+      "negative": ["4", 0],
+      "latent_image": ["5", 0],
+      "seed": 98712340123,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0,
+    },
+  },
+  "7": {
+    "class_type": "VAELoader",
+    "inputs": {"vae_name": "ae.safetensors"},
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {"samples": ["6", 0], "vae": ["7", 0]},
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {"images": ["8", 0], "filename_prefix": "saios_flux"},
+  },
+}
+
+
+class ComfyUIImageProvider(ImageProvider):
+    """ComfyUI 文生图 Provider：image 槽走本地 GPU（FLUX）。
+
+    submit → /prompt 拿 prompt_id；poll → /history 等 completed，返回 image_url。
+    """
+
+    def __init__(self, base_url: str = "", api_key: str = "", default_model: str = "") -> None:
+        self.base_url = (base_url or "").rstrip("/")
+        self.api_key = api_key or "none"
+        self.default_model = default_model or ""
+
+    def _load_workflow(self) -> dict[str, object]:
+        m = (self.default_model or "").lower()
+        if "flux" in m or "schnell" in m:
+            return json.loads(json.dumps(_FLUX_T2I_TEMPLATE))
+        # 兜底 FLUX（本 provider 只服务 FLUX）
+        return json.loads(json.dumps(_FLUX_T2I_TEMPLATE))
+
+    def _inject_prompt(self, workflow: dict[str, object], prompt: str) -> dict[str, object]:
+        for node in workflow.values():
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs")
+            if not isinstance(inputs, dict) or "text" not in inputs:
+                continue
+            title = str((node.get("_meta") or {}).get("title") or "")
+            if title.lower().startswith("prompt") or (node.get("class_type") == "CLIPTextEncode" and not title):
+                inputs["text"] = prompt
+                return workflow
+        # 兜底第一个 text 节点
+        for node in workflow.values():
+            if isinstance(node, dict) and isinstance(node.get("inputs"), dict) and "text" in node["inputs"]:
+                node["inputs"]["text"] = prompt
+                break
+        return workflow
+
+    async def submit(self, prompt: str, model: str = "default", **kwargs: object) -> dict[str, object]:
+        if not self.base_url:
+            return {"task_id": "", "status": "failed", "error": "未配置 ComfyUI 服务地址"}
+        try:
+            workflow = self._load_workflow()
+            workflow = self._inject_prompt(workflow, prompt)
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    f"{self.base_url}/prompt",
+                    json={"prompt": workflow},
+                    headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key not in ("", "none") else None,
+                )
+                resp.raise_for_status()
+                body = resp.json()
+            prompt_id = str(body.get("prompt_id") or "")
+            if not prompt_id:
+                return {"task_id": "", "status": "failed", "error": "ComfyUI 未返回 prompt_id"}
+            return {"task_id": prompt_id, "status": "running"}
+        except Exception as exc:  # noqa: BLE001
+            return {"task_id": "", "status": "failed", "error": str(exc)[:200]}
+
+    async def poll(self, task_id: str) -> dict[str, object]:
+        import asyncio
+        import time as _time
+
+        deadline = _time.monotonic() + 300.0
+        while _time.monotonic() < deadline:
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.get(f"{self.base_url}/history/{task_id}")
+                    resp.raise_for_status()
+                    hist = resp.json()
+                rec = (hist or {}).get(task_id)
+                if not rec:
+                    continue
+                if rec.get("outputs"):
+                    for node_out in (rec.get("outputs") or {}).values():
+                        items = node_out.get("images") or []
+                        if items:
+                            f = items[0]
+                            return {
+                                "status": "succeeded",
+                                "image_url": (
+                                    f"{self.base_url}/view?filename={f['filename']}"
+                                    f"&subfolder={f.get('subfolder','')}&type={f.get('type','output')}"
+                                ),
+                            }
+                    return {"status": "failed", "error": "ComfyUI 无图片输出"}
+                if (rec.get("status") or {}).get("status_str") == "running":
+                    continue
+                msgs = (rec.get("status") or {}).get("messages") or []
+                for m in msgs:
+                    if isinstance(m, list) and m and m[0] == "execution_error":
+                        return {"status": "failed", "error": str(m[1].get("exception_message") or m[1])[:200]}
+                return {"status": "failed", "error": "ComfyUI 执行未成功"}
+            except Exception:  # noqa: BLE001
+                pass
+            await asyncio.sleep(5)
+        return {"status": "failed", "error": f"ComfyUI 图片生成超时({300}s)"}
