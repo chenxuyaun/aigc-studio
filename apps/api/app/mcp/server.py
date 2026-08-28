@@ -46,17 +46,38 @@ def _summarize_task_result(t: GenerationTask) -> dict[str, Any]:
         r = json.loads(t.result)
     except json.JSONDecodeError:
         return out
-    out["asset_url"] = r.get("url")
+    # asset_url 补全为绝对 URL（原 url 是相对路径 /api/v1/assets/...，前端 <img> 直接
+    # 用相对路径在 saiOS /saios 子路径下会解析错；公网直链才能正常显示）
+    raw_url = r.get("url")
+    if isinstance(raw_url, str) and raw_url.startswith("/"):
+        base = _public_base_url()
+        out["asset_url"] = base + raw_url
+    else:
+        out["asset_url"] = raw_url
     comic = r.get("comic")
     if isinstance(comic, dict):
         out["title"] = comic.get("title")
         cover = comic.get("cover")
         if isinstance(cover, dict):
-            out["cover_url"] = cover.get("url")
+            cover_url = cover.get("url")
+            if isinstance(cover_url, str) and cover_url.startswith("/"):
+                out["cover_url"] = _public_base_url() + cover_url
+            else:
+                out["cover_url"] = cover_url
         assets = comic.get("assets")
         if isinstance(assets, list):
             out["panel_count"] = len(assets)
     return out
+
+
+def _public_base_url() -> str:
+    """公网基地址：优先 .env PUBLIC_BASE_URL，否则从 app 配置读。"""
+    from app.core.config import settings
+
+    v = str(getattr(settings, "PUBLIC_BASE_URL", "") or "").strip().rstrip("/")
+    if v:
+        return v
+    return "http://124.221.130.64"
 
 
 async def _admin_user_id(db: AsyncSession) -> str:
