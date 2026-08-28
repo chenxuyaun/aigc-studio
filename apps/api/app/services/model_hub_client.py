@@ -74,6 +74,7 @@ async def get_active_chain(slot: str) -> list[dict[str, Any]]:
                 "api_key": str(pub.get("api_key") or ""),
                 "default_model": str(pub.get("default_model") or ""),
                 "provider_type": str(pub.get("provider_type") or "").lower().strip(),
+                "last_ok": int(pub.get("last_ok") or 0),
             })
     return out
 

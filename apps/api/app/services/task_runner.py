@@ -164,12 +164,23 @@ async def _media_candidates(
 
         slot = _SLOT_BY_TASK.get((task_type or "").lower())
         chain = await get_active_chain(slot) if slot else []
-        confs = [
-            (c["base_url"], c["api_key"], c["default_model"], c["provider_type"])
+        # 智能路由：本地 GPU 离线时（last_ok != 1）跳过，不傻等 submit 超时
+        raw = [
+            (c.get("base_url",""), c.get("api_key",""), c.get("default_model",""),
+             (c.get("provider_type") or "").lower().strip(), int(c.get("last_ok") or 0))
             for c in chain
-            if c.get("base_url")
-            or (c.get("provider_type") or "").lower() == "edge_tts"  # 免密钥本地型
+            if c.get("base_url") or (c.get("provider_type") or "").lower() == "edge_tts"
         ]
+        confs = []
+        for base_url, api_key, model, pt, last_ok in raw:
+            is_local_gpu = "172.17.0.1:700" in (base_url or "")
+            if is_local_gpu and last_ok != 1:
+                logger.info("media_skip_offline_gpu", provider_type=pt, base_url=base_url, last_ok=last_ok)
+                continue
+            confs.append((base_url, api_key, model, pt))
+        if not confs and raw:
+            # 全离线时保留原链（兜底试一次，万一探活过期了）
+            confs = [(b, a, m, p) for b, a, m, p, _ in raw]
         if confs:
             return confs
     except Exception:
