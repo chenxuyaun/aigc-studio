@@ -85,14 +85,16 @@ _WAN_T2V_TEMPLATE = {
   },
 }
 
-# 批15改：MiniMax H3 文生视频改走用户 8188 官方 ComfyUI 0.30（frp 7003）。
-# 实测可跑组合（魔改容器 7860 的 offload 调度对 H3 失败，勿回退）：
-#   int8_convrot 扩散 + qwen3vl TE nvfp4 + video vae，**无 turbo lora**（8188 未装），
-#   20 步 cfg1.0 euler/simple，864x480x96 帧(~4s)。文件名必须是 8188 /data 模型库的。
+# 批16改：H3 改走容器 7860（fp8 模型 + turbo 8步 LoRA + video vae）。
+# 容器 7860 ComfyUI 上有 minimax_h3_fl2v_turbo_8step LoRA，用它 8 步出片速度翻倍。
 _H3_T2V_TEMPLATE = {
   "1": {
     "class_type": "UNETLoader",
-    "inputs": {"unet_name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors", "weight_dtype": "default"},
+    "inputs": {"unet_name": "minimax_h3_fl2va_pruned_fp8_scaled.safetensors", "weight_dtype": "default"},
+  },
+  "2": {
+    "class_type": "LoraLoader",
+    "inputs": {"model": ["1", 0], "clip": ["3", 0], "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors", "strength_model": 1.0, "strength_clip": 1.0},
   },
   "3": {
     "class_type": "CLIPLoader",
@@ -101,9 +103,8 @@ _H3_T2V_TEMPLATE = {
   "4": {
     "class_type": "MiniMaxH3ImageToVideo",
     "_meta": {"title": "prompt-h3"},
-    "inputs": {"clip": ["3", 0], "vae": ["8", 0], "prompt": "", "width": 864, "height": 480, "length": 96},
+    "inputs": {"clip": ["2", 1], "vae": ["8", 0], "prompt": "", "width": 864, "height": 480, "length": 96},
   },
-  # H3 无负向词机制：官方姿势是零化负向条件
   "5": {
     "class_type": "ConditioningZeroOut",
     "inputs": {"conditioning": ["4", 0]},
@@ -111,12 +112,12 @@ _H3_T2V_TEMPLATE = {
   "6": {
     "class_type": "KSampler",
     "inputs": {
-      "model": ["1", 0],
+      "model": ["2", 0],
       "positive": ["4", 0],
       "negative": ["5", 0],
       "latent_image": ["4", 1],
       "seed": 98712340123,
-      "steps": 20,
+      "steps": 8,
       "cfg": 1.0,
       "sampler_name": "euler",
       "scheduler": "simple",
