@@ -37,18 +37,32 @@ from app.storage import choose_write_backend, get_storage
 
 logger = structlog.get_logger()
 
+# ── 临时兼容层：以下符号已抽到 app.core.runtime 包，task_runner 仍按旧名使用 ──
+# P0 目标：建立 Core 抽象层物理存在，行为不变。
+# 后续 P 阶段会逐步删除这些 alias，最终 task_runner 完全用 core.runtime 路径。
+from app.core.runtime.task import (
+    PROGRESS_STEPS as _PROGRESS_STEPS,
+    is_cancelled as _is_cancelled,
+)  # noqa: E402,F401
+from app.core.runtime.scheduler import (
+    schedule_media_task as _schedule_media_task,
+    recover_stale_tasks as _recover_stale_tasks,
+)  # noqa: E402,F401
+from app.core.runtime.asset import EXT_MIME as _EXT_MIME  # noqa: E402,F401
+from app.core.runtime.governance import notify_event as _notify_event  # noqa: E402,F401
+
 # 保留后台任务引用，避免被 GC 回收。
 _running: set[asyncio.Task[None]] = set()
 
-_PROGRESS_STEPS = (10, 35, 60, 85)
-_EXT_MIME = {"svg": "image/svg+xml", "wav": "audio/wav"}
+# 任务进度上报百分比（迁到 core.runtime.task.PROGRESS_STEPS，保留 alias）。
+_PROGRESS_STEPS = _PROGRESS_STEPS
+# 文件扩展名 → MIME 映射（迁到 core.runtime.asset.EXT_MIME，保留 alias）。
+_EXT_MIME = _EXT_MIME
 
 
 def schedule_media_task(task_id: str) -> None:
     """从请求处理器调度一个媒体任务的后台处理。"""
-    task = asyncio.create_task(run_media_task(task_id))
-    _running.add(task)
-    task.add_done_callback(_running.discard)
+    _schedule_media_task(task_id)
 
 
 async def _delay() -> None:
@@ -57,56 +71,17 @@ async def _delay() -> None:
 
 async def notify_event(event: dict) -> None:
     """统一通知：生成完成/失败 → 通知服务（失败静默，绝不影响主流程）。"""
-    url = getattr(settings, "NOTIFY_WEBHOOK_URL", "") or os.environ.get("NOTIFY_WEBHOOK_URL", "")
-    if not url or not getattr(settings, "NOTIFY_ENABLED", False):
-        return
-    import httpx
-
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            await client.post(url, json=event)
-    except Exception:
-        pass
+    await _notify_event(event)
 
 
 async def _is_cancelled(db: AsyncSession, task_id: str) -> bool:
     """从 DB 重读任务状态，用于长 await 之后检查取消（防止覆盖终态）。"""
-    try:
-        row = (
-            await db.execute(select(GenerationTask).where(GenerationTask.id == task_id))
-        ).scalar_one_or_none()
-        return row is None or row.status == "cancelled"
-    except Exception:
-        return False
+    return await _is_cancelled(db, task_id)
 
 
 async def _recover_stale_tasks(max_age_seconds: int = 1800) -> None:
     """启动扫描：把进程崩溃遗留的 processing/queued 任务标记为失败，避免永久卡死。"""
-    from datetime import UTC as _UTC
-    from datetime import datetime, timedelta
-
-    cutoff = datetime.now(_UTC) - timedelta(seconds=max_age_seconds)
-    async with AsyncSessionLocal() as db:
-        rows = (
-            (
-                await db.execute(
-                    select(GenerationTask).where(
-                        GenerationTask.status.in_(["queued", "processing", "submitting"]),
-                        GenerationTask.updated_at < cutoff,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        for row in rows:
-            row.status = "failed"
-            row.error_message = "服务重启导致任务中断，请重新生成"
-            row.completed_at = datetime.now(_UTC)
-            logger.warning("stale_task_recovered", task_id=row.id, task_type=row.task_type)
-        if rows:
-            await db.commit()
-            logger.info("recovered_stale_tasks", count=len(rows))
+    await _recover_stale_tasks(max_age_seconds)
 
 
 # 前端/配置里的 Provider 别名，不能当作上游模型 id 原样提交。
@@ -350,11 +325,17 @@ async def _try_real_media(
                             model,
                             **_provider_kwargs(None, include_default_model=False),
                         )
+                        # 降级到 registry 路径时用上游模型
+                        current_model = upstream
                     else:
                         image_provider = _build_image_provider(conf)
+                        # 批17: 降级 bug 修复——用当前候选的 default_model（conf[2]），
+                        # 而不是固定的 upstream（FLUX 名字）。否则候选 4/4 grok2api 收到
+                        # "model=flux1-schnell" 会 400 "not an image model"。
+                        current_model = conf[2] or upstream
                     if image_provider is None or image_provider.__class__.__name__ == "MockImageProvider":
                         return None, "图像 Provider 解析为 Mock，未走真实路径"
-                    result = await image_provider.submit(prompt, model=upstream, **submit_params)
+                    result = await image_provider.submit(prompt, model=current_model, **submit_params)
                     poll_result = await image_provider.poll(str(result.get("task_id") or ""))
                     if poll_result.get("status") != "succeeded":
                         raise RuntimeError(
@@ -411,7 +392,7 @@ async def _try_real_media(
                         )
                     if video_provider.__class__.__name__ == "MockVideoProvider":
                         return None, "视频 Provider 解析为 Mock，未走真实路径"
-                    result = await video_provider.submit(prompt, model=upstream, **params)
+                    result = await video_provider.submit(prompt, model=conf[2] or upstream, **params)
                     poll_result = await video_provider.poll(str(result.get("task_id") or ""))
                     if poll_result.get("status") != "succeeded":
                         raise RuntimeError(
@@ -468,7 +449,7 @@ async def _try_real_media(
                         )
                     if speech_provider.__class__.__name__ == "MockSpeechProvider":
                         return None, "语音 Provider 解析为 Mock，未走真实路径"
-                    result = await speech_provider.submit(prompt, model=upstream, **params)
+                    result = await speech_provider.submit(prompt, model=conf[2] or upstream, **params)
                     poll_result = await speech_provider.poll(str(result.get("task_id") or ""))
                     if poll_result.get("status") != "succeeded":
                         raise RuntimeError(
@@ -551,6 +532,11 @@ async def _comic_real_media(
       {"page": (bytes, mime, ext), "cover": (bytes, mime, ext)|None, "title": str,
        "panels": [{index, data|None, mime, ext, scene, dialogue}]}
     失败返回 (None, reason)。
+
+    @todo P4 (Applications 阶段) — 此函数及 _generate_cover_image 整段为 Comic
+    Domain 业务，应迁移到 `app/applications/comic/` 下，由 Comic Application 通过
+    Runtime Tool / MCP 暴露面调用，Core (task_runner) 不应直接 import Domain。
+    P0 阶段仅作边界标记，**保持行为不变**。
     """
     from app.services.comic_service import (
         _grok_image_key,
@@ -654,16 +640,17 @@ async def _run_media_task_locked(task_id: str) -> None:
             params: dict[str, object] = json.loads(task.params or "{}")
             prompt = str(params.get("prompt") or params.get("text") or "")
             # task.model 来自请求；空则按类型取环境默认（无默认则报错，不产占位假数据）。
+            # 批16 修复：image 也复用 else 分支的 hub 链首 fallback——之前清空
+            # DEFAULT_IMAGE_PROVIDER 后 image 任务直接抛"未配置 Provider"（video 早就走 hub 链首）。
             model_name = (task.model or "").strip()
             if not model_name:
-                if task.task_type == "image":
-                    model_name = settings.DEFAULT_IMAGE_PROVIDER or ""
-                elif task.task_type in ("audio", "music"):
-                    model_name = settings.DEFAULT_SPEECH_PROVIDER or ""
+                if task.task_type == "image" and settings.DEFAULT_IMAGE_PROVIDER:
+                    model_name = settings.DEFAULT_IMAGE_PROVIDER
+                elif task.task_type in ("audio", "music") and settings.DEFAULT_SPEECH_PROVIDER:
+                    model_name = settings.DEFAULT_SPEECH_PROVIDER
                 else:
-                    # 批13 修复：video 等类型无环境默认——此前直接拒绝导致 hub
-                    # video 槽（本地GPU·ComfyUI）永远走不到。改为问模型中心
-                    # 对应槽位链首：有真实候选（带 default_model）即放行。
+                    # 批13 修复：video/audio/music/image 等类型无环境默认——此前直接拒绝导致 hub
+                    # 对应槽位链永远走不到。改为问模型中心对应槽位链首：有真实候选（带 default_model）即放行。
                     try:
                         from app.services.model_hub_client import get_active_chain
 
