@@ -208,7 +208,7 @@ async def _chat_json(
             timeout=120,
         )
         if r.status_code != 200:
-            logger.warning("comic_story_failed", status=r.status_code)
+            logger.warning("comic_story_failed, status=%s", r.status_code)
             return None
         text = r.json()["choices"][0]["message"]["content"]
     # 宽松解析：剥离 ```json 包裹，取第一个 { ... } 块
@@ -218,7 +218,7 @@ async def _chat_json(
         data = json.loads(raw)
         return data if isinstance(data, dict) else None
     except json.JSONDecodeError:
-        logger.warning("comic_story_json_invalid", preview=raw[:120])
+        logger.warning("comic_story_json_invalid, preview=%s", raw[:120])
         return None
 
 
@@ -303,11 +303,11 @@ async def _describe_character(image_bytes: bytes, key: str) -> str | None:
                 timeout=60,
             )
             if r.status_code != 200:
-                logger.warning("comic_vision_failed", status=r.status_code)
+                logger.warning("comic_vision_failed, status=%s", r.status_code)
                 return None
             text = str(r.json()["choices"][0]["message"]["content"] or "")
     except Exception as exc:
-        logger.warning("comic_vision_exc", error=str(exc)[:120])
+        logger.warning("comic_vision_exc, error=%s", str(exc)[:120])
         return None
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
@@ -375,16 +375,12 @@ async def _generate_one_panel(
                     data = await _download_result_image(client, r)
                     if data is not None:
                         return data
-                logger.warning(
-                    "comic_edit_failed",
-                    index=panel.index,
-                    status=r.status_code,
-                    detail=str(r.text)[:120],
+                logger.warning("comic_edit_failed, index=%s, status=%s, detail=%s", panel.index, r.status_code, str(r.text)[:120],
                 )
         except Exception as exc:
-            logger.warning("comic_edit_exc", index=panel.index, error=str(exc)[:120])
+            logger.warning("comic_edit_exc, index=%s, error=%s", panel.index, str(exc)[:120])
         # 降级：edits 不可用/失败 → 该格回退纯文生图
-        logger.info("comic_panel_edit_fallback", index=panel.index)
+        logger.info("comic_panel_edit_fallback, index=%s", panel.index)
     try:
         async with httpx.AsyncClient(timeout=180) as client:
             r = await client.post(
@@ -394,11 +390,11 @@ async def _generate_one_panel(
                 timeout=180,
             )
             if r.status_code != 200:
-                logger.warning("comic_panel_failed", index=panel.index, status=r.status_code)
+                logger.warning("comic_panel_failed, index=%s, status=%s", panel.index, r.status_code)
                 return None
             return await _download_result_image(client, r)
     except Exception as exc:
-        logger.warning("comic_panel_exc", index=panel.index, error=str(exc)[:120])
+        logger.warning("comic_panel_exc, index=%s, error=%s", panel.index, str(exc)[:120])
         return None
 
 

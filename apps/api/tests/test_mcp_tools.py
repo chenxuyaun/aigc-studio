@@ -47,7 +47,9 @@ def test_summarize_task_result_with_asset() -> None:
     t = _FakeTask()
     s = _summarize_task_result(t)
     assert s["status"] == "succeeded"
-    assert s["asset_url"] == "/api/v1/assets/a1/content"
+    # asset_url 现在是绝对 URL（公网直链，批 16 修过），便于 <img> 在 /saios 子路径下显示
+    assert s["asset_url"].endswith("/api/v1/assets/a1/content")
+    assert s["asset_url"].startswith("http")
 
 
 def test_summarize_task_result_comic() -> None:
@@ -61,7 +63,9 @@ def test_summarize_task_result_comic() -> None:
     )
     s = _summarize_task_result(t)
     assert s["title"] == "雨夜"
-    assert s["cover_url"] == "/api/v1/assets/c1/content"
+    # cover_url / panel url 现在是绝对 URL（批 16 修过）
+    assert s["cover_url"].endswith("/api/v1/assets/c1/content")
+    assert s["cover_url"].startswith("http")
     assert s["panel_count"] == 1
 
 

@@ -64,7 +64,8 @@ async def test_stream_all_fail():
 
 
 def test_build_image_provider_dispatch():
-    from app.services.task_runner import _build_image_provider
+    # P0-2 重构: _build_image_provider 已迁到 app.core.runtime.candidate
+    from app.core.runtime.candidate import _build_image_provider
 
     conf = ("http://x/v1", "k", "gemini-3.1-flash-image", "chat_image")
     p = _build_image_provider(conf)

@@ -1,613 +1,60 @@
-"""进程内媒体任务执行器。
+"""进程内媒体任务执行器（Comic Facade + 委派入口）。
 
-支持双模式：
-- Mock 模式（默认）：用 asyncio 后台任务模拟异步媒体生成
-- 真实模式：通过 ProviderRegistry 调用 HuggingFace 等真实 AI API
+P0 重构后的角色：
+- **非 Comic 路径**：完全委派给 `app.core.runtime.orchestrator.run_media_task_main`。
+- **Comic 路径**：通过 `app.core.runtime.comic_bridge` 间接调 Comic 业务
+  （P4 整体移 `app/applications/comic/`，本桥接废弃）。
+- 进程内串行锁 + redis_lock 防双执行：保留在 task_runner.py（Core 设施）。
 
-当 task.model != "mock" 且存在对应真实 Provider 时，走真实生成；
-真实 Provider 失败时自动回退 Mock，保证演示不中断。
+⚠️ P0 边界：task_runner.py **不**再有旧的 _media_candidates / _build_image_provider /
+_try_real_media / _load_reference_image / _download_media / _ext_from_mime /
+_rewrite_media_url / _upstream_model_id / _provider_kwargs 实现 — 全部在
+`app.core.runtime.*`（candidate / executor / asset_writer）。
 """
-
 from __future__ import annotations
 
 import asyncio
-import base64
-import hashlib
 import json
-import os
-import secrets
+import logging
 import weakref
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 
-import httpx
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from app.core.config import settings  # noqa: F401
 from app.core.database import AsyncSessionLocal
-from app.models.asset import Asset
+from app.core.runtime.asset_writer import write_main_asset_and_finalize
+from app.core.runtime.comic_bridge import (
+    _comic_real_media,
+    _write_comic_subassets,
+)
+from app.core.runtime.governance import notify_event
+from app.core.runtime.scheduler import (
+    recover_stale_tasks,
+    schedule_media_task,
+)
+from app.core.runtime.task import (
+    PROGRESS_STEPS,
+    is_cancelled,
+)
 from app.models.generation_task import GenerationTask
-from app.providers.mock import media
-from app.providers.registry import ProviderRegistry
 from app.services.call_logger import log_call
 from app.services.media_access import sign_content_url
-from app.storage import choose_write_backend, get_storage
 
 logger = structlog.get_logger()
 
-# ── 临时兼容层：以下符号已抽到 app.core.runtime 包，task_runner 仍按旧名使用 ──
-# P0 目标：建立 Core 抽象层物理存在，行为不变。
-# 后续 P 阶段会逐步删除这些 alias，最终 task_runner 完全用 core.runtime 路径。
-from app.core.runtime.task import (
-    PROGRESS_STEPS as _PROGRESS_STEPS,
-    is_cancelled as _is_cancelled,
-)  # noqa: E402,F401
-from app.core.runtime.scheduler import (
-    schedule_media_task as _schedule_media_task,
-    recover_stale_tasks as _recover_stale_tasks,
-)  # noqa: E402,F401
-from app.core.runtime.asset import EXT_MIME as _EXT_MIME  # noqa: E402,F401
-from app.core.runtime.governance import notify_event as _notify_event  # noqa: E402,F401
 
-# 保留后台任务引用，避免被 GC 回收。
-_running: set[asyncio.Task[None]] = set()
-
-# 任务进度上报百分比（迁到 core.runtime.task.PROGRESS_STEPS，保留 alias）。
-_PROGRESS_STEPS = _PROGRESS_STEPS
-# 文件扩展名 → MIME 映射（迁到 core.runtime.asset.EXT_MIME，保留 alias）。
-_EXT_MIME = _EXT_MIME
-
-
-def schedule_media_task(task_id: str) -> None:
-    """从请求处理器调度一个媒体任务的后台处理。"""
-    _schedule_media_task(task_id)
-
-
-async def _delay() -> None:
-    await asyncio.sleep(max(settings.MOCK_PROVIDER_DELAY_MIN_MS, 50) / 1000)
-
-
-async def notify_event(event: dict) -> None:
-    """统一通知：生成完成/失败 → 通知服务（失败静默，绝不影响主流程）。"""
-    await _notify_event(event)
-
-
-async def _is_cancelled(db: AsyncSession, task_id: str) -> bool:
-    """从 DB 重读任务状态，用于长 await 之后检查取消（防止覆盖终态）。"""
-    return await _is_cancelled(db, task_id)
-
-
-async def _recover_stale_tasks(max_age_seconds: int = 1800) -> None:
-    """启动扫描：把进程崩溃遗留的 processing/queued 任务标记为失败，避免永久卡死。"""
-    await _recover_stale_tasks(max_age_seconds)
-
-
-# 前端/配置里的 Provider 别名，不能当作上游模型 id 原样提交。
-_PROVIDER_ALIASES = frozenset({"mock", "huggingface", "openai_compatible", "grok", "grok2api"})
-
-
-def _upstream_model_id(model: str) -> str:
-    """别名 → 空串（用 Provider 默认模型）；具体 id（如 org/model）原样保留。"""
-    raw = (model or "").strip()
-    if not raw or raw.lower() in _PROVIDER_ALIASES:
-        return ""
-    return raw
-
-
-_SLOT_BY_TASK: dict[str, str] = {
-    "image": "image",
-    "video": "video",
-    "audio": "audio",
-    "music": "music",
-    "text": "text",
-}
-
-
-def _provider_kwargs(
-    settings_row: tuple[str, str, str, str] | None, *, include_default_model: bool = True
-) -> dict[str, Any]:
-    """组装 provider 构造参数。图片/视频分支不传 default_model：
-    DB 的 default_model 是文本模型（grok-chat-fast），上游图片/视频端点
-    需要各自的内置默认（grok-imagine-image / grok-imagine-video）。
-    """
-    if settings_row is None:
-        return {}
-    base_url, api_key, default_model, _provider_type = settings_row
-    kwargs = {
-        "base_url": base_url,
-        "api_key": api_key or "none",
-    }
-    if include_default_model:
-        kwargs["default_model"] = default_model
-    return kwargs
-
-
-async def _media_candidates(
-    db: AsyncSession, model: str, task_type: str
-) -> list[tuple[str, str, str, str] | None]:
-    """v3 故障转移候选链：模型中心对应槽位的候选列表（主选在前）。
-
-    P2（deprecation-plan.md）：saiOS DB 单候选回退已下线——
-    链为空/模型中心不可用时返回 [None]（registry 兜底）。
-    元素 None 表示走 ProviderRegistry 解析（与旧行为一致）。
-    """
-    _ = db  # P2 起不再查 DB；参数保留兼容调用方
-    try:
-        from app.services.model_hub_client import get_active_chain
-
-        slot = _SLOT_BY_TASK.get((task_type or "").lower())
-        chain = await get_active_chain(slot) if slot else []
-        # 智能路由：本地 GPU 离线时（last_ok != 1）跳过，不傻等 submit 超时
-        raw = [
-            (c.get("base_url",""), c.get("api_key",""), c.get("default_model",""),
-             (c.get("provider_type") or "").lower().strip(), int(c.get("last_ok") or 0))
-            for c in chain
-            if c.get("base_url") or (c.get("provider_type") or "").lower() == "edge_tts"
-        ]
-        confs = []
-        for base_url, api_key, model, pt, last_ok in raw:
-            is_local_gpu = "172.17.0.1:700" in (base_url or "")
-            if is_local_gpu and last_ok != 1:
-                logger.info("media_skip_offline_gpu", provider_type=pt, base_url=base_url, last_ok=last_ok)
-                continue
-            confs.append((base_url, api_key, model, pt))
-        if not confs and raw:
-            # 全离线时保留原链（兜底试一次，万一探活过期了）
-            confs = [(b, a, m, p) for b, a, m, p, _ in raw]
-        if confs:
-            return confs
-    except Exception:
-        pass
-    return [None]
-
-
-def _build_image_provider(conf: tuple[str, str, str, str] | None) -> Any | None:
-    """按 provider_type 构建图像 provider；conf=None 返回 None（registry 路径）。"""
-    if conf is None:
-        return None
-    if conf[3] == "zarklab":
-        from app.providers.zarklab import ZarklabImageProvider
-
-        return ZarklabImageProvider(**_provider_kwargs(conf, include_default_model=False))
-    if conf[3] == "chat_image":
-        from app.providers.chat_image import ChatCompletionsImageProvider
-
-        return ChatCompletionsImageProvider(**_provider_kwargs(conf))
-    if conf[3] == "comfyui_image":
-        from app.providers.comfyui import ComfyUIImageProvider
-
-        return ComfyUIImageProvider(**_provider_kwargs(conf))
-    from app.providers.openai_compatible import OpenAICompatibleImageProvider
-
-    return OpenAICompatibleImageProvider(**_provider_kwargs(conf, include_default_model=False))
-
-
-async def _load_reference_image(
-    db: AsyncSession, params: dict[str, object]
-) -> tuple[str | None, str | None]:
-    """读取参考图（写真 Photo 或素材 Asset）为 data URL，供上游 img2img 使用。
-
-    返回 (data_url, 失败原因)。图大于 3MB 或读取失败时返回 (None, 原因)，
-    不阻断主流程（继续走文生图）。
-    """
-    from app.models.asset import Asset
-    from app.models.photo import Photo
-
-    ref_id = str(params.get("reference_photo_id") or params.get("reference_asset_id") or "")
-    if not ref_id:
-        return None, None
-    photo: Photo | None = await db.get(Photo, ref_id)
-    ref: Photo | Asset | None = photo
-    model_cls: type[Photo] | type[Asset] = Photo
-    if ref is None:
-        asset: Asset | None = await db.get(Asset, ref_id)
-        if asset is not None:
-            ref = asset
-            model_cls = Asset
-    if ref is None:
-        return None, "参考图不存在"
-    try:
-        store = get_storage(getattr(ref, "storage_backend", None) or "local")
-        data = await store.get(ref.storage_key)
-        if len(data) > 3 * 1024 * 1024:
-            return None, "参考图超过 3MB，跳过图生图"
-        mime = getattr(ref, "mime_type", None) or "image/png"
-        return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}", None
-    except Exception as exc:
-        logger.warning(
-            "reference_image_load_failed",
-            model=model_cls.__name__,
-            error=str(exc)[:120],
-        )
-        return None, f"参考图读取失败: {str(exc)[:100]}"
-
-
-async def _download_media(url: str) -> tuple[bytes, str]:
-    """统一媒体下载：data URL 直接解码；http(s) URL 下载后按 content-type 定 MIME。
-
-    grok 的 assets.grok.com 图片有防盗链（403）：必须带浏览器 UA + Referer，
-    否则真实生图成功但下载失败（"图片下载 403"）。
-    """
-    if url.startswith("data:"):
-        header, b64 = url.split(",", 1)
-        mime = header.split(":")[1].split(";")[0] if ":" in header else "application/octet-stream"
-        return base64.b64decode(b64), mime
-    import httpx
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
-        ),
-        "Referer": "https://grok.com/",
-        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-        "Sec-Fetch-Dest": "image",
-        "Sec-Fetch-Mode": "no-cors",
-        "Sec-Fetch-Site": "cross-site",
-    }
-    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-        resp = await client.get(url, headers=headers)
-        if resp.status_code != 200:
-            raise RuntimeError(f"媒体下载 {resp.status_code}: {resp.text[:120]}")
-    ctype = (resp.headers.get("content-type") or "application/octet-stream").lower()
-    return resp.content, ctype
-
-
-def _ext_from_mime(mime: str, default: str) -> str:
-    mime = mime.lower()
-    if "png" in mime:
-        return "png"
-    if "jpeg" in mime or "jpg" in mime:
-        return "jpg"
-    if "webp" in mime:
-        return "webp"
-    if "gif" in mime:
-        return "gif"
-    if "flac" in mime:
-        return "flac"
-    if "wav" in mime or "wave" in mime:
-        return "wav"
-    if "mp4" in mime:
-        return "mp4"
-    if "webm" in mime:
-        return "webm"
-    return default
-
-
-def _rewrite_media_url(url: str, upstream_base: str) -> str:
-    """上游返回的 media URL 常指向其容器内 127.0.0.1/localhost。
-
-    按 provider base_url（如 http://host.docker.internal:8000/v1）的 host
-    改写，保证 AIGC 容器内也能下载到 grok2api 的媒体。
-    """
-    from urllib.parse import urlparse, urlunparse
-
-    if not url or not url.startswith(("http://", "https://")):
-        return url
-    try:
-        u = urlparse(url)
-        if u.hostname not in ("127.0.0.1", "localhost"):
-            return url
-        p = urlparse(upstream_base)
-        if not p.hostname:
-            return url
-        return urlunparse((p.scheme or u.scheme, p.netloc, u.path, u.params, u.query, u.fragment))
-    except ValueError:
-        return url
-
-
-async def _try_real_media(
-    task_type: str, prompt: str, params: dict[str, object], model: str, db: AsyncSession
-) -> tuple[bytes, str, str] | tuple[None, str]:
-    """尝试真实 Provider。
-
-    成功: (bytes, mime, ext)
-    失败: (None, reason) — reason 供 result.fallback_reason 展示。
-    """
-    upstream = _upstream_model_id(model)
-    candidates = await _media_candidates(db, model, task_type)
-    try:
-        if task_type == "image":
-            submit_params = dict(params)
-            if params.get("reference_photo_id") or params.get("reference_asset_id"):
-                ref_url, ref_err = await _load_reference_image(db, params)
-                if ref_url:
-                    submit_params["image"] = ref_url
-                elif ref_err:
-                    logger.warning("reference_skip", task_id=model, reason=ref_err)
-            last_reason = ""
-            for i, conf in enumerate(candidates):
-                try:
-                    if conf is None:
-                        image_provider: Any = ProviderRegistry.get_image_provider(
-                            model,
-                            **_provider_kwargs(None, include_default_model=False),
-                        )
-                        # 降级到 registry 路径时用上游模型
-                        current_model = upstream
-                    else:
-                        image_provider = _build_image_provider(conf)
-                        # 批17: 降级 bug 修复——用当前候选的 default_model（conf[2]），
-                        # 而不是固定的 upstream（FLUX 名字）。否则候选 4/4 grok2api 收到
-                        # "model=flux1-schnell" 会 400 "not an image model"。
-                        current_model = conf[2] or upstream
-                    if image_provider is None or image_provider.__class__.__name__ == "MockImageProvider":
-                        return None, "图像 Provider 解析为 Mock，未走真实路径"
-                    result = await image_provider.submit(prompt, model=current_model, **submit_params)
-                    poll_result = await image_provider.poll(str(result.get("task_id") or ""))
-                    if poll_result.get("status") != "succeeded":
-                        raise RuntimeError(
-                            str(poll_result.get("error") or poll_result.get("status") or "unknown")
-                        )
-                    url = str(poll_result.get("image_url") or "")
-                    if not url:
-                        raise RuntimeError("真实图像结果缺少图片地址")
-                    data, mime = await _download_media(
-                        _rewrite_media_url(url, conf[0] if conf else "")
-                    )
-                    logger.info(
-                        "media_candidate_used",
-                        task_type=task_type,
-                        candidate=f"{i + 1}/{len(candidates)}",
-                        provider_type=(conf[3] if conf else "registry"),
-                    )
-                    return data, mime, _ext_from_mime(mime, "bin")
-                except Exception as exc:  # noqa: BLE001 — 单候选失败降级到下一个
-                    last_reason = (str(exc).strip() or type(exc).__name__)[:200]
-                    if i < len(candidates) - 1:
-                        logger.warning(
-                            "media_failover_next",
-                            task_type=task_type,
-                            failed_candidate=i + 1,
-                            error=last_reason,
-                            remaining=len(candidates) - i - 1,
-                        )
-                        continue
-            return None, f"真实图像任务未成功: {last_reason[:160]}"
-        if task_type == "video":
-            last_reason = ""
-            for i, conf in enumerate(candidates):
-                try:
-                    if conf is None:
-                        video_provider: Any = ProviderRegistry.get_video_provider(
-                            model,
-                            **_provider_kwargs(None, include_default_model=False),
-                        )
-                    elif (conf[3] or "").lower() == "comfyui":
-                        from app.providers.comfyui import ComfyUIProvider
-
-                        video_provider = ComfyUIProvider(**_provider_kwargs(conf))
-                    elif (conf[3] or "").lower() == "minimax_video":
-                        # 批14：MiniMax Hailuo（H3）云 API——GPU 节点离线时的第二候选
-                        from app.providers.minimax_video import MinimaxVideoProvider
-
-                        video_provider = MinimaxVideoProvider(**_provider_kwargs(conf))
-                    else:
-                        from app.providers.openai_compatible import OpenAICompatibleVideoProvider
-
-                        video_provider = OpenAICompatibleVideoProvider(
-                            **_provider_kwargs(conf, include_default_model=False),
-                        )
-                    if video_provider.__class__.__name__ == "MockVideoProvider":
-                        return None, "视频 Provider 解析为 Mock，未走真实路径"
-                    result = await video_provider.submit(prompt, model=conf[2] or upstream, **params)
-                    poll_result = await video_provider.poll(str(result.get("task_id") or ""))
-                    if poll_result.get("status") != "succeeded":
-                        raise RuntimeError(
-                            str(poll_result.get("error") or poll_result.get("status") or "unknown")
-                        )
-                    url = str(poll_result.get("video_url") or "")
-                    if not url:
-                        raise RuntimeError("真实视频结果缺少视频地址")
-                    data, mime = await _download_media(
-                        _rewrite_media_url(url, conf[0] if conf else "")
-                    )
-                    logger.info(
-                        "media_candidate_used",
-                        task_type=task_type,
-                        candidate=f"{i + 1}/{len(candidates)}",
-                        provider_type=(conf[3] if conf else "registry"),
-                    )
-                    return data, mime, _ext_from_mime(mime, "mp4")
-                except Exception as exc:  # noqa: BLE001
-                    last_reason = (str(exc).strip() or type(exc).__name__)[:200]
-                    if i < len(candidates) - 1:
-                        logger.warning(
-                            "media_failover_next",
-                            task_type=task_type,
-                            failed_candidate=i + 1,
-                            error=last_reason,
-                            remaining=len(candidates) - i - 1,
-                        )
-                        continue
-            return None, f"真实视频任务未成功: {last_reason[:160]}"
-        if task_type in ("audio", "music"):
-            last_reason = ""
-            for i, conf in enumerate(candidates):
-                try:
-                    ptype = (conf[3] if conf else "").lower()
-                    if conf and ptype == "edge_tts":
-                        from app.providers.edge_tts import EdgeTTSSpeechProvider
-
-                        speech_provider = EdgeTTSSpeechProvider()
-                        # hub 的 default_model 存音色（如 zh-CN-XiaoxiaoNeural）；
-                        # 请求 schema 默认 voice="default" 视为未指定
-                        if conf[2] and str(params.get("voice") or "") in ("", "default"):
-                            params = {**params, "voice": str(conf[2])}
-                    elif conf and ptype == "musicgen":
-                        from app.providers.musicgen import MusicGenProvider
-
-                        # 16GB GPU 节点经 frp 隧道提供 MusicGen（音乐长文本用 duration 参数）
-                        speech_provider = MusicGenProvider(**_provider_kwargs(conf))
-                    else:
-                        # registry 兜底：get_speech_provider 只收 name，
-                        # 不能传 base_url 等构造参数（历史 TypeError 隐患）
-                        speech_provider = ProviderRegistry.get_speech_provider(
-                            upstream or ""
-                        )
-                    if speech_provider.__class__.__name__ == "MockSpeechProvider":
-                        return None, "语音 Provider 解析为 Mock，未走真实路径"
-                    result = await speech_provider.submit(prompt, model=conf[2] or upstream, **params)
-                    poll_result = await speech_provider.poll(str(result.get("task_id") or ""))
-                    if poll_result.get("status") != "succeeded":
-                        raise RuntimeError(
-                            str(poll_result.get("error") or poll_result.get("status") or "unknown")
-                        )
-                    url = str(
-                        poll_result.get("audio_url") or result.get("audio_url") or ""
-                    )
-                    if not url:
-                        raise RuntimeError("真实语音结果缺少音频地址")
-                    data, mime = await _download_media(
-                        _rewrite_media_url(url, conf[0] if conf else "")
-                    )
-                    logger.info(
-                        "media_candidate_used",
-                        task_type=task_type,
-                        candidate=f"{i + 1}/{len(candidates)}",
-                        provider_type=(conf[3] if conf else "registry"),
-                    )
-                    return data, mime, _ext_from_mime(mime, "wav")
-                except Exception as exc:  # noqa: BLE001
-                    last_reason = (str(exc).strip() or type(exc).__name__)[:200]
-                    if i < len(candidates) - 1:
-                        logger.warning(
-                            "media_failover_next",
-                            task_type=task_type,
-                            failed_candidate=i + 1,
-                            error=last_reason,
-                            remaining=len(candidates) - i - 1,
-                        )
-                        continue
-            return None, f"真实语音任务未成功: {last_reason[:160]}"
-        return None, f"任务类型 {task_type} 暂无真实 Provider"
-    except Exception as exc:
-        reason = str(exc).strip()[:200]
-        # httpx ConnectError 等有时消息为空，带上类型名便于定位
-        if not reason:
-            reason = type(exc).__name__
-        logger.warning(
-            "real_provider_failed",
-            task_type=task_type,
-            model=model,
-            error=reason,
-        )
-        return None, reason
-
-
-async def _generate_cover_image(key: str, title: str, style: str, characters: str) -> bytes | None:
-    """封面海报图（文生图）；失败返回 None。"""
-    from app.services import comic_service
-
-    chars_line = f"，角色设定：{characters}" if characters.strip() else ""
-    prompt = (
-        f"电影海报构图，标题《{title}》，{style}风格{chars_line}，"
-        "主体角色居中，戏剧化光影，高对比度"
-    )
-    try:
-        async with httpx.AsyncClient(timeout=180) as client:
-            r = await client.post(
-                f"{comic_service.IMAGE_BASE}/images/generations",
-                headers={"Authorization": f"Bearer {key}"},
-                json={"model": comic_service.IMAGE_MODEL, "prompt": prompt, "n": 1},
-                timeout=180,
-            )
-            if r.status_code != 200:
-                logger.warning("comic_cover_failed", status=r.status_code)
-                return None
-            return await comic_service._download_result_image(client, r)
-    except Exception as exc:
-        logger.warning("comic_cover_exc", error=str(exc)[:120])
-        return None
-
-
-async def _comic_real_media(
-    prompt: str, params: dict[str, object], db: AsyncSession
-) -> dict[str, object] | tuple[None, str]:
-    """漫画：分镜（cpa 文本）→ 逐格出图（grok 图片）→ PIL 拼合。
-
-    成功返回 dict：
-      {"page": (bytes, mime, ext), "cover": (bytes, mime, ext)|None, "title": str,
-       "panels": [{index, data|None, mime, ext, scene, dialogue}]}
-    失败返回 (None, reason)。
-
-    @todo P4 (Applications 阶段) — 此函数及 _generate_cover_image 整段为 Comic
-    Domain 业务，应迁移到 `app/applications/comic/` 下，由 Comic Application 通过
-    Runtime Tool / MCP 暴露面调用，Core (task_runner) 不应直接 import Domain。
-    P0 阶段仅作边界标记，**保持行为不变**。
-    """
-    from app.services.comic_service import (
-        _grok_image_key,
-        _story_api_key,
-        compose_comic_page,
-        compose_cover_page,
-        generate_panels,
-        generate_storyboard,
-        panels_to_json,
-    )
-
-    n_panels = max(4, min(9, int(str(params.get("panels") or 4))))
-    style = str(params.get("style") or "日式漫画")
-    characters = str(params.get("characters") or "")
-    layout = "manga" if str(params.get("layout") or "") == "manga" else "grid"
-    try:
-        story_key = await _story_api_key(db)
-        grok_key = await _grok_image_key()
-        if not story_key:
-            return None, "未配置 cpa 凭据（分镜文本模型不可用）"
-        if not grok_key:
-            return None, "未配置 grok2api 凭据（出图模型不可用）"
-        story = await generate_storyboard(prompt, n_panels, style, characters, story_key)
-        panels = story.panels
-        title = story.title
-        panel_images = await generate_panels(grok_key, panels, style, characters)
-        page_data = compose_comic_page(panel_images, panels, n_panels, layout)
-        panels_info: list[dict[str, object]] = []
-        for i, img in enumerate(panel_images):
-            item: dict[str, object] = {
-                "index": i,
-                "scene": panels[i].scene,
-                "dialogue": panels[i].dialogue,
-            }
-            if img is not None:
-                item.update({"data": img, "mime": "image/jpeg", "ext": "jpg"})
-            panels_info.append(item)
-        # 封面：海报文生图优先，失败用首张成功 panel 兜底
-        cover_img = await _generate_cover_image(grok_key, title, style, characters)
-        if cover_img is None:
-            for img in panel_images:
-                if img is not None:
-                    cover_img = img
-                    break
-        cover_page = compose_cover_page(cover_img, title, prompt) if cover_img is not None else None
-        return {
-            "page": (page_data, "image/jpeg", "jpg"),
-            "cover": (cover_page, "image/jpeg", "jpg") if cover_page is not None else None,
-            "title": title,
-            "panels": panels_info,
-            "storyboard": panels_to_json(panels),
-        }
-    except Exception as exc:
-        reason = str(exc).strip()[:200] or type(exc).__name__
-        logger.warning("comic_real_failed", error=reason)
-        return None, reason
-
-
-# 进程内媒体任务串行锁：同 loop 内并发任务排队执行。
-# 背景：测试库为内存 SQLite 单连接（StaticPool），并发写会概率性
-# 「database is locked/连接竞争」导致全量回归随机失败；串行化后
-# 同时只执行一个任务，连接竞争消失。生产走 Celery 队列天然串行，不受影响。
-# ⚠️ celery worker 每任务 asyncio.run 新事件循环：锁必须按 loop 隔离
-# （全局单例 Lock 会绑死第一个循环 → "Future attached to a different loop"）。
+# 进程内串行锁（背景：测试库为内存 SQLite 单连接，并发写会概率性失败）。
 _media_exec_locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = (
     weakref.WeakKeyDictionary()
 )
 
 
 def _media_lock() -> asyncio.Lock:
-    """按事件循环惰性创建（API 单循环复用一个；worker 每任务循环各一个）。"""
+    """按事件循环惰性创建。"""
     loop = asyncio.get_running_loop()
     lock = _media_exec_locks.get(loop)
     if lock is None:
@@ -616,78 +63,38 @@ def _media_lock() -> asyncio.Lock:
     return lock
 
 
-async def run_media_task(task_id: str) -> None:
-    # 跨进程防双执行：celery worker 与 drain 可能同时拿到同一 queued 任务
-    # （锁 TTL 900s > 全局 600s 任务超时，不手动释放）
-    from app.core.cache import redis_lock
+async def _run_comic_task(task_id: str) -> None:
+    """Comic 任务：分镜→逐格出图→拼合（所有 Comic 业务在 core.runtime.comic_bridge）。"""
+    from app.core.runtime.orchestrator import _resolve_model_name, _progress_loop
 
-    if not await redis_lock(f"aigc:lock:media_task:{task_id}", ttl=900):
-        return
-    async with _media_lock():
-        await _run_media_task_locked(task_id)
-
-
-async def _run_media_task_locked(task_id: str) -> None:
     async with AsyncSessionLocal() as db:
         task = (
             await db.execute(select(GenerationTask).where(GenerationTask.id == task_id))
         ).scalar_one_or_none()
-        # processing：drain 抢占后交给本执行器（排队中的 queued/submitting 同样执行）
         if task is None or task.status not in ("queued", "submitting", "processing"):
             return
 
         try:
             params: dict[str, object] = json.loads(task.params or "{}")
             prompt = str(params.get("prompt") or params.get("text") or "")
-            # task.model 来自请求；空则按类型取环境默认（无默认则报错，不产占位假数据）。
-            # 批16 修复：image 也复用 else 分支的 hub 链首 fallback——之前清空
-            # DEFAULT_IMAGE_PROVIDER 后 image 任务直接抛"未配置 Provider"（video 早就走 hub 链首）。
-            model_name = (task.model or "").strip()
-            if not model_name:
-                if task.task_type == "image" and settings.DEFAULT_IMAGE_PROVIDER:
-                    model_name = settings.DEFAULT_IMAGE_PROVIDER
-                elif task.task_type in ("audio", "music") and settings.DEFAULT_SPEECH_PROVIDER:
-                    model_name = settings.DEFAULT_SPEECH_PROVIDER
-                else:
-                    # 批13 修复：video/audio/music/image 等类型无环境默认——此前直接拒绝导致 hub
-                    # 对应槽位链永远走不到。改为问模型中心对应槽位链首：有真实候选（带 default_model）即放行。
-                    try:
-                        from app.services.model_hub_client import get_active_chain
 
-                        slot = _SLOT_BY_TASK.get((task.task_type or "").lower())
-                        chain = await get_active_chain(slot) if slot else []
-                        if chain and (chain[0].get("base_url") or (chain[0].get("provider_type") or "").lower() == "edge_tts"):
-                            model_name = str(chain[0].get("default_model") or "hub-candidate")
-                    except Exception:
-                        pass
-            # 显式 "mock" 仅保留为测试/开发隔离通道；生产界面不暴露
+            model_name = _resolve_model_name(task)
             use_real = bool(model_name and model_name != "mock")
             if not use_real and model_name != "mock":
                 raise RuntimeError(
                     f"未配置可用的{task.task_type} Provider，请在「模型配置」中启用真实模型"
                 )
 
+            # P0-2 修复：设 processing 之前先检查 cancel（避免竞态覆盖 cancelled 状态）
+            if await is_cancelled(db, task_id):
+                logger.info("media_task_cancelled, task_id=%s, stage=%s", task_id, "before_processing")
+                return
+
             task.status = "processing"
             await db.commit()
 
-            for pct in _PROGRESS_STEPS:
-                await _delay()
-                # 期间被取消则终止。
-                await db.refresh(task)
-                if task.status == "cancelled":
-                    logger.info("media_task_cancelled", task_id=task_id)
-                    return
-                task.progress = pct
-                await db.commit()
+            await _progress_loop(db, task, task_id)
 
-            # 失败率模拟（默认 0）。
-            if settings.MOCK_PROVIDER_FAILURE_RATE > 0 and (
-                secrets.randbelow(100) < settings.MOCK_PROVIDER_FAILURE_RATE
-            ):
-                raise RuntimeError("Mock Provider 模拟失败")
-
-            # ── 尝试真实 Provider ───────────────────────────────
-            # 排除 prompt/text/model：model 由上游单独解析，避免 submit(..., model=x, **params) 冲突
             render_params = {
                 k: v for k, v in params.items() if k not in ("prompt", "text", "model")
             }
@@ -698,225 +105,123 @@ async def _run_media_task_locked(task_id: str) -> None:
             fallback_reason = ""
 
             if use_real:
-                # 漫画：分镜→逐格出图→拼合，返回主资产 + 每格资产
-                comic_result: dict[str, object] | tuple[None, str] | None = None
-                if task.task_type == "comic":
-                    comic_result = await _comic_real_media(prompt, render_params, db)
-                    if await _is_cancelled(db, task_id):
-                        logger.info("media_task_cancelled", task_id=task_id, stage="after_real")
-                        return
-                    if isinstance(comic_result, dict) and comic_result.get("page"):
-                        page = cast(tuple[bytes, str, str], comic_result["page"])
-                        data, mime, ext = page[0], page[1], page[2]
-                        used_real = True
-                        logger.info("real_provider_succeeded", task_id=task_id, model=model_name)
-                    else:
-                        fallback_reason = (
-                            comic_result[1]
-                            if isinstance(comic_result, tuple) and len(comic_result) == 2
-                            else "漫画真实生成失败或不可用"
-                        )
-                else:
-                    real_result = await _try_real_media(
-                        task.task_type, prompt, render_params, model_name, db
+                comic_result = await _comic_real_media(prompt, render_params, db)
+                if await is_cancelled(db, task_id):
+                    logger.info(
+                        "media_task_cancelled", task_id=task_id, stage="after_real"
                     )
-                    # 真实调用（最长 180s）期间可能被取消：调用后重读，取消则终止
-                    if await _is_cancelled(db, task_id):
-                        logger.info("media_task_cancelled", task_id=task_id, stage="after_real")
-                        return
-                    if (
-                        isinstance(real_result, tuple)
-                        and len(real_result) == 3
-                        and real_result[0] is not None
-                    ):
-                        data, mime, ext = real_result
-                        used_real = True
-                        logger.info("real_provider_succeeded", task_id=task_id, model=model_name)
-                    else:
-                        # (None, reason)
-                        fallback_reason = (
-                            real_result[1]
-                            if isinstance(real_result, tuple) and len(real_result) == 2
-                            else "真实 Provider 失败或不可用"
-                        )
+                    return
+                if isinstance(comic_result, dict) and comic_result.get("page"):
+                    page = comic_result["page"]
+                    data, mime, ext = page[0], page[1], page[2]
+                    used_real = True
+                    logger.info(
+                        "real_provider_succeeded", task_id=task_id, model=model_name
+                    )
+                else:
+                    fallback_reason = (
+                        comic_result[1]
+                        if isinstance(comic_result, tuple) and len(comic_result) == 2
+                        else "漫画真实生成失败或不可用"
+                    )
 
-            # ── 真实生成失败：报错落库，不降级占位假数据 ──────────
             if data is None and use_real:
                 if not fallback_reason:
                     fallback_reason = "真实 Provider 失败或不可用"
                 logger.warning(
-                    "real_provider_failed",
-                    task_id=task_id,
-                    model=model_name,
-                    reason=fallback_reason[:200],
+                    "real_provider_failed, task_id=%s, model=%s, reason=%s",
+                    task_id,
+                    model_name,
+                    fallback_reason[:200],
                 )
                 raise RuntimeError(f"真实生成失败：{fallback_reason[:300]}")
-            # 显式 "mock"（测试/开发隔离通道）才渲染占位
             if data is None:
-                data, mime, ext = media.render_for(task.task_type, prompt, **render_params)
+                from app.providers.mock import media as _media
+                data, mime, ext = _media.render_for(task.task_type, prompt, **render_params)
 
             now = datetime.now(UTC)
-            key = f"{task.user_id}/{now:%Y/%m}/{task_id}.{ext}"
-            backend = choose_write_backend(task.user_id)
-            store = get_storage(backend)
-            await store.put(key, data, mime)
+            key = f"{task.user_id}/{now:%Y/%m}/{task.id}.{ext}"
 
-            # 漫画：主资产（拼合页）+ 每格资产
-            panel_assets: list[dict[str, object]] = []
-            comic_panels: list[dict[str, object]] = []
-            if task.task_type == "comic" and isinstance(comic_result, dict):
-                comic_panels_raw = cast(list[dict[str, object]], comic_result.get("panels") or [])
-                for p in comic_panels_raw:
-                    pdata = p.get("data")
-                    pindex = int(str(p.get("index") or 0))
-                    comic_panels.append(
-                        {
-                            "index": pindex,
-                            "scene": str(p.get("scene") or ""),
-                            "dialogue": str(p.get("dialogue") or ""),
-                        }
-                    )
-                    if pdata is None:
-                        continue
-                    pdata_bytes = cast(bytes, pdata)
-                    pmime, pext = str(p.get("mime") or "image/jpeg"), str(p.get("ext") or "jpg")
-                    pkey = f"{task.user_id}/{now:%Y/%m}/{task_id}-panel{pindex}.{pext}"
-                    await store.put(pkey, pdata_bytes, pmime)
-                    passet = Asset(
-                        filename=f"comic-{task_id[:8]}-panel{pindex}.{pext}",
-                        storage_key=pkey,
-                        storage_backend=backend,
-                        mime_type=pmime,
-                        size_bytes=len(pdata_bytes),
-                        sha256=hashlib.sha256(pdata_bytes).hexdigest(),
-                        user_id=task.user_id,
-                        task_id=task.id,
-                    )
-                    db.add(passet)
-                    await db.flush()
-                    panel_assets.append(
-                        {
-                            "index": pindex,
-                            "asset_id": passet.id,
-                            "url": sign_content_url(str(passet.id)),
-                            "scene": str(p.get("scene") or ""),
-                            "dialogue": str(p.get("dialogue") or ""),
-                        }
-                    )
-
-            # 漫画：封面页资产
-            cover_asset: dict[str, object] | None = None
-            if task.task_type == "comic" and isinstance(comic_result, dict):
-                cover_raw = comic_result.get("cover")
-                if cover_raw is not None:
-                    cdata_bytes, cmime, cext = cast(tuple[bytes, str, str], cover_raw)
-                    ckey = f"{task.user_id}/{now:%Y/%m}/{task_id}-cover.{cext}"
-                    await store.put(ckey, cdata_bytes, cmime)
-                    casset = Asset(
-                        filename=f"comic-{task_id[:8]}-cover.{cext}",
-                        storage_key=ckey,
-                        storage_backend=backend,
-                        mime_type=cmime,
-                        size_bytes=len(cdata_bytes),
-                        sha256=hashlib.sha256(cdata_bytes).hexdigest(),
-                        user_id=task.user_id,
-                        task_id=task.id,
-                    )
-                    db.add(casset)
-                    await db.flush()
-                    cover_asset = {
-                        "asset_id": casset.id,
-                        "url": sign_content_url(str(casset.id)),
-                    }
-
-            asset = Asset(
-                filename=f"{task.task_type}-{task_id[:8]}.{ext}",
-                storage_key=key,
-                storage_backend=backend,
-                mime_type=mime,
-                size_bytes=len(data),
-                sha256=hashlib.sha256(data).hexdigest(),
-                user_id=task.user_id,
-                task_id=task.id,
+            # 写主资产（用 core.runtime.asset_writer 抽离的工具）
+            await write_main_asset_and_finalize(
+                db,
+                task=task,
+                data=data,
+                mime=mime,
+                ext=ext,
+                used_real=used_real,
+                model_name=model_name,
+                fallback_reason=fallback_reason,
+                params=params,
             )
-            db.add(asset)
-            try:
-                await db.flush()
-                # 写终态前重读：取消请求可能刚到达，不允许把已取消任务覆盖为成功
-                if await _is_cancelled(db, task_id):
-                    logger.info("media_task_cancelled", task_id=task_id, stage="before_terminal")
-                    await db.rollback()
+
+            # Comic 子资产（panels + cover）
+            if used_real and data is not None and "comic" in str(task.task_type).lower() and isinstance(comic_result, dict):
+                # 上面 write_main_asset_and_finalize 内部已 commit 主资产
+                # 重新查 task（已 commit 状态变化）
+                task = (
+                    await db.execute(
+                        select(GenerationTask).where(GenerationTask.id == task_id)
+                    )
+                ).scalar_one_or_none()
+                if task is not None:
+                    panel_assets, cover_asset = await _write_comic_subassets(
+                        db, task, comic_result, now
+                    )
+                    # Comic metadata 写到 task.result（不重写主资产字段，只追加 comic 部分）
                     try:
-                        await store.delete(key)
+                        existing = json.loads(task.result or "{}")
                     except Exception:
-                        logger.warning("cancelled_object_cleanup_failed", task_id=task_id)
-                    return
-                task.status = "succeeded"
-                task.progress = 100
-                task.result = json.dumps(
+                        existing = {}
+                    existing["comic"] = {
+                        "panels": cast(list, existing.get("comic", {})).get("panels", []),
+                        "assets": panel_assets,
+                        "storyboard": (
+                            cast(str, comic_result.get("storyboard") or "")
+                            if isinstance(comic_result, dict)
+                            else ""
+                        ),
+                        "title": (
+                            cast(str, comic_result.get("title") or "")
+                            if isinstance(comic_result, dict)
+                            else ""
+                        ),
+                        "cover": cover_asset,
+                    }
+                    task.result = json.dumps(existing)
+                    await db.commit()
+                    logger.info(
+                        "comic_subassets_written",
+                        task_id=task_id,
+                        panels=len(panel_assets),
+                        has_cover=cover_asset is not None,
+                    )
+
+            # 通知：生成完成
+            if task is not None and task.task_type in (
+                "image", "video", "audio", "music", "comic", "text"
+            ):
+                await notify_event(
                     {
-                        "asset_id": asset.id,
-                        "url": sign_content_url(str(asset.id)),
-                        "access_url_endpoint": f"/api/v1/assets/{asset.id}/access-url",
-                        "mime": mime,
-                        "is_real": used_real,
-                        "provider": model_name if used_real else "mock",
-                        "fallback_reason": fallback_reason or None,
-                        "reference_photo_id": params.get("reference_photo_id"),
-                        "reference_asset_id": params.get("reference_asset_id"),
-                        "comic": {
-                            "panels": comic_panels,
-                            "assets": panel_assets,
-                            "storyboard": cast(str, comic_result.get("storyboard") or "")
-                            if isinstance(comic_result, dict)
-                            else "",
-                            "title": cast(str, comic_result.get("title") or "")
-                            if isinstance(comic_result, dict)
-                            else "",
-                            "cover": cover_asset,
-                        }
-                        if task.task_type == "comic"
-                        else None,
+                        "source": "saios",
+                        "type": "saios.generation.succeeded",
+                        "severity": "success",
+                        "priority": "low",
+                        "dedup_key": f"saios:task:{task.id}",
+                        "merge_key": f"saios:{task.task_type}",
+                        "title": f"{task.task_type} 生成完成",
+                        "message": f"模型 {model_name if used_real else 'mock'} · asset {task.id[:8]}",
+                        "payload": {
+                            "task_id": task.id,
+                            "task_type": task.task_type,
+                            "model": model_name,
+                            "is_real": used_real,
+                        },
                     }
                 )
-                task.completed_at = now
-                await db.commit()
-            except Exception:
-                # 写库失败：补偿删除对象，避免孤儿
-                try:
-                    await store.delete(key)
-                except Exception:
-                    logger.exception(
-                        "orphan_object_cleanup_failed",
-                        storage_backend=backend,
-                        storage_key=key,
-                        task_id=task_id,
-                    )
-                raise
-            logger.info(
-                "media_task_succeeded",
-                task_id=task_id,
-                asset_id=asset.id,
-                storage_backend=backend,
-            )
-            # 通知：生成完成
-            if task.task_type in ("image", "video", "audio", "music", "comic", "text"):
-                await notify_event({
-                    "source": "saios",
-                    "type": "saios.generation.succeeded",
-                    "severity": "success",
-                    "priority": "low",
-                    "dedup_key": f"saios:task:{task.id}",
-                    "merge_key": f"saios:{task.task_type}",
-                    "title": f"{task.task_type} 生成完成",
-                    "message": f"模型 {model_name if used_real else 'mock'} · asset {asset.id[:8]}",
-                    "payload": {"task_id": task.id, "task_type": task.task_type,
-                                "model": model_name, "is_real": used_real,
-                                "asset_id": asset.id},
-                })
             await log_call(
                 task_id=task_id,
-                task_type=task.task_type,
+                task_type=task.task_type if task else "comic",
                 provider=model_name if used_real else "mock",
                 model=model_name,
                 status="fallback" if fallback_reason else "succeeded",
@@ -932,26 +237,58 @@ async def _run_media_task_locked(task_id: str) -> None:
                 task.error_message = str(exc)[:500]
                 task.completed_at = datetime.now(UTC)
                 await db.commit()
-                # 通知：生成失败
                 if task.task_type in ("image", "video", "audio", "music", "comic", "text"):
-                    await notify_event({
-                        "source": "saios",
-                        "type": "saios.generation.failed",
-                        "severity": "error",
-                        "priority": "normal",
-                        "dedup_key": f"saios:task:{task.id}",
-                        "merge_key": f"saios:{task.task_type}",
-                        "title": f"{task.task_type} 生成失败",
-                        "message": str(exc)[:200],
-                        "payload": {"task_id": task.id, "task_type": task.task_type,
-                                    "error": str(exc)[:200]},
-                    })
-            logger.exception("media_task_failed", task_id=task_id)
+                    await notify_event(
+                        {
+                            "source": "saios",
+                            "type": "saios.generation.failed",
+                            "severity": "error",
+                            "priority": "normal",
+                            "dedup_key": f"saios:task:{task.id}",
+                            "merge_key": f"saios:{task.task_type}",
+                            "title": f"{task.task_type} 生成失败",
+                            "message": str(exc)[:200],
+                            "payload": {
+                                "task_id": task.id,
+                                "task_type": task.task_type,
+                                "error": str(exc)[:200],
+                            },
+                        }
+                    )
+            logger.exception("media_task_failed, task_id=%s", task_id)
             await log_call(
                 task_id=task_id,
-                task_type=task.task_type if task else "",
+                task_type=task.task_type if task else "comic",
                 provider=model_name if "model_name" in locals() else "",
                 model=model_name if "model_name" in locals() else "",
                 status="failed",
                 error_message=str(exc)[:400],
             )
+
+
+async def _run_media_task_locked(task_id: str) -> None:
+    """任务分派：Comic 走 _run_comic_task；其他委派给 orchestrator。"""
+    async with AsyncSessionLocal() as db:
+        task = (
+            await db.execute(select(GenerationTask).where(GenerationTask.id == task_id))
+        ).scalar_one_or_none()
+        if task is None or task.status not in ("queued", "submitting", "processing"):
+            return
+        task_type = (task.task_type or "").lower()
+
+    if task_type == "comic":
+        await _run_comic_task(task_id)
+    else:
+        from app.core.runtime.orchestrator import run_media_task_main
+
+        await run_media_task_main(task_id)
+
+
+async def run_media_task(task_id: str) -> None:
+    """入口：跨进程 redis_lock + 进程内串行锁。"""
+    from app.core.cache import redis_lock
+
+    if not await redis_lock(f"aigc:lock:media_task:{task_id}", ttl=900):
+        return
+    async with _media_lock():
+        await _run_media_task_locked(task_id)
