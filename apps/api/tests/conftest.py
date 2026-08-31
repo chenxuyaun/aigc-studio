@@ -139,8 +139,8 @@ async def _fake_text_resolver(monkeypatch: pytest.MonkeyPatch):
 
     import app.api.v1.generations.text as _text_mod
     import app.api.v1.knowledge as _knowledge_mod
-    import app.api.v1.story as _story_mod
     import app.api.v1.workflows as _workflows_mod
+    import app.core.runtime.story.generation as _story_gen_mod
     import app.services.agent_chat as _agent_chat_mod
     import app.services.roleplay as _roleplay_mod
     import app.services.story_crew as _story_crew_mod
@@ -149,7 +149,7 @@ async def _fake_text_resolver(monkeypatch: pytest.MonkeyPatch):
     for _mod in (
         _text_mod,
         _knowledge_mod,
-        _story_mod,
+        _story_gen_mod,
         _workflows_mod,
         _agent_chat_mod,
         _roleplay_mod,

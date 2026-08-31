@@ -19,10 +19,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.runtime.story import generation, serial
 from app.models.user import User
 from app.security.auth import get_current_user
 from app.services import story_crew, story_forge
-from app.services.provider_resolver import resolve_text_provider
 
 router = APIRouter()
 
@@ -525,90 +525,19 @@ async def generate_chapter_stream(
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """生成章节正文（SSE 流式，叙事模式）。"""
-    import re as _re
-
-    from app.services import roleplay as rp
 
     async def _gen() -> AsyncIterator[str]:
-        project = await story_forge.get_project(db, user.id, req.project_id)
-        chapter = await story_forge.get_chapter(db, user.id, chapter_id)
-        if project is None or chapter is None:
-            yield _sse({"type": "error", "error": "项目或章节不存在"})
-            return
-        cards = await rp._load_cards(
-            db, user.id, story_forge._load_json(project.character_asset_ids, [])
-        )
-        if not cards:
-            yield _sse({"type": "error", "error": "项目未关联角色卡"})
-            return
-        system_prompt, user_prompt, wb = await story_forge._build_chapter_prompt(
-            db, user.id, project, chapter, cards, req.instruction
-        )
-        resolved = await resolve_text_provider(db, req.model)
-        provider = rp.cast_text_provider(resolved.provider)
-        chunks: list[str] = []
-        try:
-            async for chunk in provider.stream_generate(
-                user_prompt,
-                resolved.model,
-                system=system_prompt,
-                temperature=req.temperature,
-                max_tokens=req.max_tokens,
-            ):
-                chunks.append(chunk)
-                yield _sse({"type": "chunk", "content": chunk})
-                # 断点恢复：每 20 个 chunk 增量落库草稿（status=draft），
-                # 刷新/断网后章节保留已生成部分，可继续编辑或重新生成
-                if len(chunks) % 20 == 0:
-                    chapter.content = "".join(chunks)
-                    chapter.status = "draft"
-                    await db.commit()
-        except Exception as exc:
-            # 中断：保留草稿（不丢已生成内容）
-            if chunks:
-                chapter.content = "".join(chunks)
-                chapter.status = "draft"
-                await db.commit()
-            yield _sse({"type": "error", "error": f"生成失败：{str(exc)[:200]}"})
-            yield "data: [DONE]\n\n"
-            return
-        content = "".join(chunks).strip()
-        names = [c.get("name") or "角色" for _, c in cards]
-        content = _re.sub(rf"^第\s*{chapter.chapter_no}\s*章.*?\n", "", content, count=1).strip()
-        scripts = await rp._load_regex_scripts(db, user.id)
-        if scripts:
-            content = rp._apply_regex(scripts, content, "ai_output", names)
-        chapter.content = content
-        chapter.word_count = len(content)
-        chapter.model = resolved.model
-        chapter.status = "done"
-        # 创作内核（P3-5）：确定性预检 → quality_report（零 LLM，流式场景不跑 LLM Critic）
-        quality_report = None
-        try:
-            from app.services.story_gate import deterministic_quality_report
-
-            quality_report = await deterministic_quality_report(db, project, content, chapter)
-        except Exception:
-            quality_report = None
-        await db.commit()
-        # AI 腔体检（分级报告：套话/机械句式/连接词/宣传腔/空洞修饰）
-        try:
-            from app.services.ai_voice_checker import check_ai_voice
-
-            issues = check_ai_voice(content)
-        except Exception:
-            issues = []
-        yield _sse(
-            {
-                "type": "done",
-                "chapter_id": chapter.id,
-                "word_count": chapter.word_count,
-                "worldbook_hits": len(wb.activated),
-                "ai_voice": issues[:12],
-                "quality_report": quality_report,
-            }
-        )
-        yield "data: [DONE]\n\n"
+        async for chunk in generation.stream_chapter_sse(
+            db,
+            user.id,
+            chapter_id,
+            project_id=req.project_id,
+            model=req.model,
+            temperature=req.temperature,
+            max_tokens=req.max_tokens,
+            instruction=req.instruction,
+        ):
+            yield chunk
 
     return StreamingResponse(_gen(), media_type="text/event-stream")
 
@@ -724,39 +653,8 @@ async def list_schedules(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    from sqlalchemy import select
-
-    from app.models.serial_schedule import SerialSchedule
-
-    rows = (
-        (
-            await db.execute(
-                select(SerialSchedule).where(
-                    SerialSchedule.project_id == project_id,
-                    SerialSchedule.user_id == user.id,
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return {
-        "items": [
-            {
-                "id": s.id,
-                "project_id": s.project_id,
-                "interval_minutes": s.interval_minutes,
-                "batch_size": s.batch_size,
-                "next_run_at": str(s.next_run_at) if s.next_run_at else "",
-                "chapter_count": s.chapter_count,
-                "status": s.status,
-                "mode": s.mode,
-                "last_run_at": str(s.last_run_at) if s.last_run_at else "",
-                "error_message": s.error_message,
-            }
-            for s in rows
-        ]
-    }
+    """自动连载排期列表。"""
+    return await serial.schedule_list(db, user.id, project_id)
 
 
 @router.post("/projects/{project_id}/schedules")
@@ -766,37 +664,16 @@ async def create_schedule(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    from datetime import UTC, datetime, timedelta
-
-    from app.models.serial_schedule import SerialSchedule
-
-    p = await story_forge.get_project(db, user.id, project_id)
-    if p is None:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    now = datetime.now(UTC)
-    s = SerialSchedule(
-        project_id=project_id,
-        user_id=user.id,
+    """创建自动连载排期。"""
+    return await serial.schedule_create(
+        db,
+        user.id,
+        project_id,
         interval_minutes=req.interval_minutes,
         batch_size=req.batch_size,
         mode=req.mode,
         status=req.status,
-        next_run_at=now + timedelta(minutes=req.interval_minutes),
     )
-    db.add(s)
-    await db.commit()
-    await db.refresh(s)
-    return {
-        "ok": True,
-        "schedule": {
-            "id": s.id,
-            "project_id": s.project_id,
-            "interval_minutes": s.interval_minutes,
-            "next_run_at": str(s.next_run_at),
-            "status": s.status,
-            "mode": s.mode,
-        },
-    }
 
 
 @router.put("/schedules/{schedule_id}")
@@ -806,25 +683,16 @@ async def update_schedule(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    from sqlalchemy import select
-
-    from app.models.serial_schedule import SerialSchedule
-
-    s = (
-        await db.execute(
-            select(SerialSchedule).where(
-                SerialSchedule.id == schedule_id, SerialSchedule.user_id == user.id
-            )
-        )
-    ).scalar_one_or_none()
-    if s is None:
-        raise HTTPException(status_code=404, detail="调度不存在")
-    s.interval_minutes = req.interval_minutes
-    s.batch_size = req.batch_size
-    s.mode = req.mode
-    s.status = req.status
-    await db.commit()
-    return {"ok": True}
+    """更新自动连载排期。"""
+    return await serial.schedule_update(
+        db,
+        user.id,
+        schedule_id,
+        interval_minutes=req.interval_minutes,
+        batch_size=req.batch_size,
+        mode=req.mode,
+        status=req.status,
+    )
 
 
 @router.delete("/schedules/{schedule_id}")
@@ -833,19 +701,5 @@ async def delete_schedule(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    from sqlalchemy import select
-
-    from app.models.serial_schedule import SerialSchedule
-
-    s = (
-        await db.execute(
-            select(SerialSchedule).where(
-                SerialSchedule.id == schedule_id, SerialSchedule.user_id == user.id
-            )
-        )
-    ).scalar_one_or_none()
-    if s is None:
-        raise HTTPException(status_code=404, detail="调度不存在")
-    await db.delete(s)
-    await db.commit()
-    return {"ok": True}
+    """删除自动连载排期。"""
+    return await serial.schedule_delete(db, user.id, schedule_id)
