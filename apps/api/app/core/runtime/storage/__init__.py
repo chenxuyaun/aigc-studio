@@ -11,5 +11,18 @@ P0-4 抽离：ObjectStorage 基类 + get_storage 动态选择器 + 已有 local/
 P0 边界：app.storage.* 保留兼容 wrapper；新代码直接用 core.runtime.storage.*。
 """
 from app.core.runtime.storage.base import BaseStorage, ObjectStorage  # noqa: F401
+from app.core.runtime.storage.registry import (  # noqa: F401
+    choose_write_backend,
+    get_storage,
+    normalize_backend,
+    reset_storage_cache,
+)
 
-__all__ = ["BaseStorage", "ObjectStorage"]
+__all__ = [
+    "BaseStorage",
+    "ObjectStorage",
+    "choose_write_backend",
+    "get_storage",
+    "normalize_backend",
+    "reset_storage_cache",
+]
