@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends
 
-from app.models.user import User
-from app.schemas.prompt_tools import (
+from app.data.schemas.prompt_tools import (
     OptimizeResult,
     PromptGenerateRequest,
     PromptOptimizeRequest,
     StructuredPrompt,
 )
+from app.models.user import User
 from app.security.auth import get_current_user
 from app.services import prompt_tools
 

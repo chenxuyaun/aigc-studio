@@ -420,7 +420,7 @@ async def _create_and_poll(
 @mcp.tool()
 async def generate_image(prompt: str) -> dict[str, Any]:
     """文生图：引擎由模型中心 image 链自动选择（主选失败自动降级备选）。返回任务结果（含 asset_url）。"""
-    from app.schemas.generation import ImageGenerationRequest
+    from app.data.schemas.generation import ImageGenerationRequest
 
     # 不向 LLM 暴露 model 参数：聊天模型曾把自己的名字填进来（如 stealth/ox-alpha）
     # 导致生图上游 400 "not an image model"。空 model = 走 hub 链首候选。
@@ -437,7 +437,7 @@ async def generate_comic(
     layout: str = "grid",
 ) -> dict[str, Any]:
     """漫画生成：分镜→逐格出图→封面+拼合。返回 title/cover_url/panel_count。"""
-    from app.schemas.generation import ComicGenerationRequest
+    from app.data.schemas.generation import ComicGenerationRequest
 
     params = ComicGenerationRequest(
         prompt=prompt,
@@ -472,7 +472,7 @@ async def generate_text(prompt: str, model: str = "") -> dict[str, Any]:
 @mcp.tool()
 async def synthesize_speech(text: str, voice: str = "default") -> dict[str, Any]:
     """语音合成（edge-tts）。返回音频 asset_url。"""
-    from app.schemas.generation import AudioGenerationRequest
+    from app.data.schemas.generation import AudioGenerationRequest
 
     params = AudioGenerationRequest(text=text, voice=voice)
     return await _create_and_poll("audio", params.model, params)
