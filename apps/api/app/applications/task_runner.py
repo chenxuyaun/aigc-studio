@@ -3,7 +3,7 @@
 P0 重构后的角色：
 - **非 Comic 路径**：完全委派给 `app.core.runtime.orchestrator.run_media_task_main`。
 - **Comic 路径**：通过 `app.core.runtime.comic_bridge` 间接调 Comic 业务
-  （P4 整体移 `app/applications/comic/`，本桥接废弃）。
+  （P4-2 已归位 `app/applications/comic/bridge.py`）。
 - 进程内串行锁 + redis_lock 防双执行：保留在 task_runner.py（Core 设施）。
 
 ⚠️ P0 边界：task_runner.py **不**再有旧的 _media_candidates / _build_image_provider /
@@ -23,13 +23,13 @@ import structlog
 from sqlalchemy import select
 
 from app.applications.call_logger import log_call
-from app.core.config import settings  # noqa: F401
-from app.core.database import AsyncSessionLocal
-from app.core.runtime.asset_writer import write_main_asset_and_finalize
-from app.core.runtime.comic_bridge import (
+from app.applications.comic.bridge import (
     _comic_real_media,
     _write_comic_subassets,
 )
+from app.core.config import settings  # noqa: F401
+from app.core.database import AsyncSessionLocal
+from app.core.runtime.asset_writer import write_main_asset_and_finalize
 from app.core.runtime.governance import notify_event
 from app.core.runtime.task import (
     is_cancelled,

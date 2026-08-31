@@ -17,15 +17,14 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.config import settings
-from app.models.asset import Asset
 from app.core.runtime.asset.access import sign_content_url
+from app.models.asset import Asset
 from app.storage import choose_write_backend, get_storage
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
