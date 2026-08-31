@@ -279,10 +279,10 @@ async def test_execute_music_saves_work_and_backfills(client):
     backfill_mock = AsyncMock()
     with (
         patch(
-            "app.api.v1.generations.music.compose_song",
+            "app.core.runtime.music.engine.compose_song",
             new=AsyncMock(return_value=dict(fake_data)),
         ),
-        patch("app.api.v1.generations.music._backfill_work_material", new=backfill_mock),
+        patch("app.core.runtime.music.works._backfill_work_material", new=backfill_mock),
         patch("app.services.music_works._auto_tags", new=AsyncMock(return_value="民谣,夏日")),
     ):
         async with TestingSessionLocal() as session:
@@ -368,7 +368,7 @@ async def test_execute_music_injects_agent_role(client):
 
     captured: dict[str, str] = {}
 
-    async def _fake_compose(req, _db, _uid):
+    async def _fake_compose(_db, req):
         captured["theme"] = req.theme
         return {
             "title": "车站",
@@ -379,8 +379,8 @@ async def test_execute_music_injects_agent_role(client):
         }
 
     with (
-        patch("app.api.v1.generations.music.compose_song", new=_fake_compose),
-        patch("app.api.v1.generations.music._backfill_work_material", new=AsyncMock()),
+        patch("app.core.runtime.music.engine.compose_song", new=_fake_compose),
+        patch("app.core.runtime.music.works._backfill_work_material", new=AsyncMock()),
         patch("app.services.music_works._auto_tags", new=AsyncMock(return_value="民谣")),
     ):
         async with TestingSessionLocal() as session:
@@ -454,7 +454,7 @@ async def test_execute_music_truncates_long_theme(client):
     """多轮对话长目标：theme 超 500 字时截断，不触发 validation error。"""
     captured: dict[str, str] = {}
 
-    async def _fake_compose(req, _db, _uid):
+    async def _fake_compose(_db, req):
         captured["theme"] = req.theme
         return {
             "title": "x",
@@ -466,8 +466,8 @@ async def test_execute_music_truncates_long_theme(client):
 
     long_prompt = "写一首关于山间晨雾的民谣" + "，加上阳光意象和露珠细节" * 40
     with (
-        patch("app.api.v1.generations.music.compose_song", new=_fake_compose),
-        patch("app.api.v1.generations.music._backfill_work_material", new=AsyncMock()),
+        patch("app.core.runtime.music.engine.compose_song", new=_fake_compose),
+        patch("app.core.runtime.music.works._backfill_work_material", new=AsyncMock()),
         patch("app.services.music_works._auto_tags", new=AsyncMock(return_value="民谣")),
     ):
         from tests.conftest import TestingSessionLocal
@@ -615,9 +615,9 @@ async def test_roundtable_true_discussion_rounds(client):
         ),
         # _produce_final/_extract_fix_list 用的是 music.py 模块内绑定的名字
         patch(
-            "app.api.v1.generations.music.resolve_text_provider", return_value=fake_resolver
+            "app.core.runtime.music.engine.resolve_text_provider", return_value=fake_resolver
         ),
-        patch("app.api.v1.generations.music._backfill_work_material", new=AsyncMock()),
+        patch("app.core.runtime.music.works._backfill_work_material", new=AsyncMock()),
         patch("app.services.music_works._auto_tags", new=AsyncMock(return_value="民谣")),
     ):
         from tests.conftest import TestingSessionLocal

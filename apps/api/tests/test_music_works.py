@@ -179,7 +179,7 @@ async def test_backfill_work_material_saves_and_dedups(client) -> None:
         with (
             patch("app.core.database.AsyncSessionLocal", return_value=db),
             # 防刷窗口置负：两次调用都过防刷，第二次由「查重」拦截（测试意图）
-            patch("app.api.v1.generations.music._BACKFILL_MIN_INTERVAL", -1),
+            patch("app.core.runtime.music.works._BACKFILL_MIN_INTERVAL", -1),
             patch(
                 "app.services.knowledge_materials.summarize_for_creation",
                 new=AsyncMock(return_value="【AI 精华解读】…"),
@@ -289,7 +289,7 @@ async def test_extract_fix_list_returns_fixes(client) -> None:
         "R", (), {"content": '{"fixes": ["- 批评：「灯光」→ 替代：「老闸口吱呀声」"]}'}
     )()
     fake_resolver.model = "mock"
-    with patch("app.api.v1.generations.music.resolve_text_provider", return_value=fake_resolver):
+    with patch("app.core.runtime.music.engine.resolve_text_provider", return_value=fake_resolver):
         out = await _extract_fix_list(None, rounds)
     assert "老闸口吱呀声" in out
 
@@ -823,7 +823,7 @@ async def test_compose_rewrites_on_severe_checks(client, user_token) -> None:
         )(),
     ]
     fake_resolver.model = "mock"
-    with patch("app.api.v1.generations.music.resolve_text_provider", return_value=fake_resolver):
+    with patch("app.core.runtime.music.engine.resolve_text_provider", return_value=fake_resolver):
         data = await music_mod.compose_song(
             type("Req", (), {"theme": "歌颂劳动者", "style": "流行", "mood": "激昂",
                               "language": "中文", "verse_count": 2, "model": ""})(),
@@ -852,7 +852,7 @@ async def test_compose_no_rewrite_when_clean(client, user_token) -> None:
         "R", (), {"content": json.dumps(clean)}
     )()
     fake_resolver.model = "mock"
-    with patch("app.api.v1.generations.music.resolve_text_provider", return_value=fake_resolver):
+    with patch("app.core.runtime.music.engine.resolve_text_provider", return_value=fake_resolver):
         data = await music_mod.compose_song(
             type("Req", (), {"theme": "晨雾里的粥摊", "style": "民谣", "mood": "温暖",
                               "language": "中文", "verse_count": 2, "model": ""})(),

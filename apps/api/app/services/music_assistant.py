@@ -11,14 +11,10 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# 复用写歌/讨论的提示词与解析（一次性反向依赖：API 模块只承担端点组装）
-from app.api.v1.generations.music import (
-    _COMPOSE_PROMPT,
-    _DISCUSS_SYSTEM,
-    _STYLE_PROFILES,
-    _extract_json,
-    _transcript,
-)
+# 复用写歌/讨论的提示词与解析（P1-1 后直接依赖 core.runtime.music，不再反向依赖 API 层）
+from app.core.runtime.music.prompts import _COMPOSE_PROMPT, _DISCUSS_SYSTEM
+from app.core.runtime.music.style import _STYLE_PROFILES
+from app.core.runtime.music.textproc import _extract_json, _transcript
 from app.models.roleplay_chat import RoleplayChat
 from app.services import sessions
 from app.services.provider_resolver import resolve_text_provider

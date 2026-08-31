@@ -42,7 +42,7 @@ async def test_discuss_first_round(client, user_token, monkeypatch) -> None:
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
         return ResolvedTextProvider(fake, "cpa", False, provider_config_id=None, source="fake")
 
-    monkeypatch.setattr("app.api.v1.generations.music.resolve_text_provider", fake_resolver)
+    monkeypatch.setattr("app.core.runtime.music.engine.resolve_text_provider", fake_resolver)
     r = await client.post(
         "/api/v1/generations/music/discuss",
         headers=_headers(user_token),
@@ -64,7 +64,7 @@ async def test_discuss_multiturn_context(client, user_token, monkeypatch) -> Non
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
         return ResolvedTextProvider(fake, "cpa", False, provider_config_id=None, source="fake")
 
-    monkeypatch.setattr("app.api.v1.generations.music.resolve_text_provider", fake_resolver)
+    monkeypatch.setattr("app.core.runtime.music.engine.resolve_text_provider", fake_resolver)
     history = [
         {"role": "user", "content": "写一首古风思乡的歌"},
         {"role": "assistant", "content": "【副歌】家书万里……"},
@@ -145,7 +145,7 @@ async def test_roundtable_returns_discussion_and_final(client, user_token, monke
     async def fake_resolver(db: object, model: str) -> ResolvedTextProvider:
         return ResolvedTextProvider(rec, "cpa", False, provider_config_id=None, source="fake")
 
-    monkeypatch.setattr("app.api.v1.generations.music.resolve_text_provider", fake_resolver)
+    monkeypatch.setattr("app.core.runtime.music.engine.resolve_text_provider", fake_resolver)
     r = await client.post(
         "/api/v1/generations/music/roundtable",
         headers=_headers(user_token),

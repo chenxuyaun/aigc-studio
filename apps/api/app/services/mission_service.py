@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from typing import Any, cast
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -402,12 +402,10 @@ async def _agent_role_block(
 async def _execute_music(
     db: AsyncSession, user_id: str, prompt: str, theme_goal: str = "", agent_name: str = ""
 ) -> dict[str, Any]:
-    from app.api.v1.generations.music import (
-        MusicComposeRequest,
-        _auto_save_work,
-        _detect_style,
-        compose_song,
-    )
+    from app.api.v1.generations.music import MusicComposeRequest
+    from app.core.runtime.music.engine import compose_song
+    from app.core.runtime.music.style import _detect_style
+    from app.core.runtime.music.works import _auto_save_work
 
     # 角色编排：指派了 Agent 则以其身份视角创作（引擎完整链路保留）
     role_block = await _agent_role_block(db, user_id, agent_name, prompt)
@@ -423,7 +421,7 @@ async def _execute_music(
         verse_count=2,
         model="",
     )
-    data = await compose_song(req, db, cast(Any, user_id))
+    data = await compose_song(db, req)
     if data.get("error"):
         return {"summary": f"写歌失败：{data['error']}", "ok": False}
     title = str(data.get("title") or "未命名")
@@ -458,7 +456,7 @@ def _spawn_work_backfill(
 ) -> None:
     """把 Mission 产出的好歌词后台回填知识库（异常静默；防刷由回填函数把关）。"""
 
-    from app.api.v1.generations.music import _backfill_work_material
+    from app.core.runtime.music.works import _backfill_work_material
 
     async def _run() -> None:
         with contextlib.suppress(Exception):
@@ -545,12 +543,9 @@ async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> di
     （fix_list 结构化采纳 + 自检 + 严重问题自动重写一轮），只是不推流。
     """
 
-    from app.api.v1.generations.music import (
-        _CAST_PROMPT,
-        _detect_style,
-        _produce_final,
-        _speaker_prompt,
-    )
+    from app.core.runtime.music.engine import _produce_final
+    from app.core.runtime.music.prompts import _CAST_PROMPT, _speaker_prompt
+    from app.core.runtime.music.style import _detect_style
     from app.services.provider_resolver import resolve_text_provider
 
     try:
@@ -610,7 +605,7 @@ async def _execute_roundtable(db: AsyncSession, user_id: str, prompt: str) -> di
     lyrics = str(final.get("lyrics") or "")
     try:
         # 生长闭环：圆桌定稿同样进作品库 + 回填知识库
-        from app.api.v1.generations.music import _auto_save_work
+        from app.core.runtime.music.works import _auto_save_work
 
         await _auto_save_work(
             db,
