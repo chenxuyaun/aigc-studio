@@ -88,16 +88,8 @@ from app.services.text_utils import sse_event as _sse_event
 router = APIRouter()
 
 
-class MusicComposeRequest(BaseModel):
-    """AI 写歌：主题 → 原创歌词 + 风格描述（供 Suno/网易天音等免费合成）。"""
-
-    theme: str = Field(max_length=500)
-    style: str = Field(default="流行", max_length=100)
-    mood: str = Field(default="治愈", max_length=100)
-    language: str = Field(default="中文", max_length=50)
-    verse_count: int = Field(default=2, ge=1, le=4)
-    model: str = ""  # 空 = 自动选择文本 Provider（cpa）
-
+# P4：MusicComposeRequest 归 runtime 引擎所有（engine.py 定义），此处再导出保 HTTP 契约不变
+from app.core.runtime.music.engine import MusicComposeRequest  # noqa: F401  # 兼容再导出
 
 class MusicDiscussRequest(BaseModel):
     """音乐讨论室：多轮对话式共创（主题/歌词/编曲/乐理，AI 基于上下文迭代）。"""

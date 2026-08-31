@@ -1,12 +1,5 @@
-"""定时创作服务（P0-8 薄 facade）。
+import sys as _sys
 
-P0-8 后：实际实现已迁到 `app.core.runtime.scheduler.scheduled_creator`。
-本模块**只**保留 wrapper 以兼容现有 import 路径。
-"""
-from app.core.runtime.scheduler import (  # noqa: F401  # 兼容
-    compute_next_run_at,
-    enqueue_run,
-    run_due_schedules,
-)
+from app.applications import schedule_service as _impl
 
-__all__ = ["compute_next_run_at", "enqueue_run", "run_due_schedules"]
+_sys.modules[__name__] = _impl

@@ -17,6 +17,8 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from app.core.runtime.music.prompts import (
     _COMPOSE_PROMPT,
     _FINAL_PROMPT,
@@ -37,6 +39,17 @@ from app.core.runtime.music.textproc import (
 from app.services.provider_resolver import resolve_text_provider
 from app.services.text_utils import result_text as _provider_text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+class MusicComposeRequest(BaseModel):
+    """AI 写歌请求（引擎输入契约；P4 从 api 层迁入，路由层沿用此定义保 HTTP 契约不变）。"""
+
+    theme: str = Field(max_length=500)
+    style: str = Field(default="流行", max_length=100)
+    mood: str = Field(default="治愈", max_length=100)
+    language: str = Field(default="中文", max_length=50)
+    verse_count: int = Field(default=2, ge=1, le=4)
+    model: str = ""  # 空 = 自动选择文本 Provider（cpa）
+
 
 # 圆桌限流：每用户每分钟最多 3 场（一场 8 次 LLM 调用，成本保护）
 _ROUNDTABLE_RATE = 3
