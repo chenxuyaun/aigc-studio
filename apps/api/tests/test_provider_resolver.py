@@ -11,13 +11,16 @@ from app.services.provider_resolver import NoTextProviderError, resolve_text_pro
 
 
 def _mock_chain(monkeypatch: pytest.MonkeyPatch, confs: list[dict]) -> None:
-    import app.services.model_hub_client as hub_mod
+    # P0-5 后：实际定义在 core.runtime.model.router。
+    # resolve_text_provider 内部 `from .router import get_active_chain` 已经在
+    # 加载时绑定到自己命名空间；必须 patch resolver 命名空间里的引用才能生效。
+    import app.core.runtime.model.resolver as resolver_mod
 
     async def fake_chain(slot: str):
         assert slot == "text"
         return confs
 
-    monkeypatch.setattr(hub_mod, "get_active_chain", fake_chain)
+    monkeypatch.setattr(resolver_mod, "get_active_chain", fake_chain)
 
 
 def _env_off(monkeypatch: pytest.MonkeyPatch) -> None:
