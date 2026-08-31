@@ -50,7 +50,7 @@ def _fake_text_runner(monkeypatch):
         task.progress = 100
         await db.commit()
 
-    monkeypatch.setattr(schedule_service, "_run_text_task", fake_run_text)
+    monkeypatch.setattr("app.core.runtime.scheduler.scheduled_creator._run_text_task", fake_run_text)
 
 
 @pytest.mark.asyncio
@@ -265,7 +265,7 @@ async def test_run_now_image_enqueues_queued_task(client, user_token, monkeypatc
     def fake_dispatch(task_id: str, task_type: str) -> None:
         dispatched.append((task_id, task_type))
 
-    monkeypatch.setattr(gen_service, "_dispatch", fake_dispatch)
+    monkeypatch.setattr("app.core.runtime.task_lifecycle._dispatch", fake_dispatch)
 
     s = await _create_schedule(client, user_token, "定时出图", task_type="image")
     r = await client.post(
@@ -336,3 +336,5 @@ async def test_disabled_schedule_not_picked_up(client, user_token, monkeypatch) 
         # next_run_at 没有被推进（未命中）
         await db.refresh(sched)
         assert sched.next_run_at <= datetime.now(UTC)
+
+
