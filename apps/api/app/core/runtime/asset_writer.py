@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.asset import Asset
-from app.services.media_access import sign_content_url
+from app.core.runtime.asset.access import sign_content_url
 from app.storage import choose_write_backend, get_storage
 
 logger = logging.getLogger(__name__)
