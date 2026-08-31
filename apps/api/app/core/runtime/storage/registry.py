@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from functools import lru_cache
 
 from app.core.config import settings
@@ -22,7 +23,7 @@ from app.core.runtime.storage.base import ObjectStorage
 logger = logging.getLogger(__name__)
 
 
-_VALID_BACKENDS = frozenset({"local", "r2", "s3", "b2", "minio"})
+_VALID_BACKENDS = frozenset({"local", "r2", "s3", "b2", "minio", "quark"})
 
 
 def normalize_backend(name: str | None) -> str:
@@ -77,6 +78,19 @@ def get_storage(backend: str | None = None) -> ObjectStorage:
             public_base_url="",  # 强制空
             backend="r2" if name == "r2" else name,
             allow_public_base_url=False,
+        )
+
+    # 夸克网盘 WebDAV（P2：读侧镜像 / 备份目标，凭据走旧脚本同名 env）
+    if name == "quark":
+        from app.storage.quark_provider import QuarkWebDAVStorage
+
+        return QuarkWebDAVStorage(
+            base_url=getattr(settings, "QUARK_WEBDAV_URL", "")
+            or os.environ.get("QUARK_WEBDAV_URL", "http://host.docker.internal:8080"),
+            username=getattr(settings, "QUARK_WEBDAV_USER", "")
+            or os.environ.get("QUARK_WEBDAV_USER", "admin"),
+            password=getattr(settings, "QUARK_WEBDAV_PASS", "")
+            or os.environ.get("QUARK_WEBDAV_PASS", "admin888"),
         )
 
     raise ValueError(f"不支持的存储 backend: {name}")
