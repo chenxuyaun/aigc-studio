@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.runtime.model.router import get_active_chain, get_active_config, list_providers
-from app.providers.openai_compatible import OpenAICompatibleTextProvider
+from app.providers.models.openai_compatible import OpenAICompatibleTextProvider
 
 
 class NoTextProviderError(RuntimeError):

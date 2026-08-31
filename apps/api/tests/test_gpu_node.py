@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.providers.comfyui import ComfyUIProvider
-from app.providers.musicgen import MusicGenProvider
+from app.providers.models.comfyui import ComfyUIProvider
+from app.providers.models.musicgen import MusicGenProvider
 
 pytestmark = pytest.mark.asyncio
 
@@ -49,7 +49,7 @@ async def test_musicgen_submit_returns_data_url() -> None:
     fake.post.return_value = _resp(200, content=wav)
 
     p = MusicGenProvider(base_url="http://172.17.0.1:7002")
-    with patch("app.providers.musicgen.httpx.AsyncClient", return_value=fake):
+    with patch("app.providers.models.musicgen.httpx.AsyncClient", return_value=fake):
         r = await p.submit("一首温柔的钢琴曲", duration=8)
 
     assert r["status"] == "succeeded"
@@ -85,7 +85,7 @@ async def test_comfyui_submit_and_poll_success() -> None:
     )
 
     p = ComfyUIProvider(base_url="http://172.17.0.1:7001")
-    with patch("app.providers.comfyui.httpx.AsyncClient", return_value=fake):
+    with patch("app.providers.models.comfyui.httpx.AsyncClient", return_value=fake):
         sub = await p.submit("一只猫在草地上奔跑", width=480)
         assert sub["task_id"] == "abc123" and sub["status"] == "running"
         # prompt 已注入模板
@@ -122,7 +122,7 @@ async def test_comfyui_poll_running_then_completed() -> None:
     fake.post.return_value = _resp(200, json_data={"prompt_id": "abc123"})
 
     p = ComfyUIProvider(base_url="http://172.17.0.1:7001")
-    with patch("app.providers.comfyui.httpx.AsyncClient", return_value=fake):
+    with patch("app.providers.models.comfyui.httpx.AsyncClient", return_value=fake):
         await p.submit("一只猫", width=480)
         r = await p.poll("abc123")
     assert r["status"] == "succeeded"
@@ -137,7 +137,7 @@ async def test_comfyui_poll_timeout_reports_failed() -> None:
     fake.get.return_value = _resp(200, json_data={"abc123": {}})
 
     p = ComfyUIProvider(base_url="http://172.17.0.1:7001")
-    with patch("app.providers.comfyui.httpx.AsyncClient", return_value=fake):
+    with patch("app.providers.models.comfyui.httpx.AsyncClient", return_value=fake):
         r = await p.poll("abc123", timeout=0.05)
     assert r["status"] == "failed"
     assert "超时" in (r.get("error") or "")

@@ -89,7 +89,7 @@ class _ChatRequest(BaseModel):
 
 async def _providers(db: AsyncSession | None) -> dict[str, Any]:
     """构造 grok/cpa 两个 provider 实例（复用现有 key 解析）。"""
-    from app.providers.openai_compatible import OpenAICompatibleTextProvider
+    from app.providers.models.openai_compatible import OpenAICompatibleTextProvider
     from app.services import comic_service
 
     grok_key = await comic_service._grok_image_key()

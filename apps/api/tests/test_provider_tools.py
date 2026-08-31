@@ -16,7 +16,7 @@ def test_text_result_tool_calls_default_none() -> None:
 @pytest.mark.anyio
 async def test_generate_with_tools_parses_tool_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     """generate(tools=...) 请求体带 tools；响应含 tool_calls 被解析。"""
-    from app.providers.openai_compatible import OpenAICompatibleTextProvider
+    from app.providers.models.openai_compatible import OpenAICompatibleTextProvider
 
     captured: dict = {}
 
@@ -67,7 +67,7 @@ async def test_generate_with_tools_parses_tool_calls(monkeypatch: pytest.MonkeyP
             return _FakeResp()
 
     monkeypatch.setattr(
-        "app.providers.openai_compatible.httpx.AsyncClient", lambda **k: _FakeClient()
+        "app.providers.models.openai_compatible.httpx.AsyncClient", lambda **k: _FakeClient()
     )
     p = OpenAICompatibleTextProvider(base_url="http://x/v1", api_key="k", default_model="m")
     tools = [{"type": "function", "function": {"name": "generate_comic", "parameters": {}}}]
@@ -82,7 +82,7 @@ async def test_generate_with_tools_parses_tool_calls(monkeypatch: pytest.MonkeyP
 @pytest.mark.anyio
 async def test_generate_without_tools_no_tool_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     """不带 tools 时请求体无 tools 字段，普通内容返回。"""
-    from app.providers.openai_compatible import OpenAICompatibleTextProvider
+    from app.providers.models.openai_compatible import OpenAICompatibleTextProvider
 
     captured: dict = {}
 
@@ -111,7 +111,7 @@ async def test_generate_without_tools_no_tool_calls(monkeypatch: pytest.MonkeyPa
             return _FakeResp()
 
     monkeypatch.setattr(
-        "app.providers.openai_compatible.httpx.AsyncClient", lambda **k: _FakeClient()
+        "app.providers.models.openai_compatible.httpx.AsyncClient", lambda **k: _FakeClient()
     )
     p = OpenAICompatibleTextProvider(base_url="http://x/v1", api_key="k", default_model="m")
     r = await p.generate("hi")

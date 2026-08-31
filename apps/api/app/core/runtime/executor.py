@@ -130,16 +130,16 @@ async def _try_real_media(
                             **_provider_kwargs(None, include_default_model=False),
                         )
                     elif (conf[3] or "").lower() == "comfyui":
-                        from app.providers.comfyui import ComfyUIProvider
+                        from app.providers.models.comfyui import ComfyUIProvider
 
                         video_provider = ComfyUIProvider(**_provider_kwargs(conf))
                     elif (conf[3] or "").lower() == "minimax_video":
                         # 批14：MiniMax Hailuo（H3）云 API——GPU 节点离线时的第二候选
-                        from app.providers.minimax_video import MinimaxVideoProvider
+                        from app.providers.models.minimax_video import MinimaxVideoProvider
 
                         video_provider = MinimaxVideoProvider(**_provider_kwargs(conf))
                     else:
-                        from app.providers.openai_compatible import (
+                        from app.providers.models.openai_compatible import (
                             OpenAICompatibleVideoProvider,
                         )
 
@@ -187,7 +187,7 @@ async def _try_real_media(
                 try:
                     ptype = (conf[3] if conf else "").lower()
                     if conf and ptype == "edge_tts":
-                        from app.providers.edge_tts import EdgeTTSSpeechProvider
+                        from app.providers.models.edge_tts import EdgeTTSSpeechProvider
 
                         speech_provider = EdgeTTSSpeechProvider()
                         # hub 的 default_model 存音色（如 zh-CN-XiaoxiaoNeural）；
@@ -195,7 +195,7 @@ async def _try_real_media(
                         if conf[2] and str(params.get("voice") or "") in ("", "default"):
                             params = {**params, "voice": str(conf[2])}
                     elif conf and ptype == "musicgen":
-                        from app.providers.musicgen import MusicGenProvider
+                        from app.providers.models.musicgen import MusicGenProvider
 
                         # 16GB GPU 节点经 frp 隧道提供 MusicGen（音乐长文本用 duration 参数）
                         speech_provider = MusicGenProvider(**_provider_kwargs(conf))

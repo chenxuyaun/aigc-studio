@@ -20,11 +20,11 @@ class ProviderRegistry:
     def get_text_provider(cls, name: str = "") -> TextProvider:
         provider = name or settings.DEFAULT_TEXT_PROVIDER
         if provider in {"openai_compatible", "grok", "grok2api"}:
-            from app.providers.openai_compatible import OpenAICompatibleTextProvider
+            from app.providers.models.openai_compatible import OpenAICompatibleTextProvider
 
             return OpenAICompatibleTextProvider()
         if provider == "huggingface":
-            from app.providers.huggingface import HuggingFaceTextProvider
+            from app.providers.models.huggingface import HuggingFaceTextProvider
 
             return HuggingFaceTextProvider()
         return MockTextProvider()
@@ -53,19 +53,19 @@ class ProviderRegistry:
         if key in {"", "mock"}:
             return MockImageProvider()
         if key == "zarklab":
-            from app.providers.zarklab import ZarklabImageProvider
+            from app.providers.models.zarklab import ZarklabImageProvider
 
             return ZarklabImageProvider(
                 base_url=base_url, api_key=api_key, default_model=default_model
             )
         if key in {"grok", "grok2api", "openai_compatible"}:
-            from app.providers.openai_compatible import OpenAICompatibleImageProvider
+            from app.providers.models.openai_compatible import OpenAICompatibleImageProvider
 
             return OpenAICompatibleImageProvider(
                 base_url=base_url, api_key=api_key, default_model=default_model
             )
         if key == "huggingface" or "/" in raw:
-            from app.providers.huggingface import HuggingFaceImageProvider
+            from app.providers.models.huggingface import HuggingFaceImageProvider
 
             # 传具体模型 id；仅写 huggingface 时用 HF 默认 SDXL
             model = "" if key == "huggingface" else raw
@@ -88,7 +88,7 @@ class ProviderRegistry:
         if raw.lower() in {"", "mock"}:
             return MockVideoProvider()
         if raw.lower() in {"grok", "grok2api", "openai_compatible"}:
-            from app.providers.openai_compatible import OpenAICompatibleVideoProvider
+            from app.providers.models.openai_compatible import OpenAICompatibleVideoProvider
 
             return OpenAICompatibleVideoProvider(
                 base_url=base_url, api_key=api_key, default_model=default_model
@@ -100,16 +100,16 @@ class ProviderRegistry:
     def get_speech_provider(cls, name: str = "") -> SpeechProvider:
         provider = name or settings.DEFAULT_SPEECH_PROVIDER
         if provider == "huggingface":
-            from app.providers.huggingface import HuggingFaceSpeechProvider
+            from app.providers.models.huggingface import HuggingFaceSpeechProvider
 
             return HuggingFaceSpeechProvider()
         # HF 模型 id（含 /，如 facebook/musicgen-small）：直接走该模型的推理端点
         if "/" in provider:
-            from app.providers.huggingface import HuggingFaceSpeechProvider
+            from app.providers.models.huggingface import HuggingFaceSpeechProvider
 
             return HuggingFaceSpeechProvider(model=provider)
         if provider in {"edge_tts", "edge-tts", "edge"}:
-            from app.providers.edge_tts import EdgeTTSSpeechProvider
+            from app.providers.models.edge_tts import EdgeTTSSpeechProvider
 
             return EdgeTTSSpeechProvider()
         return MockSpeechProvider()

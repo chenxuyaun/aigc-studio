@@ -108,20 +108,20 @@ def _build_image_provider(conf: tuple[str, str, str, str] | None) -> Any | None:
     if conf is None:
         return None
     if conf[3] == "zarklab":
-        from app.providers.zarklab import ZarklabImageProvider
+        from app.providers.models.zarklab import ZarklabImageProvider
 
         return ZarklabImageProvider(
             **_provider_kwargs(conf, include_default_model=False)
         )
     if conf[3] == "chat_image":
-        from app.providers.chat_image import ChatCompletionsImageProvider
+        from app.providers.models.chat_image import ChatCompletionsImageProvider
 
         return ChatCompletionsImageProvider(**_provider_kwargs(conf))
     if conf[3] == "comfyui_image":
-        from app.providers.comfyui import ComfyUIImageProvider
+        from app.providers.models.comfyui import ComfyUIImageProvider
 
         return ComfyUIImageProvider(**_provider_kwargs(conf))
-    from app.providers.openai_compatible import OpenAICompatibleImageProvider
+    from app.providers.models.openai_compatible import OpenAICompatibleImageProvider
 
     return OpenAICompatibleImageProvider(
         **_provider_kwargs(conf, include_default_model=False)

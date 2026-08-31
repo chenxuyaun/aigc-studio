@@ -57,7 +57,7 @@ class FailoverTextProvider:
                         model=getattr(result, "model", "") or use_model or "default",
                     )
                 return result
-            except Exception as exc:  # noqa: BLE001 — 单候选失败降级
+            except Exception as exc:
                 last_exc = exc
                 logger.warning(
                     "text_failover_next",
@@ -96,7 +96,7 @@ class FailoverTextProvider:
                 first = await agen.__anext__()
             except StopAsyncIteration:
                 return
-            except Exception as exc:  # noqa: BLE001 — 首字节前失败 → 下一候选
+            except Exception as exc:
                 last_exc = exc
                 logger.warning(
                     "text_failover_next",

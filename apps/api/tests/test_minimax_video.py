@@ -10,7 +10,7 @@ sys.path.insert(0, ".")
 
 import pytest
 
-from app.providers.minimax_video import MinimaxVideoProvider
+from app.providers.models.minimax_video import MinimaxVideoProvider
 
 
 def _resp(status_code=200, json_data=None):
@@ -56,7 +56,7 @@ async def test_submit_no_key_fails_fast() -> None:
 async def test_submit_returns_task_id() -> None:
     fake = _client(post_return=_resp(json_data={"task_id": "t123"}))
     p = MinimaxVideoProvider(base_url="https://api.minimax.io", api_key="k")
-    with mock.patch("app.providers.minimax_video.httpx.AsyncClient", return_value=fake):
+    with mock.patch("app.providers.models.minimax_video.httpx.AsyncClient", return_value=fake):
         r = await p.submit("一只猫在草地上奔跑", duration=6, resolution="768P")
     assert r["task_id"] == "t123" and r["status"] == "running"
     args, kwargs = fake.post.call_args
@@ -77,7 +77,7 @@ async def test_poll_running_then_success_via_file_id() -> None:
         ]
     )
     p = MinimaxVideoProvider(api_key="k")
-    with mock.patch("app.providers.minimax_video.httpx.AsyncClient", return_value=fake):
+    with mock.patch("app.providers.models.minimax_video.httpx.AsyncClient", return_value=fake):
         r = await p.poll("t123")
     assert r["status"] == "succeeded"
     assert r["video_url"] == "https://cdn/mm.mp4"
@@ -86,7 +86,7 @@ async def test_poll_running_then_success_via_file_id() -> None:
 async def test_poll_failed_status() -> None:
     fake = _client(get_side_effects=[_resp(json_data={"status": "Failed"})])
     p = MinimaxVideoProvider(api_key="k")
-    with mock.patch("app.providers.minimax_video.httpx.AsyncClient", return_value=fake):
+    with mock.patch("app.providers.models.minimax_video.httpx.AsyncClient", return_value=fake):
         r = await p.poll("t1")
     assert r["status"] == "failed"
 
@@ -94,6 +94,6 @@ async def test_poll_failed_status() -> None:
 async def test_poll_timeout_reports_failed() -> None:
     fake = _client(get_side_effects=[_resp(json_data={"status": "Preparing"})] * 50)
     p = MinimaxVideoProvider(api_key="k")
-    with mock.patch("app.providers.minimax_video.httpx.AsyncClient", return_value=fake):
+    with mock.patch("app.providers.models.minimax_video.httpx.AsyncClient", return_value=fake):
         r = await p.poll("t1", timeout=0.05)
     assert r["status"] == "failed" and "超时" in str(r.get("error"))
