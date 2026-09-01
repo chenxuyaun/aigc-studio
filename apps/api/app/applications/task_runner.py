@@ -103,7 +103,7 @@ async def _run_comic_task(task_id: str) -> None:
             params: dict[str, object] = json.loads(task.params or "{}")
             prompt = str(params.get("prompt") or params.get("text") or "")
 
-            model_name = _resolve_model_name(task)
+            model_name = await _resolve_model_name(task)
             use_real = bool(model_name and model_name != "mock")
             if not use_real and model_name != "mock":
                 raise RuntimeError(

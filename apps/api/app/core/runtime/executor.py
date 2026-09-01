@@ -9,6 +9,7 @@ Comic 业务**不**在此（保留在 task_runner.py，P4 移 applications/comic
 from __future__ import annotations
 
 import logging
+import traceback
 from typing import Any, cast
 
 import structlog
@@ -232,6 +233,14 @@ async def _try_real_media(
                     return data, mime, _ext_from_mime(mime, "wav")
                 except Exception as exc:  # noqa: BLE001
                     last_reason = (str(exc).strip() or type(exc).__name__)[:200]
+                    logger.warning(
+                        "media_candidate_exception",
+                        task_type=task_type,
+                        failed_candidate=i + 1,
+                        provider_type=(conf[3] if conf else "registry"),
+                        error=last_reason,
+                        trace=traceback.format_exc(limit=6),
+                    )
                     if i < len(candidates) - 1:
                         logger.warning(
                             "media_failover_next",

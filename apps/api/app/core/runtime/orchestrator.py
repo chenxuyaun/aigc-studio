@@ -44,8 +44,13 @@ _SLOT_BY_TASK: dict[str, str] = {
 }
 
 
-def _resolve_model_name(task: GenerationTask) -> str:
-    """解析 model_name：空时回退到 hub 链首 default_model（批 13 修复逻辑）。"""
+async def _resolve_model_name(task: GenerationTask) -> str:
+    """解析 model_name：空时回退到 hub 链首 default_model（批 13 修复逻辑）。
+
+    batch15: get_active_chain 是协程——原实现漏 await（同步函数里无法 await），
+    协程对象 truthy 但 chain[0] 抛 TypeError 被 except 吞掉，恒走「未配置 Provider」。
+    本函数改为 async，调用方需 await。
+    """
     model_name = (task.model or "").strip()
     if model_name:
         return model_name
@@ -58,7 +63,7 @@ def _resolve_model_name(task: GenerationTask) -> str:
         from app.services.model_hub_client import get_active_chain
 
         slot = _SLOT_BY_TASK.get((task.task_type or "").lower())
-        chain = get_active_chain(slot) if slot else []
+        chain = await get_active_chain(slot) if slot else []
         if chain and (
             chain[0].get("base_url") or (chain[0].get("provider_type") or "").lower() == "edge_tts"
         ):
@@ -108,7 +113,7 @@ async def run_media_task_main(task_id: str, comic_result_out: dict | None = None
             prompt = str(params.get("prompt") or params.get("text") or "")
 
             # ── model_name 解析（含 hub 链首 fallback）──
-            model_name = _resolve_model_name(task)
+            model_name = await _resolve_model_name(task)
             use_real = bool(model_name and model_name != "mock")
             if not use_real and model_name != "mock":
                 raise RuntimeError(
