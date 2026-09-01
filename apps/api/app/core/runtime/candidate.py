@@ -11,6 +11,7 @@ P0 不动 _try_real_media（仍在 task_runner.py，作为门面，调用 _media
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 from typing import Any
@@ -68,7 +69,15 @@ async def _media_candidates(
     _ = db  # P2 起不再查 DB；参数保留兼容调用方
     try:
         slot = _SLOT_BY_TASK.get((task_type or "").lower())
-        chain = await get_active_chain(slot) if slot else []
+        if slot:
+            chain = await get_active_chain(slot)
+            if not chain:
+                # batch15: hub 拉取瞬态失败有 10s 负缓存——媒体槽位有配置时空链
+                # 几乎必为瞬态（music succeeded 与 video failed 仅差 4 分钟实证）。
+                # 等过负缓存窗口重试一次，仍空才认输。
+                logger.warning("media_chain_empty_retry, slot=%s", slot)
+                await asyncio.sleep(1.5)
+                chain = await get_active_chain(slot)
         # 智能路由：本地 GPU 离线时（last_ok != 1）跳过，不傻等 submit 超时
         raw = [
             (
@@ -98,8 +107,10 @@ async def _media_candidates(
             confs = [(b, a, m, p) for b, a, m, p, _ in raw]
         if confs:
             return confs
-    except Exception:
-        pass
+        if slot:
+            logger.warning("media_candidates_empty_chain, slot=%s", slot)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("media_candidates_error, slot=%s, err=%s", slot, str(exc)[:120])
     return [None]
 
 
