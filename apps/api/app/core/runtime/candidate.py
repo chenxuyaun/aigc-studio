@@ -94,11 +94,12 @@ async def _media_candidates(
         for base_url, api_key, model, pt, last_ok in raw:
             is_local_gpu = "172.17.0.1:700" in (base_url or "")
             if is_local_gpu and last_ok != 1:
+                # batch15: stdlib logging 不收任意 kwargs——原 kwargs 写法在这里
+                # 必抛 TypeError（Logger._log unexpected keyword），被外层 except
+                # 吞掉后整条候选链崩成 [None]→Mock 拒绝。改为位置参数格式。
                 logger.info(
-                    "media_skip_offline_gpu",
-                    provider_type=pt,
-                    base_url=base_url,
-                    last_ok=last_ok,
+                    "media_skip_offline_gpu slot=%s base_url=%s last_ok=%s",
+                    pt, base_url, last_ok,
                 )
                 continue
             confs.append((base_url, api_key, model, pt))
