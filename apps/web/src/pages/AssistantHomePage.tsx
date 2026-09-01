@@ -438,7 +438,15 @@ export function AssistantHomePage() {
             content:
               "你是云彩平台的 AI 助手。你可以用自然语言帮用户完成多模态创作：生图、写文、写歌、语音合成、故事创作等。" +
               "写歌词/写文案/写故事/写祝福这类**纯文本创作直接用文字回答**，绝不调用生图或音频工具。" +
-              "只有用户**明确要求生成图片、音频、语音**时，才调用对应工具完成；否则用对话回答。回答简洁、贴心、用中文。",
+              "只有用户**明确要求生成图片、音频、语音**时，才调用对应工具完成；否则用对话回答。回答简洁、贴心、用中文。" +
+              "\n\n创作格式规范（重要）：\n" +
+              "- 歌词必须用标准段落结构：用《歌名》开头，段落间空一行；每段不超过 4-6 行，每行一个完整短语/意象\n" +
+              "- 副歌用【副歌】标注，主歌用【主歌一】【主歌二】标注（方便用户谱曲对位）\n" +
+              "- 输出使用 Markdown：段落间必须空行，需要强调时用粗体，绝不用 HTML\n" +
+              "\n文风要求：\n" +
+              "- 意象要具体、有画面感，避免堆砌陈词（大量\"闪闪的光/眨呀眨/叮当\"这类空泛意象）\n" +
+              "- 结尾收束自然，**不要**对用户说教、不要主动追问\"需要我再调整吗\"之类的话；作品完成即止\n" +
+              "- 用户偏好（颜色/风格）可自然融入，不必刻意点破",
           },
           ...history.map((m) => ({ role: m.role, content: m.content })),
           { role: "user" as const, content: text },
@@ -1758,11 +1766,17 @@ export function AssistantHomePage() {
   );
 }
 
-/** v2 批7：思维链折叠行（🧠 思考过程 + 单行摘要，点击展开全文）。 */
+/** v2 批7：思维链折叠行（🧠 思考过程 + 单行摘要，点击展开全文）。
+ * 2026-09-01：摘要改取「倒数第一个 8-64 字的实质行」——gpt-oss 的思考首句常是
+ * 需求复述（与用户输入重复），摘要取结论性短行信息量更高；展开态隐藏摘要避免复读观感。 */
 function ThinkBlock({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
-  const firstLine = text.split("\n").find((l) => l.trim()) ?? "";
-  const summary = firstLine.length > 64 ? `${firstLine.slice(0, 64)}…` : firstLine;
+  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  const summary =
+    [...lines].reverse().find((l) => l.length >= 8 && l.length <= 64) ??
+    lines[lines.length - 1] ??
+    "";
+  const trimmed = summary.length > 64 ? `${summary.slice(0, 64)}…` : summary;
   return (
     <div className="mb-2 rounded-xl border border-indigo-500/25 bg-indigo-500/5">
       <button
@@ -1772,7 +1786,9 @@ function ThinkBlock({ text }: { text: string }) {
       >
         <span aria-hidden>🧠</span>
         <span className="font-medium">思考过程</span>
-        <span className="min-w-0 flex-1 truncate text-indigo-400/70">{summary}</span>
+        {!open && trimmed && (
+          <span className="min-w-0 flex-1 truncate text-indigo-400/70">{trimmed}</span>
+        )}
         <span className="shrink-0 text-indigo-400">{open ? "▲" : "▼"}</span>
       </button>
       {open && (

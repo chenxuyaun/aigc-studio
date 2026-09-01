@@ -2,17 +2,20 @@ import { useEffect, useState, type ImgHTMLAttributes, type ReactNode } from "rea
 
 import { Check, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
 import { apiClient } from "@/lib/apiClient";
 import { copyText } from "@/lib/clipboard";
 
-/** Markdown 内容渲染：表格/任务列表/代码块（带复制按钮）。react-markdown 默认不渲染 raw HTML，无 XSS 风险。 */
+/** Markdown 内容渲染：表格/任务列表/代码块（带复制按钮）。react-markdown 默认不渲染 raw HTML，无 XSS 风险。
+ * remark-breaks：单换行渲染为 <br>（CommonMark 默认把单个 \n 当软换行折叠成空格——
+ * 歌词/诗句曾被压成一坨，2026-09-01 用户反馈修复）。 */
 export function MarkdownContent({ content }: { content: string }) {
   return (
     <div className="markdown-body text-sm leading-relaxed">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
           pre: CodeBlock,
           img: SmartImg,
