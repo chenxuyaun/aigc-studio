@@ -55,6 +55,39 @@ def _media_lock() -> asyncio.Lock:
     return lock
 
 
+async def _recover_stale_tasks(max_age_seconds: int = 1800) -> None:
+    """启动扫描：把进程崩溃遗留的 processing/queued 任务标记为失败，避免永久卡死。
+
+    P0 拆分 task_runner 时曾误丢此函数（main.py lifespan 启动恢复静默失效），
+    2026-09-01 从 pre-refactor-v1 原样恢复；app.main 仍从 task_runner 导入。
+    """
+    from datetime import UTC as _UTC
+    from datetime import datetime, timedelta
+
+    cutoff = datetime.now(_UTC) - timedelta(seconds=max_age_seconds)
+    async with AsyncSessionLocal() as db:
+        rows = (
+            (
+                await db.execute(
+                    select(GenerationTask).where(
+                        GenerationTask.status.in_(["queued", "processing", "submitting"]),
+                        GenerationTask.updated_at < cutoff,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for row in rows:
+            row.status = "failed"
+            row.error_message = "服务重启导致任务中断，请重新生成"
+            row.completed_at = datetime.now(_UTC)
+            logger.warning("stale_task_recovered", task_id=row.id, task_type=row.task_type)
+        if rows:
+            await db.commit()
+            logger.info("recovered_stale_tasks", count=len(rows))
+
+
 async def _run_comic_task(task_id: str) -> None:
     """Comic 任务：分镜→逐格出图→拼合（所有 Comic 业务在 core.runtime.comic_bridge）。"""
     from app.core.runtime.orchestrator import _progress_loop, _resolve_model_name
