@@ -86,7 +86,9 @@ async def _fetch_active() -> dict[str, Any] | None:
     if isinstance(cached, dict) and now - _cache["ts"] < cache_seconds:
         return cached.get("data")
     try:
-        timeout = float(getattr(settings, "MODEL_HUB_TIMEOUT", 2) or 2)
+        # batch15: hub /api/active 含全链 provider 探活（含跨公网隧道），2s 常超时
+        # → worker 端把失败缓存成 None → 媒体候选退化为 [None]。默认提到 5s。
+        timeout = float(getattr(settings, "MODEL_HUB_TIMEOUT", 5) or 5)
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.get(f"{_base_url()}/api/active")
             if resp.status_code != 200:

@@ -208,8 +208,10 @@ async def _try_real_media(
                         )
                     if speech_provider.__class__.__name__ == "MockSpeechProvider":
                         return None, "语音 Provider 解析为 Mock，未走真实路径"
+                    # batch15: conf=None（registry 兜底路径）时 conf[2] 会炸——
+                    # hub 短暂不可达时 _media_candidates 返回 [None]，必须有防护
                     result = await speech_provider.submit(
-                        prompt, model=conf[2] or upstream, **params
+                        prompt, model=(conf[2] if conf else "") or upstream, **params
                     )
                     poll_result = await speech_provider.poll(str(result.get("task_id") or ""))
                     if poll_result.get("status") != "succeeded":
