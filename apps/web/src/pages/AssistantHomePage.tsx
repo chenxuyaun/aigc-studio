@@ -331,8 +331,15 @@ export function AssistantHomePage() {
         setModelList(list);
         // 当前选择不在列表中 → 自动切到第一个可用模型
         setChatModel((cur) => {
-          const valid = list.some((p) => p.id === cur);
-          const next = valid ? cur : (list[0]?.id ?? cur);
+          // 2026-09-01 一次性迁移：旧默认 gpt-oss-120b-medium（内容偏弱，用户反馈）
+          // → claude-sonnet-4-6（cpa 旗舰）；此后尊重用户手动选择
+          const migrated =
+            cur === "gpt-oss-120b-medium" &&
+            list.some((p) => p.id === "claude-sonnet-4-6")
+              ? "claude-sonnet-4-6"
+              : cur;
+          const valid = list.some((p) => p.id === migrated);
+          const next = valid ? migrated : (list[0]?.id ?? migrated);
           localStorage.setItem("aigc-chat-model", next);
           return next;
         });

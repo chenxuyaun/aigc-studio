@@ -58,6 +58,35 @@ async def test_hub_chain_wins(client, admin_token, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_hub_chain_honors_matching_requested_model(client, admin_token, monkeypatch) -> None:
+    """显式 model 与链内某候选 default_model 相同 → 从该候选起步（选择器真实生效）。
+
+    2026-09-01：此前 hub 路径无条件用链首 default_model，前端模型选择器是
+    「假交互」；现按请求名匹配链内候选并旋转链序，不匹配仍回落链首。
+    """
+    _mock_chain(
+        monkeypatch,
+        [
+            {"base_url": "http://up-a/v1", "api_key": "k1", "default_model": "model-a", "provider_type": "openai_compatible"},
+            {"base_url": "http://up-b/v1", "api_key": "k2", "default_model": "model-b", "provider_type": "openai_compatible"},
+        ],
+    )
+    from app.providers.failover import FailoverTextProvider
+
+    from tests.conftest import TestingSessionLocal
+
+    async with TestingSessionLocal() as db:
+        r = await resolve_text_provider(db, "model-b")
+        assert r.source == "hub"
+        assert r.model == "model-b"
+        assert isinstance(r.provider, FailoverTextProvider)
+        assert r.provider._providers[0].base_url == "http://up-b/v1"
+        # 不匹配的名仍回落链首（原语义不变）
+        r2 = await resolve_text_provider(db, "whatever-model")
+        assert r2.model == "model-a"
+
+
+@pytest.mark.asyncio
 async def test_env_fallback_when_hub_down(client, admin_token, monkeypatch) -> None:
     """hub 不可用且 env 已配置 → env 兜底。"""
     import app.services.model_hub_client as hub_mod

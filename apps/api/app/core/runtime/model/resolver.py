@@ -92,7 +92,6 @@ async def resolve_text_provider(db: AsyncSession, requested_model: str) -> Resol
     系统无任何可用 Provider 时抛 NoTextProviderError（不产出离线假数据）。
     """
     requested = (requested_model or "").strip()
-    _ = requested  # 显式 model 名不再跨供应商传递：链首 default_model 优先
 
     # 0) 模型中心 text 候选链
     try:
@@ -110,10 +109,20 @@ async def resolve_text_provider(db: AsyncSession, requested_model: str) -> Resol
                 )
                 for c in confs
             ]
-            model_name = confs[0].get("default_model") or ""
-            provider: Any = providers[0]
-            if len(providers) > 1:
-                provider = FailoverTextProvider(providers)
+            # 显式 model 名在链内找同款 default_model 的候选并从该候选起步
+            # （前端模型选择器真实生效，2026-09-01）；不匹配则回落链首——
+            # 模型名不跨供应商，备选一律用自身 default_model（failover 约定）。
+            start = 0
+            if requested:
+                for i, c in enumerate(confs):
+                    if (c.get("default_model") or "") == requested:
+                        start = i
+                        break
+            ordered = providers[start:] + providers[:start]
+            model_name = confs[start].get("default_model") or ""
+            provider: Any = ordered[0]
+            if len(ordered) > 1:
+                provider = FailoverTextProvider(ordered)
             return ResolvedTextProvider(provider, model_name, True, source="hub")
     except NoTextProviderError:
         raise
