@@ -9,6 +9,11 @@ clickbait 分类 + high/medium/info 分级 + 原文定位），供小说/文案�
 - connective 机械连接词（medium）：「与此同时/此外/综上所述…」
 - clickbait 宣传腔（high）：「不容错过/震撼来袭…」
 - filler    空洞修饰（info）：「日益/不断/充分/进一步…」
+
+Personal Voice Engine 扩展：传入 voice_dna（用户文风档案）时追加两类命中——
+- voice_avoid：文本出现用户**明确忌讳**的表达（档案 avoid 列表，非通用禁词表）
+- voice_rhythm：用户偏好短句但文本通篇长句（档案 sentence_length=short）
+这使检测从「通用 AI 腔」升级为「对照具体用户的写作习惯」。
 """
 
 from __future__ import annotations
@@ -129,8 +134,14 @@ _SUGGESTIONS: dict[str, str] = {
 }
 
 
-def check_ai_voice(text: str) -> list[dict[str, str]]:
-    """检测文本中的 AI 腔，返回按严重度排序的命中列表（去重）。"""
+def check_ai_voice(
+    text: str, voice_dna: dict | None = None
+) -> list[dict[str, str]]:
+    """检测文本中的 AI 腔，返回按严重度排序的命中列表（去重）。
+
+    voice_dna（可选）：用户文风档案（voice_profiles.voice_dna），
+    提供时追加「个人忌讳表达 / 节奏偏好不符」两类命中；None 退化为通用规则。
+    """
     if not text:
         return []
     issues: dict[str, AiVoiceIssue] = {}
@@ -148,9 +159,54 @@ def check_ai_voice(text: str) -> list[dict[str, str]]:
                     suggestion=_SUGGESTIONS.get(kind, "换成具体表达"),
                 )
             break  # 每个词只报一次
+
+    # Personal Voice：对照用户自己的文风档案补查（不替代通用规则）
+    if isinstance(voice_dna, dict):
+        for issue in _voice_against_dna(text, voice_dna):
+            key = f"{issue.kind}:{issue.sample[:20]}"
+            if key not in issues:
+                issues[key] = issue
+
     result = [i.to_dict() for i in issues.values()]
     result.sort(key=lambda x: _LEVEL_RANK.get(x["level"], 0), reverse=True)
     return result
+
+
+def _voice_against_dna(text: str, dna: dict) -> list[AiVoiceIssue]:
+    """对照用户文风档案查「个人忌讳 + 节奏偏好」。"""
+    out: list[AiVoiceIssue] = []
+    # ① 忌讳表达：用户明确 avoid 的词/腔调，出现即命中（≥2 字防误报）
+    for w in (dna.get("avoid") or [])[:20]:
+        word = str(w).strip()
+        if len(word) < 2:
+            continue
+        for m in re.finditer(re.escape(word), text):
+            start = max(0, m.start() - 8)
+            end = min(len(text), m.end() + 8)
+            out.append(
+                AiVoiceIssue(
+                    kind="voice_avoid",
+                    level="high",
+                    sample=f"…{text[start:end].strip().replace(chr(10), ' ')}…",
+                    suggestion=f"这是你文风档案里忌讳的表达（「{word}」），删掉或换自己的说法",
+                )
+            )
+            break  # 每个词只报一次
+    # ② 节奏偏好：档案写 short（喜欢短句）却通篇长句
+    if str(dna.get("sentence_length") or "") == "short":
+        sents = [s for s in re.split(r"[。！？!?…\n]", text) if len(s.strip()) >= 2]
+        long_ones = [s.strip() for s in sents if len(s.strip()) > 30]
+        if long_ones and len(long_ones) / max(len(sents), 1) >= 0.5:
+            sample = long_ones[0][:40]
+            out.append(
+                AiVoiceIssue(
+                    kind="voice_rhythm",
+                    level="medium",
+                    sample=f"…{sample}…",
+                    suggestion="你的文风档案偏好短句，这句超过 30 字，试着拆成两句",
+                )
+            )
+    return out
 
 
 def _all_rules() -> list[tuple[str, str, str]]:
