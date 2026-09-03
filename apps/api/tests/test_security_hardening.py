@@ -116,22 +116,25 @@ async def test_task_cancel_marks_cancelled(client, admin_token):
     assert resp.status_code == 200, resp.text
     task_id = resp.json()["id"]
 
-    resp = await client.post(f"/api/v1/tasks/{task_id}/cancel", headers=headers)
-    assert resp.status_code == 200, resp.text
-
-    # 取消与后台 mock 任务的 processing 写入存在合法竞态窗口：
-    # 轮询到终态（cancelled 必须最终胜出——before_terminal 检查保护终态不被 succeeded 覆盖）。
+    # 确定性契约测试：等 mock 任务到终态（毫秒级），然后取消必须被 409 拒绝，
+    # 且终态不被覆盖（P0-2 设计：已取消任务不允许被写成 succeeded，反之亦然）。
     import asyncio as _asyncio
 
     status = ""
-    for _ in range(100):  # 最多 ~5s
+    for _ in range(100):  # 最多 ~5s 等任务跑完
         resp = await client.get(f"/api/v1/tasks/{task_id}", headers=headers)
         assert resp.status_code == 200
         status = resp.json()["status"]
-        if status in ("cancelled", "succeeded", "failed"):
+        if status in ("succeeded", "failed"):
             break
         await _asyncio.sleep(0.05)
-    assert status == "cancelled", f"取消应最终胜出，实际 {status}"
+    assert status == "succeeded", f"mock 任务应快速完成，实际 {status}"
+
+    resp = await client.post(f"/api/v1/tasks/{task_id}/cancel", headers=headers)
+    assert resp.status_code == 409, f"终态任务取消应 409，实际 {resp.status_code}"
+
+    resp = await client.get(f"/api/v1/tasks/{task_id}", headers=headers)
+    assert resp.json()["status"] == "succeeded"
 
 
 @pytest.mark.asyncio
