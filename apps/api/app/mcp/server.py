@@ -479,6 +479,18 @@ async def synthesize_speech(text: str, voice: str = "default") -> dict[str, Any]
 
 
 @mcp.tool()
+async def generate_music(prompt: str, duration_seconds: int = 30) -> dict[str, Any]:
+    """歌曲/音乐生成（MusicGen，家庭 GPU 节点）。prompt 用自然语言描述风格/情绪/乐器/节奏，不写歌词。
+    返回音频 asset_url。注意：纯歌词创作不要调用本工具，直接文字回答。"""
+    from app.data.schemas.generation import MusicGenerationRequest
+
+    # model 显式置空 = 走模型中心 music 槽链首（MusicGen）。
+    # 不能用 schema 默认值 DEFAULT_SPEECH_PROVIDER（edge_tts）——那会把 prompt 当台词朗读而不是作曲。
+    params = MusicGenerationRequest(prompt=prompt, duration_seconds=duration_seconds, model="")
+    return await _create_and_poll("music", params.model, params)
+
+
+@mcp.tool()
 async def trigger_register_batch(count: int = 10, ctx: Any | None = None) -> dict[str, Any]:
     """触发注册机刷号批次（仅 admin，后台异步执行）。"""
     if await _request_role(ctx) != "admin":

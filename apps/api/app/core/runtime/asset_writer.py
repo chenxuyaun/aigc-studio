@@ -21,10 +21,14 @@ from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import AsyncSessionLocal
 from app.core.runtime.asset.access import sign_content_url
 from app.models.asset import Asset
+from app.models.generation_task import GenerationTask
 from app.storage import choose_write_backend, get_storage
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +155,21 @@ async def write_main_asset_and_finalize(
         if await is_cancelled(db, task.id):
             logger.info("media_task_cancelled, task_id=%s, stage=%s", task.id, "before_terminal")
             await db.rollback()
+            # 显式落 cancelled 终态：worker 侧 processing 写入可能已覆盖 cancel 的状态，
+            # 若此处直接 raise，任务会永久卡在 processing（无终态、前端无限轮询）。
+            try:
+                async with AsyncSessionLocal() as s2:
+                    t2 = (
+                        await s2.execute(
+                            select(GenerationTask).where(GenerationTask.id == task.id)
+                        )
+                    ).scalar_one_or_none()
+                    if t2 is not None and t2.status != "cancelled":
+                        t2.status = "cancelled"
+                        t2.completed_at = now
+                        await s2.commit()
+            except Exception:
+                logger.warning("cancelled_terminal_write_failed, task_id=%s", task.id, exc_info=True)
             try:
                 await store.delete(key)
             except Exception:

@@ -144,7 +144,7 @@ def test_openai_tools_all_twelve() -> None:
     from app.mcp.server import _openai_tools
 
     tools = _openai_tools()
-    assert len(tools) == 19  # 12 基础 + 4 创作 + 2 AgentList 检索 + 一致性检查
+    assert len(tools) == 20  # 12 基础 + 5 创作(含 generate_music) + 2 AgentList 检索 + 一致性检查
     for t in tools:
         assert t["type"] == "function"
         fn = t["function"]
@@ -153,6 +153,7 @@ def test_openai_tools_all_twelve() -> None:
         assert fn["parameters"]["type"] == "object"
     names = {t["function"]["name"] for t in tools}
     assert "generate_comic" in names
+    assert "generate_music" in names
     assert "trigger_register_batch" in names
     assert "search_agent_directory" in names
     assert "get_agent_comparison" in names
