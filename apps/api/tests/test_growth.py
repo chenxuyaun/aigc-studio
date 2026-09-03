@@ -76,7 +76,11 @@ async def test_reflect_creates_diary_and_memories(sqlite_db) -> None:
     assert out["summary"].startswith("AI 帮")
     diaries = (await db.execute(GrowthDiary.__table__.select())).fetchall()
     assert len(diaries) == 1
-    mems = (await db.execute(MemoryEntry.__table__.select())).fetchall()
+    mems = (
+        await db.execute(
+            MemoryEntry.__table__.select().where(MemoryEntry.user_id == "u1")
+        )
+    ).fetchall()
     # bad_kind 与空 content 被过滤 → 只剩 preference + fact
     kinds = sorted(m[0].kind if hasattr(m[0], "kind") else m["kind"] for m in []) or [
         getattr(r, "kind") for r in mems

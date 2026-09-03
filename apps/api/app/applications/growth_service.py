@@ -163,15 +163,22 @@ async def reflect_session_bg(user_id: str, session_id: str) -> None:
         logger.warning("growth_reflect_failed", exc_info=True)
 
 
-async def build_memory_injection(db: AsyncSession, user_id: str) -> str:
-    """组装 system 级记忆注入文本；无记忆返回空串。"""
+async def build_memory_injection(
+    db: AsyncSession, user_id: str, user_query: str = "", k: int = 12
+) -> str:
+    """组装 system 级记忆注入文本；无记忆返回空串。
+
+    方向 B（top-k 相关性检索）：user_query 非空时按
+    0.65×n-gram 余弦相关性 + 0.35×新近度 选 top-k 条（app.applications.memory_rank）；
+    user_query 为空时保持旧行为（按新→旧取前 k 条）。
+    """
     rows = (
         (
             await db.execute(
                 select(MemoryEntry)
                 .where(MemoryEntry.user_id == user_id)
                 .order_by(MemoryEntry.updated_at.desc())
-                .limit(20)
+                .limit(120)
             )
         )
         .scalars()
@@ -179,6 +186,13 @@ async def build_memory_injection(db: AsyncSession, user_id: str) -> str:
     )
     if not rows:
         return ""
+    try:
+        from app.applications.memory_rank import rank_memories
+
+        idx = rank_memories(user_query, [r.content for r in rows], k=k)
+        rows = [rows[i] for i in idx]
+    except Exception:
+        rows = rows[:k]
     label = {"preference": "偏好", "fact": "背景", "event": "事件", "emotion": "情绪"}
     parts: list[str] = []
     total = 0

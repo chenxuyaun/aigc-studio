@@ -119,9 +119,19 @@ async def test_task_cancel_marks_cancelled(client, admin_token):
     resp = await client.post(f"/api/v1/tasks/{task_id}/cancel", headers=headers)
     assert resp.status_code == 200, resp.text
 
-    resp = await client.get(f"/api/v1/tasks/{task_id}", headers=headers)
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "cancelled"
+    # 取消与后台 mock 任务的 processing 写入存在合法竞态窗口：
+    # 轮询到终态（cancelled 必须最终胜出——before_terminal 检查保护终态不被 succeeded 覆盖）。
+    import asyncio as _asyncio
+
+    status = ""
+    for _ in range(100):  # 最多 ~5s
+        resp = await client.get(f"/api/v1/tasks/{task_id}", headers=headers)
+        assert resp.status_code == 200
+        status = resp.json()["status"]
+        if status in ("cancelled", "succeeded", "failed"):
+            break
+        await _asyncio.sleep(0.05)
+    assert status == "cancelled", f"取消应最终胜出，实际 {status}"
 
 
 @pytest.mark.asyncio

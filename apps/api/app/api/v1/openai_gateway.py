@@ -35,23 +35,12 @@ def _local_embed(text: str) -> list[float]:
     """字符级 1/2-gram 特征哈希向量（中文不分词，词典外词也能命中）。
 
     中文连续字符取 1-gram + 2-gram；英文按单词。L2 归一化后余弦相似度
-    即特征重合度。纯内存计算，供 MemoryCore 的 embedding 配置使用
-    （provider=openai → 本端点；后续可替换为真实向量服务）。
+    即特征重合度。实现已抽取至 app.applications.ngram_embed（与记忆 top-k
+    检索共享同一份），此处保留薄委托以维持端点行为不变。
     """
-    vec = [0.0] * _LOCAL_EMBED_DIM
-    s = text.lower()
-    zh = re.sub(r"[^a-z0-9\u4e00-\u9fff]", "", s)
-    grams: list[str] = re.findall(r"[a-z0-9]+", s)
-    for i, ch in enumerate(zh):
-        if "\u4e00" <= ch <= "\u9fff":
-            grams.append(ch)
-            if i + 1 < len(zh) and "\u4e00" <= zh[i + 1] <= "\u9fff":
-                grams.append(zh[i : i + 2])
-    for g in grams:
-        h = int(hashlib.md5(g.encode()).hexdigest()[:8], 16) % _LOCAL_EMBED_DIM
-        vec[h] += 2.0 if len(g) >= 2 else 1.0
-    norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-    return [v / norm for v in vec]
+    from app.applications.ngram_embed import local_embed as _impl
+
+    return _impl(text)
 
 
 class _EmbedRequest(BaseModel):

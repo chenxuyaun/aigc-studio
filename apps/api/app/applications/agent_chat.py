@@ -44,11 +44,20 @@ async def agent_chat_stream(
         all_tools = [t for t in all_tools if t["function"]["name"] in set(tools)]
 
     # 批8+9：长期记忆注入（「AI 记得你」）——失败静默，绝不影响对话
+    # 方向 B：传入最后一条用户消息做 top-k 相关性检索（空查询自动退化为时间序）
     if user_id:
         try:
             from app.applications.growth_service import build_memory_injection
 
-            memory_text = await build_memory_injection(db, user_id)
+            user_query = next(
+                (
+                    str(m.get("content") or "")
+                    for m in reversed(messages)
+                    if m.get("role") == "user"
+                ),
+                "",
+            )
+            memory_text = await build_memory_injection(db, user_id, user_query)
             if memory_text:
                 messages = [{"role": "system", "content": memory_text}, *messages]
         except Exception:
