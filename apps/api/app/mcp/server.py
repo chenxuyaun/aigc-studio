@@ -652,6 +652,50 @@ async def check_story_consistency(
         return await story_crew.run_crew(db, uid, project_id, "consistency", model=model)
 
 
+# ── Personal Voice Engine：Style Reference（写作用户文风档案）──
+
+
+@mcp.tool()
+async def get_voice_profile(ctx: Any | None = None) -> dict[str, Any]:
+    """读取当前用户的「文风档案」（Voice DNA + 范文样本）：
+    用户习惯的句式/用词/口吻、喜欢的表达（preferred）、忌讳的腔调（avoid）。
+    用户要求「按我的风格写/像我这样说话/去 AI 味」时调用，按档案模仿其写作人格。"""
+    from app.services import voice_service
+
+    async with AsyncSessionLocal() as db:
+        uid = await _request_user_id(ctx)
+        if not uid:
+            return {"exists": False, "reason": "无法识别当前用户"}
+        p = await voice_service.get_profile(db, uid)
+        if p is None:
+            return {"exists": False}
+        return {
+            "exists": True,
+            "name": p.name,
+            "source": p.source,
+            "voice_dna": p.voice_dna or {},
+            "samples": (p.samples or [])[:2],
+        }
+
+
+@mcp.tool()
+async def add_voice_sample(
+    text: str, kind: str = "note", ctx: Any | None = None
+) -> dict[str, Any]:
+    """把一段用户自己写的文字存入「个人语料」，作为文风学习的素材。
+    用户提供自己的文章/聊天片段并要求「学我的风格」时调用。"""
+    from app.services import voice_service
+
+    async with AsyncSessionLocal() as db:
+        uid = await _request_user_id(ctx)
+        if not uid:
+            return {"error": "无法识别当前用户"}
+        item = await voice_service.add_corpus(db, uid, kind=kind, text=text)
+        if item is None:
+            return {"error": "文本过短（至少 8 字）"}
+        return {"ok": True, "kind": item.kind, "text": item.text_snippet[:120]}
+
+
 def _openai_tools() -> list[dict[str, Any]]:
     """FastMCP 工具注册表 → OpenAI function calling 格式。"""
     tools: list[dict[str, object]] = []

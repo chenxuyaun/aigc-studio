@@ -140,11 +140,13 @@ async def test_trigger_register_batch_creates_task(monkeypatch: pytest.MonkeyPat
 
 
 def test_openai_tools_all_twelve() -> None:
-    """全部工具（含创作工具 + AgentList 检索）转为 OpenAI function 格式。"""
+    """全部工具（含创作工具 + AgentList 检索 + Voice Engine）转为 OpenAI function 格式。"""
     from app.mcp.server import _openai_tools
 
     tools = _openai_tools()
-    assert len(tools) == 20  # 12 基础 + 5 创作(含 generate_music) + 2 AgentList 检索 + 一致性检查
+    # 12 基础 + 5 创作(含 generate_music) + 2 AgentList 检索 + 一致性检查
+    # + 2 Voice Engine（get_voice_profile/add_voice_sample）
+    assert len(tools) == 22
     for t in tools:
         assert t["type"] == "function"
         fn = t["function"]
@@ -158,6 +160,8 @@ def test_openai_tools_all_twelve() -> None:
     assert "search_agent_directory" in names
     assert "get_agent_comparison" in names
     assert "check_story_consistency" in names
+    assert "get_voice_profile" in names
+    assert "add_voice_sample" in names
 
 
 def test_openai_tools_story_creation_tools() -> None:
