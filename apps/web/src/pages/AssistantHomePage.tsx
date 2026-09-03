@@ -34,6 +34,7 @@ import {
 
 import { Textarea } from "@/components/ui/Field";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
+import { VoiceBadge } from "@/components/voice/VoiceBadge";
 import { useChatSessions } from "@/hooks/useChatSessions";
 import { AppError, apiClient, streamSse } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
@@ -1207,6 +1208,8 @@ export function AssistantHomePage() {
                 ))}
               </select>
             </div>
+            {/* Personal Voice Engine：文风开关（去 AI 味，让 AI 像用户自己表达） */}
+            <VoiceBadge />
             {/* 显示工具调用开关（真实控制） */}
             <div className="hidden items-center gap-2 sm:flex">
               <label
