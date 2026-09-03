@@ -48,6 +48,7 @@ from app.data.models.story_project import StoryProject
 from app.data.models.team_run import TeamRun
 from app.data.models.text_document import TextDocument
 from app.data.models.user import User
+from app.data.models.voice import VoiceCorpus, VoiceProfile
 from app.data.models.workflow import Workflow
 from app.data.models.workflow_category import WorkflowCategory
 from app.data.models.workflow_favorite import WorkflowFavorite
@@ -102,6 +103,8 @@ __all__ = [
     "StoryStateSnapshot",
     "TextDocument",
     "User",
+    "VoiceCorpus",
+    "VoiceProfile",
     "Workflow",
     "WorkflowCategory",
     "WorkflowFavorite",
