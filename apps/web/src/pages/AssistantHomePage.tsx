@@ -38,7 +38,7 @@ import { useChatSessions } from "@/hooks/useChatSessions";
 import { AppError, apiClient, streamSse } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 /**
  * 对话中枢首页 —— AI 助手
@@ -93,12 +93,26 @@ const CAPABILITY_GROUPS: {
 
 // 资源库入口（收纳进能力中心，避免侧栏平铺；功能不删只收敛）
 const RESOURCE_LINKS: { to: string; icon: string; label: string; desc: string }[] = [
-  { to: "/prompts", icon: "📚", label: "提示词库", desc: "1.3 万 + 提示词" },
-  { to: "/knowledge", icon: "📖", label: "知识库", desc: "创作知识沉淀" },
-  { to: "/assets", icon: "🗂️", label: "素材库", desc: "图片 / 音频素材" },
-  { to: "/asmr", icon: "🎧", label: "ASMR 库", desc: "助眠音源" },
-  { to: "/agents", icon: "🤖", label: "Agent 库", desc: "智能体目录" },
+  { to: "/library/prompts", icon: "📚", label: "提示词库", desc: "1.3 万 + 提示词" },
+  { to: "/library/knowledge", icon: "📖", label: "知识库", desc: "创作知识沉淀" },
+  { to: "/library/assets", icon: "🗂️", label: "素材库", desc: "图片 / 音频素材" },
+  { to: "/library/asmr", icon: "🎧", label: "ASMR 库", desc: "助眠音源" },
+  { to: "/library/agents", icon: "🤖", label: "Agent 库", desc: "智能体目录" },
   { to: "/roleplay", icon: "🎭", label: "角色扮演", desc: "角色对话" },
+];
+
+/**
+ * v3 P1 技能芯片行：能力=芯片，不是页面。点芯片 → 输入框注入意图模板，
+ * 回车由 agent 路由到 MCP 工具；「更多」直达 Studio 直控。
+ */
+const SKILL_CHIPS: { icon: string; label: string; prompt: string }[] = [
+  { icon: "🎨", label: "生图", prompt: "帮我画一张：" },
+  { icon: "🎬", label: "视频", prompt: "帮我生成一段视频：" },
+  { icon: "🎙", label: "语音", prompt: "请把这句话合成语音：「」" },
+  { icon: "🎵", label: "音乐", prompt: "帮我创作一首歌，风格：" },
+  { icon: "🎴", label: "漫画", prompt: "帮我做一部四格漫画，题材：" },
+  { icon: "💬", label: "故事", prompt: "帮我创作一个故事：" },
+  { icon: "👥", label: "团队", prompt: "组建 Agent 团队完成：" },
 ];
 
 // 斜杠命令面板：输入 / 触发，映射 MCP 能力（对应 agent_chat 工具）
@@ -114,10 +128,10 @@ const COMMANDS: { cmd: string; label: string; desc: string; prompt: string }[] =
 
 // @ 资源引用：静态分类入口 + 动态搜索（统一搜索 /search?q=&scope=all&limit=8）
 const AT_RESOURCES: { icon: string; label: string; kind: string; desc: string; to?: string }[] = [
-  { icon: "📚", label: "提示词库", kind: "prompts", desc: "1.3 万 + 精选提示词，可搜索引用", to: "/prompts" },
-  { icon: "📖", label: "知识库", kind: "knowledge", desc: "创作知识沉淀文档", to: "/knowledge" },
-  { icon: "🗂️", label: "素材库", kind: "assets", desc: "图片 / 音频素材", to: "/assets" },
-  { icon: "🎧", label: "ASMR 库", kind: "asmr", desc: "助眠音源合集", to: "/asmr" },
+  { icon: "📚", label: "提示词库", kind: "prompts", desc: "1.3 万 + 精选提示词，可搜索引用", to: "/library/prompts" },
+  { icon: "📖", label: "知识库", kind: "knowledge", desc: "创作知识沉淀文档", to: "/library/knowledge" },
+  { icon: "🗂️", label: "素材库", kind: "assets", desc: "图片 / 音频素材", to: "/library/assets" },
+  { icon: "🎧", label: "ASMR 库", kind: "asmr", desc: "助眠音源合集", to: "/library/asmr" },
   { icon: "🎭", label: "角色卡", kind: "agents", desc: "智能体 / 角色扮演", to: "/roleplay" },
 ];
 
@@ -177,7 +191,10 @@ export function AssistantHomePage() {
   const [polishing, setPolishing] = useState(false);
   // v2 P1：模型选择器（catalog 直连，替代硬编码）
   const [chatModel, setChatModel] = useState(
-    () => localStorage.getItem("aigc-chat-model") || "gpt-oss-120b-medium",
+    // 默认空 = 走模型中心 text 槽候选链（hub 优先）。显式硬编码 gpt-oss 是 hub v3 之前的
+    // 2026-08-20 过渡方案；A/B 实测（2026-09-03）同提示词下 Deepseek 中文创作质量明显
+    // 更优（无破句、韵脚自然、hook 合规），回归"模型中心统一调度"架构，兜底仍是 .env 链。
+    () => localStorage.getItem("aigc-chat-model") || "",
   );
   const [modelList, setModelList] = useState<{ id: string; label: string; healthy?: boolean }[]>([]);
   // 工具调用过程日志（流式中展示 AI 正在干什么）
@@ -357,10 +374,10 @@ export function AssistantHomePage() {
   /** v2 P1 结构化斜杠命令：/image /music /tts /comic <参数> → 派发卡（推送 Studio）。 */
   const SLASH_RE = /^\/(image|music|tts|comic)\s+(.{2,})$/i;
   const SLASH_TARGET: Record<string, { kind: "image" | "music" | "tts" | "comic"; target: string; label: string }> = {
-    image: { kind: "image", target: "/create/image", label: "图像引擎" },
-    comic: { kind: "comic", target: "/create/comic", label: "漫画引擎" },
-    music: { kind: "music", target: "/create/music", label: "音乐引擎" },
-    tts: { kind: "tts", target: "/create/audio", label: "语音引擎" },
+    image: { kind: "image", target: "/studio?engine=image", label: "图像引擎" },
+    comic: { kind: "comic", target: "/studio?engine=image", label: "漫画引擎" },
+    music: { kind: "music", target: "/studio?engine=music", label: "音乐引擎" },
+    tts: { kind: "tts", target: "/studio?engine=music", label: "语音引擎" },
   };
 
   async function send(textOverride?: string, editIdx?: number) {
@@ -443,20 +460,35 @@ export function AssistantHomePage() {
           {
             role: "system" as const,
             content:
-              "你是云彩平台的 AI 助手。你可以用自然语言帮用户完成多模态创作：生图、写文、写歌、语音合成、故事创作等。" +
+              "你是云彩平台的 AI 助手。你可以用自然语言帮用户完成多模态创作：生图、写文、写歌、作曲、语音合成、故事创作等。" +
               "写歌词/写文案/写故事/写祝福这类**纯文本创作直接用文字回答**，绝不调用生图或音频工具。" +
-              "只有用户**明确要求生成图片、音频、语音**时，才调用对应工具完成；否则用对话回答。回答简洁、贴心、用中文。" +
+              "只有用户**明确要求生成图片、音频、语音、音乐**时，才调用对应工具完成；否则用对话回答。回答简洁、贴心、用中文。" +
+              "\n\n诚实性铁律（最高优先级）：\n" +
+              "- 没有在本轮实际调用工具并收到成功结果，就**绝不能声称**\"已经生成/绘制/绘制好了\"任何图片、音频或视频——宁可如实说\"我来帮你生成\"再调用工具，也绝不虚构产出\n" +
+              "- 工具调用失败时必须如实告知失败，不得用文字描写冒充生成结果\n" +
+              "\n意图判定（重要）：\n" +
+              "- 用户最后一条消息才是当前意图。即使上文在讨论别的任务（如画图），新消息明确换了任务就**以新任务为准**，绝不被上文主题锚定\n" +
+              "- 用户给出\"歌曲/音乐的完整风格描述（编曲/人声/节奏/情绪）\"并要求创作 → 这是要**生成音乐**：先把这段描述整理成 MusicGen 风格的英文/中文风格描述（保留编曲、人声、节奏、情绪要素），调用 generate_music 工具\n" +
+              "- 用户只是要\"歌词\"或\"写一首歌的词\" → 纯文本创作，不调用工具；可顺带说明\"如需生成音频版本告诉我\"\n" +
+              "- 拿不准要词还是要曲时，先给歌词再问一句\"需要我生成音频版本吗\"" +
               "\n\n创作格式规范（重要）：\n" +
-              "- 歌词必须用标准段落结构：用《歌名》开头，段落间空一行；每段不超过 4-6 行，每行一个完整短语/意象\n" +
-              "- 副歌用【副歌】标注，主歌用【主歌一】【主歌二】标注（方便用户谱曲对位）\n" +
+              "- 歌词用标准段落结构：《歌名》开头，段落间空一行；【主歌一】【副歌】【桥段】【尾声】标注\n" +
               "- 输出使用 Markdown：段落间必须空行，需要强调时用粗体，绝不用 HTML\n" +
-              "\n文风要求：\n" +
-              "- 意象要具体、有画面感，避免堆砌陈词（大量\"闪闪的光/眨呀眨/叮当\"这类空泛意象）\n" +
+              "\n歌词文风铁律（防止 AI 味，最高优先级）：\n" +
+              "- **像人话，像能被唱出来的话**：先想想这句真人会不会这么说、歌手能不能一口气唱完\n" +
+              "- **一首歌只押一个主韵**，韵脚自然（汉语歌词通常押 an/ang/ao/ou/i/u 等宽韵），不硬凑\n" +
+              "- **副歌必须有 hook**：重复的核心句（歌名句），两遍副歌歌词一致或仅尾句变化，让听众一遍记住\n" +
+              "- **口语优先，具象优先**：用日常语言写具体的人/事/物/场景（一句话里有一个画面即可），全歌核心意象不超过 2 个\n" +
+              "- **严禁**：每行都换比喻、生僻意象堆砌（雷达/摩斯电码/水银/白鲸这类炫技词）、通感滥用、" +
+              "\"…的…\"式长定语连环、四字成语连用、空洞大词（岁月/时光/灵魂/远方）\n" +
+              "- **情感具体化**：写\"怀念\"就写那个具体场景里你做了什么、看到什么，不直接说情绪名词\n" +
+              "- 行长考虑演唱：每行 7-13 字为宜，同一小节行长接近\n" +
+              "\n文风要求（所有创作）：\n" +
               "- 结尾收束自然，**不要**对用户说教、不要主动追问\"需要我再调整吗\"之类的话；作品完成即止\n" +
               "- 用户偏好（颜色/风格）可自然融入，不必刻意点破\n" +
-              "- 创作类回答（歌词/诗文/故事/文案）先给【创作思路】：2-3 行中文说明切入角度与" +
+              "- 创作类回答先给【创作思路】：2-3 行中文说明切入角度与" +
               "意象选择理由，空一行再给作品正文；思路要具体（为什么用这个意象、想营造什么感受），" +
-              "不复述用户需求",
+              "不复述用户需求；除【创作思路】和作品外，**绝不输出**思考过程、执行计划、对需求的理解复述（如\"用户要求的是…让我…\"这类开场白一律不要）",
           },
           ...history.map((m) => ({ role: m.role, content: m.content })),
           { role: "user" as const, content: text },
@@ -506,6 +538,12 @@ export function AssistantHomePage() {
               const resourceUrl =
                 typeof data?.asset_url === "string" ? data.asset_url : undefined;
               const taskType = typeof data?.task_type === "string" ? data.task_type : "";
+              // v3 P1：任务 id 供「去 Studio 精修」rehydrate 深链（条件展开过 exactOptionalPropertyTypes）
+              const taskId = typeof data?.id === "string" ? data.id : undefined;
+              const meta = {
+                ...(taskId ? { taskId } : {}),
+                ...(taskType ? { taskType } : {}),
+              };
               // 漫画：封面图优先；其余媒体用 asset_url
               const coverUrl =
                 typeof data?.cover_url === "string" ? data.cover_url : undefined;
@@ -514,14 +552,14 @@ export function AssistantHomePage() {
                 if (cover) {
                   updateCurrentMessages((prev) => [
                     ...prev,
-                    { role: "assistant", content: "", image: cover, media: "comic" },
+                    { role: "assistant", content: "", image: cover, media: "comic", ...meta },
                   ]);
                 }
               } else if (resourceUrl) {
                 const media = taskType === "audio" ? "audio" : "image";
                 updateCurrentMessages((prev) => [
                   ...prev,
-                  { role: "assistant", content: "", image: resourceUrl, media },
+                  { role: "assistant", content: "", image: resourceUrl, media, ...meta },
                 ]);
               }
             }
@@ -610,6 +648,25 @@ export function AssistantHomePage() {
     setShowAt(false);
     setAtQuery("");
     setShowCmds(false);
+  }
+
+  /** v3 P1 技能芯片：把意图模板插入输入框光标处并聚焦（不加 @，光标落句尾待补细节）。 */
+  function useSkillChip(template: string) {
+    const ta = inputWrapRef.current?.querySelector<HTMLTextAreaElement>("textarea");
+    const start = ta ? ta.selectionStart ?? input.length : input.length;
+    const end = ta ? ta.selectionEnd ?? start : start;
+    const next = input.slice(0, start) + template + input.slice(end);
+    setInput(next);
+    setShowAt(false);
+    setShowCmds(false);
+    requestAnimationFrame(() => {
+      const el = inputWrapRef.current?.querySelector<HTMLTextAreaElement>("textarea");
+      if (el) {
+        el.focus();
+        const caret = Math.min(start + template.length, next.length);
+        el.setSelectionRange(caret, caret);
+      }
+    });
   }
 
   /** 纯文本 @token 插入（常用分类入口用——无具体实体，不登记引用）。 */
@@ -731,12 +788,12 @@ export function AssistantHomePage() {
 
   const capAccent = (a: string) =>
     a === "purple"
-      ? "text-purple-300 border-purple-500/30"
+      ? "text-purple-600 border-purple-500/35"
       : a === "emerald"
-        ? "text-emerald-300 border-emerald-500/30"
+        ? "text-success border-success/35"
         : a === "amber"
-          ? "text-amber-300 border-amber-500/30"
-          : "text-cyan-300 border-cyan-500/30";
+          ? "text-warning border-warning/35"
+          : "text-primary-text border-primary/35";
 
   return (
     <div className="ai-page absolute inset-0 flex min-h-0 overflow-hidden">
@@ -747,17 +804,17 @@ export function AssistantHomePage() {
 
       {/* ============ 能力中心抽屉 ============ */}
       {showCaps && (
-        <div className="ai-glass absolute inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-white/10">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <span className="text-sm font-semibold text-slate-100">🧭 能力中心</span>
-            <button type="button" aria-label="关闭能力中心" onClick={() => setShowCaps(false)} className="text-slate-400 hover:text-white">
+        <div className="ai-glass absolute inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-border">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <span className="text-sm font-semibold text-foreground">🧭 能力中心</span>
+            <button type="button" aria-label="关闭能力中心" onClick={() => setShowCaps(false)} className="text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" aria-hidden />
             </button>
           </div>
           <div className="flex-1 space-y-4 overflow-y-auto p-3">
             {CAPABILITY_GROUPS.map((g) => (
               <div key={g.title}>
-                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <span>{g.icon}</span> {g.title}
                 </p>
                 <div className="space-y-1.5">
@@ -769,7 +826,7 @@ export function AssistantHomePage() {
                         setInput(s.prompt);
                         setShowCaps(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-left text-sm text-slate-400 transition-colors hover:border-cyan-500/40 hover:text-slate-100"
+                      className="flex w-full items-center gap-2 rounded-lg border border-border bg-foreground/5 px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-primary/45 hover:text-foreground"
                     >
                       <span>{s.icon}</span>
                       <span className="truncate">{s.label}</span>
@@ -780,29 +837,29 @@ export function AssistantHomePage() {
             ))}
             {/* 资源库（原侧栏资源/角色入口收纳于此） */}
             <div>
-              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <span>🗂️</span> 资源库
               </p>
               <div className="space-y-1.5">
                 {RESOURCE_LINKS.map((r) => (
-                  <a
+                  <Link
                     key={r.to}
-                    href={r.to}
+                    to={r.to}
                     onClick={() => setShowCaps(false)}
-                    className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-left text-sm text-slate-400 transition-colors hover:border-cyan-500/40 hover:text-slate-100"
+                    className="flex w-full items-center gap-2 rounded-lg border border-border bg-foreground/5 px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-primary/45 hover:text-foreground"
                   >
                     <span>{r.icon}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{r.label}</span>
-                      <span className="block truncate text-[11px] text-slate-500">{r.desc}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{r.desc}</span>
                     </span>
-                    <span className="text-[11px] text-slate-600">→</span>
-                  </a>
+                    <span className="text-[11px] text-muted-foreground/70">→</span>
+                  </Link>
                 ))}
               </div>
             </div>
-            <div className="rounded-lg border border-dashed border-white/15 px-3 py-2.5 text-[11px] leading-relaxed text-slate-500">
-              提示：在输入框输入 <span className="font-mono text-cyan-400">/</span> 也能快速打开命令面板。
+            <div className="rounded-lg border border-dashed border-border-strong px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+              提示：在输入框输入 <span className="font-mono text-primary-text">/</span> 也能快速打开命令面板。
             </div>
           </div>
         </div>
@@ -815,18 +872,18 @@ export function AssistantHomePage() {
           onClick={() => setShowGallery(false)}
         >
           <div
-            className="ai-glass flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-white/10"
+            className="ai-glass flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-border"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <span className="text-sm font-semibold text-slate-100">🖼️ 本会话产出（{mediaItems.length}）</span>
-              <button type="button" aria-label="关闭画廊" onClick={() => setShowGallery(false)} className="text-slate-400 hover:text-white">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <span className="text-sm font-semibold text-foreground">🖼️ 本会话产出（{mediaItems.length}）</span>
+              <button type="button" aria-label="关闭画廊" onClick={() => setShowGallery(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" aria-hidden />
               </button>
             </div>
             <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto p-4 sm:grid-cols-3">
               {mediaItems.map((m, idx) => (
-                <div key={idx} className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
+                <div key={idx} className="overflow-hidden rounded-xl border border-border bg-surface-raised/60">
                   {m.media === "audio" ? (
                     <audio controls src={m.image} className="w-full" />
                   ) : (
@@ -836,7 +893,7 @@ export function AssistantHomePage() {
                       className="aspect-square w-full object-cover"
                     />
                   )}
-                  <p className="px-2 py-1.5 text-[11px] text-slate-400">
+                  <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
                     {m.media === "comic" ? "🎴 漫画" : m.media === "audio" ? "🔊 语音" : "🖼️ 图片"}
                   </p>
                 </div>
@@ -883,8 +940,8 @@ export function AssistantHomePage() {
       })()}
 
       {/* ============ 左侧会话栏 ============ */}
-      <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-white/10 bg-slate-950/90 backdrop-blur-2xl md:flex">
-        <div className="space-y-2.5 border-b border-white/10 p-3.5">
+      <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-border bg-surface/90 backdrop-blur-2xl md:flex">
+        <div className="space-y-2.5 border-b border-border p-3.5">
           <button
             onClick={newChat}
             className="ai-glow-btn flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold text-slate-950 shadow-[0_0_20px_rgba(0,242,254,0.3)] transition-all hover:-translate-y-0.5"
@@ -893,17 +950,17 @@ export function AssistantHomePage() {
           </button>
           <button
             onClick={() => setShowCaps(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2 text-xs text-slate-300 transition-colors hover:border-cyan-500/40 hover:text-cyan-300"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-foreground/5 py-2 text-xs text-foreground/80 transition-colors hover:border-primary/45 hover:text-primary-text"
           >
-            <Wand2 className="h-4 w-4 text-cyan-400" aria-hidden /> 能力中心
+            <Wand2 className="h-4 w-4 text-primary-text" aria-hidden /> 能力中心
           </button>
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="搜索历史对话…"
-              className="ai-glass-input w-full rounded-lg py-1.5 pl-8 pr-3 text-xs text-slate-200 placeholder:text-slate-500 outline-none"
+              className="ai-glass-input w-full rounded-lg py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none"
             />
           </div>
         </div>
@@ -913,7 +970,7 @@ export function AssistantHomePage() {
           {sessionGroups.length > 0 ? (
             sessionGroups.map((g) => (
               <div key={g.label} className="space-y-1">
-                <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {g.label}
                 </p>
                 {g.items.map((s) => (
@@ -922,8 +979,8 @@ export function AssistantHomePage() {
                     className={cn(
                       "group relative flex cursor-pointer items-center gap-2 rounded-xl border p-2.5 transition-all",
                       s.id === currentId
-                        ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"
-                        : "border-transparent text-slate-400 hover:border-white/10 hover:bg-white/5 hover:text-slate-200",
+                        ? "border-primary/35 bg-primary/10 text-primary-text"
+                        : "border-transparent text-muted-foreground hover:border-border hover:bg-foreground/5 hover:text-foreground",
                     )}
                     onClick={() => {
                       abortRef.current?.abort();
@@ -933,12 +990,12 @@ export function AssistantHomePage() {
                       switchSession(s.id);
                     }}
                   >
-                    <MessageSquare className="h-3.5 w-3.5 shrink-0 text-cyan-400/70" aria-hidden />
+                    <MessageSquare className="h-3.5 w-3.5 shrink-0 text-primary-text/70" aria-hidden />
                     <span className="flex-1 truncate font-medium">{s.name || "新对话"}</span>
                     <button
                       type="button"
                       aria-label="会话菜单"
-                      className="opacity-0 transition-opacity hover:text-cyan-300 group-hover:opacity-100"
+                      className="opacity-0 transition-opacity hover:text-primary-text group-hover:opacity-100"
                       onClick={(e) => openSessionMenu(e, s.id)}
                     >
                       <Ellipsis className="h-3.5 w-3.5" aria-hidden />
@@ -961,7 +1018,7 @@ export function AssistantHomePage() {
             ))
           ) : (
             customGroups.length === 0 && (
-              <p className="px-2.5 py-2 text-[11px] text-slate-500">
+              <p className="px-2.5 py-2 text-[11px] text-muted-foreground">
                 {searchTerm ? "没有匹配的会话" : "还没有会话，点击「新对话」开始"}
               </p>
             )
@@ -976,7 +1033,7 @@ export function AssistantHomePage() {
                   <button
                     type="button"
                     onClick={() => toggleGroupCollapse(g.group)}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-cyan-300/80 transition-colors hover:text-cyan-200"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-primary-text/80 transition-colors hover:text-primary-text"
                   >
                     {collapsed ? (
                       <ChevronRight className="h-3 w-3 shrink-0" aria-hidden />
@@ -984,7 +1041,7 @@ export function AssistantHomePage() {
                       <ChevronDown className="h-3 w-3 shrink-0" aria-hidden />
                     )}
                     <span className="truncate">{g.group}</span>
-                    <span className="ml-auto shrink-0 rounded bg-cyan-500/15 px-1 py-px font-mono text-[9px] text-cyan-300">
+                    <span className="ml-auto shrink-0 rounded bg-primary/15 px-1 py-px font-mono text-[9px] text-primary-text">
                       {g.items.length}
                     </span>
                   </button>
@@ -992,7 +1049,7 @@ export function AssistantHomePage() {
                     type="button"
                     aria-label={`删除分组 ${g.group}`}
                     title="删除分组（清空该组会话的分组）"
-                    className="shrink-0 rounded p-0.5 text-slate-600 opacity-0 transition-opacity hover:text-rose-400 group-hover/title:opacity-100"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground/70 opacity-0 transition-opacity hover:text-rose-400 group-hover/title:opacity-100"
                     onClick={(e) => {
                       e.stopPropagation();
                       if (window.confirm(`删除分组「${g.group}」？该组 ${g.items.length} 个会话将移回时间分组。`)) {
@@ -1010,8 +1067,8 @@ export function AssistantHomePage() {
                       className={cn(
                         "group relative flex cursor-pointer items-center gap-2 rounded-xl border p-2.5 transition-all",
                         s.id === currentId
-                          ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"
-                          : "border-transparent text-slate-400 hover:border-white/10 hover:bg-white/5 hover:text-slate-200",
+                          ? "border-primary/35 bg-primary/10 text-primary-text"
+                          : "border-transparent text-muted-foreground hover:border-border hover:bg-foreground/5 hover:text-foreground",
                       )}
                       onClick={() => {
                         abortRef.current?.abort();
@@ -1021,12 +1078,12 @@ export function AssistantHomePage() {
                         switchSession(s.id);
                       }}
                     >
-                      <MessageSquare className="h-3.5 w-3.5 shrink-0 text-cyan-400/70" aria-hidden />
+                      <MessageSquare className="h-3.5 w-3.5 shrink-0 text-primary-text/70" aria-hidden />
                       <span className="flex-1 truncate font-medium">{s.name || "新对话"}</span>
                       <button
                         type="button"
                         aria-label="会话菜单"
-                        className="opacity-0 transition-opacity hover:text-cyan-300 group-hover:opacity-100"
+                        className="opacity-0 transition-opacity hover:text-primary-text group-hover:opacity-100"
                         onClick={(e) => openSessionMenu(e, s.id)}
                       >
                         <Ellipsis className="h-3.5 w-3.5" aria-hidden />
@@ -1052,11 +1109,11 @@ export function AssistantHomePage() {
 
         {/* 归档折叠区 */}
         {archivedSessions.length > 0 && (
-          <div className="border-t border-white/10">
+          <div className="border-t border-border">
             <button
               type="button"
               onClick={() => setArchivedOpen((v) => !v)}
-              className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-xs text-slate-400 transition-colors hover:text-amber-300"
+              className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:text-amber-300"
             >
               {archivedOpen ? (
                 <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -1075,7 +1132,7 @@ export function AssistantHomePage() {
                       "group flex cursor-pointer items-center gap-2 rounded-xl border p-2 transition-all",
                       s.id === currentId
                         ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-                        : "border-transparent text-slate-500 hover:border-white/10 hover:bg-white/5 hover:text-slate-300",
+                        : "border-transparent text-muted-foreground hover:border-border hover:bg-foreground/5 hover:text-foreground/80",
                     )}
                     onClick={() => {
                       abortRef.current?.abort();
@@ -1091,7 +1148,7 @@ export function AssistantHomePage() {
                       type="button"
                       aria-label="恢复会话"
                       title="取消归档"
-                      className="opacity-0 transition-opacity hover:text-cyan-300 group-hover:opacity-100"
+                      className="opacity-0 transition-opacity hover:text-primary-text group-hover:opacity-100"
                       onClick={(e) => {
                         e.stopPropagation();
                         archiveSession(s.id, false);
@@ -1107,30 +1164,30 @@ export function AssistantHomePage() {
         )}
 
         {/* 底部画廊 & 会话数 */}
-        <div className="space-y-2 border-t border-white/10 bg-slate-950/60 p-3">
+        <div className="space-y-2 border-t border-border bg-surface/70 p-3">
           <button
             onClick={() => setShowGallery(true)}
-            className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300 transition-colors hover:border-cyan-500/40 hover:text-cyan-300"
+            className="flex w-full items-center justify-between rounded-xl border border-border bg-foreground/5 px-3 py-2 text-xs text-foreground/80 transition-colors hover:border-primary/45 hover:text-primary-text"
           >
             <span className="flex items-center gap-2">
-              <FolderKanban className="h-4 w-4 text-cyan-400" aria-hidden /> 本次会话产出画廊
+              <FolderKanban className="h-4 w-4 text-primary-text" aria-hidden /> 本次会话产出画廊
             </span>
-            <span className="rounded-md bg-cyan-500/20 px-1.5 py-0.5 font-mono text-[10px] text-cyan-300">
+            <span className="rounded-md bg-primary/20 px-1.5 py-0.5 font-mono text-[10px] text-primary-text">
               {mediaItems.length} 项
             </span>
           </button>
-          <p className="px-1 text-[10px] text-slate-500">共 {sessions.length} 个会话 · 本地保存</p>
+          <p className="px-1 text-[10px] text-muted-foreground">共 {sessions.length} 个会话 · 本地保存</p>
         </div>
       </aside>
 
       {/* ============ 中央对话区 ============ */}
       <section className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col">
         {/* 顶部系统栏 */}
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-slate-950/60 px-4 text-xs backdrop-blur">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface/70 px-4 text-xs backdrop-blur">
           <div className="flex items-center gap-3">
             {/* v2 P1：模型选择器（catalog 直连，全局生效） */}
-            <div className="flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-slate-900 px-2.5 py-1 text-cyan-300">
-              <Wrench className="h-3.5 w-3.5 text-cyan-400" aria-hidden />
+            <div className="flex items-center gap-1.5 rounded-xl border border-primary/35 bg-surface-raised px-2.5 py-1 text-primary-text">
+              <Wrench className="h-3.5 w-3.5 text-primary-text" aria-hidden />
               <span className="hidden font-medium sm:inline">模型:</span>
               <select
                 value={chatModel}
@@ -1138,7 +1195,7 @@ export function AssistantHomePage() {
                   setChatModel(e.target.value);
                   localStorage.setItem("aigc-chat-model", e.target.value);
                 }}
-                className="max-w-[180px] cursor-pointer truncate bg-transparent font-mono text-[11px] font-semibold text-white outline-none [&>option]:bg-slate-900"
+                className="max-w-[180px] cursor-pointer truncate bg-transparent font-mono text-[11px] font-semibold text-foreground outline-none [&>option]:bg-surface-raised"
                 title="切换对话模型（来自模型中心 catalog）"
               >
                 {modelList.length === 0 && <option value={chatModel}>{chatModel}</option>}
@@ -1153,27 +1210,27 @@ export function AssistantHomePage() {
             {/* 显示工具调用开关（真实控制） */}
             <div className="hidden items-center gap-2 sm:flex">
               <label
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-slate-900/80 px-2.5 py-1 text-[11px] text-cyan-300 transition-colors hover:bg-cyan-500/10"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-primary/35 bg-surface-raised/80 px-2.5 py-1 text-[11px] text-primary-text transition-colors hover:bg-primary/10"
               >
                 <input
                   type="checkbox"
                   checked={showTools}
                   onChange={(e) => setShowTools(e.target.checked)}
-                  className="h-3 w-3 rounded border-cyan-500 bg-slate-950 text-cyan-500 focus:ring-0"
+                  className="h-3 w-3 rounded border-primary bg-background text-primary-text focus:ring-0"
                 />
-                <Wrench className="h-3 w-3 text-cyan-400" aria-hidden /> 显示工具调用
+                <Wrench className="h-3 w-3 text-primary-text" aria-hidden /> 显示工具调用
               </label>
             </div>
-            <div className="hidden items-center gap-3 border-l border-white/10 pl-3 font-mono text-[11px] text-slate-400 md:flex">
-              <span>提问: <strong className="text-slate-200">{qCount}</strong></span>
-              <span>产出: <strong className="text-cyan-400">{mediaItems.length}</strong></span>
+            <div className="hidden items-center gap-3 border-l border-border pl-3 font-mono text-[11px] text-muted-foreground md:flex">
+              <span>提问: <strong className="text-foreground">{qCount}</strong></span>
+              <span>产出: <strong className="text-primary-text">{mediaItems.length}</strong></span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {mediaItems.length > 0 && (
               <button
                 onClick={() => setShowGallery(true)}
-                className="rounded-lg px-2 py-1 text-[11px] text-cyan-400 transition-colors hover:bg-cyan-500/10"
+                className="rounded-lg px-2 py-1 text-[11px] text-primary-text transition-colors hover:bg-primary/10"
               >
                 🖼️ 查看产出（{mediaItems.length}）
               </button>
@@ -1189,7 +1246,7 @@ export function AssistantHomePage() {
                   }
                 }}
                 title="清空对话"
-                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-500/20 hover:text-rose-300"
+                className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-rose-500/20 hover:text-rose-300"
               >
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -1197,7 +1254,7 @@ export function AssistantHomePage() {
             <a
               href={`${window.location.pathname.startsWith("/saios") ? "/saios" : ""}/login`}
               title="返回首页"
-              className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300"
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-foreground/5 px-3 py-1.5 text-foreground/80 transition-all hover:border-primary/45 hover:text-primary-text"
             >
               <Home className="h-3.5 w-3.5" aria-hidden /> <span className="hidden lg:inline">返回首页</span>
             </a>
@@ -1210,34 +1267,34 @@ export function AssistantHomePage() {
             <div className="mx-auto max-w-3xl space-y-8 py-4">
               {/* 欢迎态 */}
               {/* v3 系统启动横幅 */}
-              <div className="ai-glass flex items-start gap-3 rounded-2xl border border-cyan-500/20 p-4 text-xs text-slate-300 shadow-lg">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
+              <div className="ai-glass flex items-start gap-3 rounded-2xl border border-primary/20 p-4 text-xs text-foreground/80 shadow-lg">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary-text">
                   <Sparkles className="h-4 w-4" aria-hidden />
                 </div>
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-bold text-white">AI 调度大厅已就绪</span>
-                    <span className="rounded bg-cyan-500/20 px-2 py-0.5 font-mono text-[10px] text-cyan-300">
+                    <span className="text-sm font-bold text-foreground">AI 调度大厅已就绪</span>
+                    <span className="rounded bg-primary/20 px-2 py-0.5 font-mono text-[10px] text-primary-text">
                       工具调用 · 已启用
                     </span>
                   </div>
-                  <p className="leading-relaxed text-slate-400">
+                  <p className="leading-relaxed text-muted-foreground">
                     直接输入想法派活；用 / 调命令、@ 引用资料。我可以帮你生图、写文、配音与创作故事。
                   </p>
                 </div>
               </div>
 
               <div className="space-y-3 text-center">
-                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-1.5 text-xs font-medium text-cyan-300">
+                <div className="inline-flex items-center gap-2 rounded-full border border-primary/35 bg-primary/10 px-3.5 py-1.5 text-xs font-medium text-primary-text">
                   <Sparkles className="h-4 w-4 animate-pulse" aria-hidden />
                   {sessions.length > 0
                     ? <>欢迎回来，上次在聊「{sessions[0] && !sessions[0].name?.startsWith("新") ? sessions[0].name : "新想法"}」</>
                     : "你好，我是你的 AI 助手"}
                 </div>
-                <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+                <h1 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
                   今天你想<span className="ai-grad-text">创造什么</span>？
                 </h1>
-                <p className="mx-auto max-w-xl text-xs leading-relaxed text-slate-400 sm:text-sm">
+                <p className="mx-auto max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
                   输入自然语言，驱动生图、写文、写歌、连续漫画与角色演练。
                 </p>
               </div>
@@ -1253,11 +1310,11 @@ export function AssistantHomePage() {
                       capAccent(g.accent),
                     )}
                   >
-                    <div className="mb-2.5 flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-lg transition-transform group-hover:scale-110">
+                    <div className="mb-2.5 flex h-8 w-8 items-center justify-center rounded-xl bg-foreground/10 text-lg transition-transform group-hover:scale-110">
                       {g.icon}
                     </div>
-                    <div className={cn("text-xs font-bold text-white", capAccent(g.accent))}>{g.icon} {g.title}</div>
-                    <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">
+                    <div className={cn("text-xs font-bold text-foreground", capAccent(g.accent))}>{g.icon} {g.title}</div>
+                    <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
                       {g.items.map((it) => it.label).join(" · ")}
                     </p>
                   </button>
@@ -1266,10 +1323,10 @@ export function AssistantHomePage() {
 
               {/* 最近作品 */}
               {recentWorks.length > 0 && (
-                <div className="ai-glass space-y-3 rounded-2xl border border-white/10 p-4">
+                <div className="ai-glass space-y-3 rounded-2xl border border-border p-4">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 font-bold text-white">
-                      <Sparkles className="h-3.5 w-3.5 text-cyan-400" aria-hidden /> 最近生成
+                    <span className="flex items-center gap-1.5 font-bold text-foreground">
+                      <Sparkles className="h-3.5 w-3.5 text-primary-text" aria-hidden /> 最近生成
                     </span>
                   </div>
                   <div className="grid grid-cols-4 gap-2.5">
@@ -1283,11 +1340,11 @@ export function AssistantHomePage() {
                         "linear-gradient(135deg,#b45309,#7c3aed)",
                       ][w.task_type.length % 4];
                       return (
-                        <a
+                        <Link
                           key={w.id}
-                          href="/assets"
+                          to="/library/works"
                           title={w.title || w.prompt || "AI 作品"}
-                          className="group relative h-20 cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-slate-900"
+                          className="group relative h-20 cursor-pointer overflow-hidden rounded-xl border border-border bg-surface-raised"
                         >
                           <div className="absolute inset-0" style={{ background: grad }} />
                           {thumb && (
@@ -1301,10 +1358,10 @@ export function AssistantHomePage() {
                               }}
                             />
                           )}
-                          <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 font-mono text-[9px] text-cyan-300 backdrop-blur">
+                          <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 font-mono text-[9px] text-primary-text backdrop-blur">
                             {label}
                           </span>
-                        </a>
+                        </Link>
                       );
                     })}
                   </div>
@@ -1323,7 +1380,7 @@ export function AssistantHomePage() {
                   )}
                 >
                   {m.role === "assistant" && (
-                    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-400 shadow-[0_0_25px_rgba(0,242,254,0.25)]">
+                    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/45 bg-surface-raised text-primary-text shadow-[0_0_25px_rgba(0,242,254,0.25)]">
                       <Bot className="h-4 w-4" aria-hidden />
                     </div>
                   )}
@@ -1342,7 +1399,7 @@ export function AssistantHomePage() {
                           value={editVal}
                           onChange={(e) => setEditVal(e.target.value)}
                           rows={Math.max(2, Math.ceil(editVal.length / 40))}
-                          className="ai-glass-input w-full resize-y rounded-lg px-3 py-2 text-sm text-slate-100 outline-none"
+                          className="ai-glass-input w-full resize-y rounded-lg px-3 py-2 text-sm text-foreground outline-none"
                         />
                         <div className="mt-2 flex gap-2">
                           <button
@@ -1358,15 +1415,15 @@ export function AssistantHomePage() {
                           </button>
                           <button
                             onClick={() => setEditingIdx(null)}
-                            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300"
+                            className="rounded-lg border border-border bg-foreground/5 px-3 py-1.5 text-xs text-foreground/80"
                           >
                             取消
                           </button>
                         </div>
                       </div>
                     ) : m.dispatch ? (
-                      <div className="w-full max-w-md rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4">
-                        <p className="flex items-center gap-2 text-xs font-bold text-cyan-300">
+                      <div className="w-full max-w-md rounded-2xl border border-primary/35 bg-cyan-500/5 p-4">
+                        <p className="flex items-center gap-2 text-xs font-bold text-primary-text">
                           ⚡ 已解析派发指令 ·{" "}
                           {m.dispatch.kind === "image"
                             ? "图像引擎"
@@ -1376,16 +1433,16 @@ export function AssistantHomePage() {
                                 ? "音乐引擎"
                                 : "语音引擎"}
                         </p>
-                        <p className="mt-2 rounded-lg bg-slate-950/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-slate-200">
+                        <p className="mt-2 rounded-lg bg-surface/70 px-3 py-2 font-mono text-[11px] leading-relaxed text-foreground">
                           {m.dispatch.args}
                         </p>
                         <button
-                          onClick={() =>
-                            navigate(
-                              `${window.location.pathname.startsWith("/saios") ? "/saios" : ""}${m.dispatch!.target}?prompt=${encodeURIComponent(m.dispatch!.args)}`,
-                            )
-                          }
-                          className="mt-3 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 py-2 text-xs font-bold text-slate-950 transition-transform hover:scale-[1.02] active:scale-95"
+                          onClick={() => {
+                            const t = m.dispatch!.target;
+                            const sep = t.includes("?") ? "&" : "?";
+                            navigate(`${t}${sep}prompt=${encodeURIComponent(m.dispatch!.args)}`);
+                          }}
+                          className="mt-3 w-full rounded-xl bg-primary py-2 text-xs font-bold text-primary-foreground transition-transform hover:bg-primary-hover hover:scale-[1.02] active:scale-95"
                         >
                           🚀 推送到引擎渲染
                         </button>
@@ -1393,7 +1450,7 @@ export function AssistantHomePage() {
                     ) : m.image ? (
                       m.media === "audio" ? (
                         <div className="w-full max-w-sm">
-                          <p className="mb-1.5 flex items-center gap-2 text-xs text-slate-400">
+                          <p className="mb-1.5 flex items-center gap-2 text-xs text-muted-foreground">
                             <span>🔊 AI 语音</span>
                             <button
                               onClick={() => {
@@ -1402,7 +1459,7 @@ export function AssistantHomePage() {
                                   .find((x) => x.role === "user")?.content;
                                 if (prompt) void send(prompt);
                               }}
-                              className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-300 hover:bg-cyan-500/20"
+                              className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary-text hover:bg-primary/20"
                             >
                               🔄 再生成
                             </button>
@@ -1414,17 +1471,17 @@ export function AssistantHomePage() {
                           <img
                             src={m.image}
                             alt={m.media === "comic" ? "AI 漫画" : "AI 生成"}
-                            className="max-h-96 w-full rounded-xl border border-white/10 object-cover"
+                            className="max-h-96 w-full rounded-xl border border-border object-cover"
                           />
-                          <div className="mt-1.5 flex items-center gap-2">
-                            <span className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] text-slate-300">
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-foreground/80">
                               {m.media === "comic" ? "🎴 AI 漫画" : "🖼️ AI 生成"}
                             </span>
                             <a
                               href={m.image}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-300 hover:bg-cyan-500/20"
+                              className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary-text hover:bg-primary/20"
                             >
                               ⬇ 下载 / 查看
                             </a>
@@ -1435,17 +1492,37 @@ export function AssistantHomePage() {
                                   .find((x) => x.role === "user")?.content;
                                 if (prompt) void send(prompt);
                               }}
-                              className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-300 hover:bg-cyan-500/20"
+                              className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary-text hover:bg-primary/20"
                             >
                               🔄 再生成
                             </button>
+                            {m.taskId && (
+                              <button
+                                onClick={() =>
+                                  navigate(`/studio?rehydrate=${m.taskId}`)
+                                }
+                                className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[11px] text-info hover:bg-indigo-500/25"
+                              >
+                                🎛️ 去 Studio 精修
+                              </button>
+                            )}
+                            {m.media === "image" && m.image && (
+                              <button
+                                onClick={() =>
+                                  navigate("/library/works")
+                                }
+                                className="rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                              >
+                                📁 作品库
+                              </button>
+                            )}
                           </div>
                         </div>
                       )
                     ) : m.role === "assistant" && m.content ? (
                       <MarkdownContent content={m.content} />
                     ) : (
-                      <span className="whitespace-pre-wrap text-slate-300">{m.content || "思考中…"}</span>
+                      <span className="whitespace-pre-wrap text-foreground/80">{m.content || "思考中…"}</span>
                     )}
                     {m.role === "assistant" && !!m.toolCalls?.length && (
                       <ToolCallsBlock calls={m.toolCalls} />
@@ -1465,7 +1542,7 @@ export function AssistantHomePage() {
                         setEditingIdx(i);
                         setEditVal(m.content);
                       }}
-                      className="mt-1 flex items-center gap-1 pr-1 text-[11px] text-slate-500 hover:text-slate-200"
+                      className="mt-1 flex items-center gap-1 pr-1 text-[11px] text-muted-foreground hover:text-foreground"
                     >
                       ✏️ 编辑此问题
                     </button>
@@ -1479,15 +1556,15 @@ export function AssistantHomePage() {
                   {toolLog.map((t) => (
                     <div
                       key={t.name + t.status}
-                      className="ai-glass w-full max-w-2xl overflow-hidden rounded-xl border border-cyan-500/30 text-xs"
+                      className="ai-glass w-full max-w-2xl overflow-hidden rounded-xl border border-primary/35 text-xs"
                       style={{ borderLeft: "2px solid rgba(0,242,254,.6)" }}
                     >
-                      <div className="flex items-center justify-between bg-slate-950/80 px-3.5 py-2.5 font-mono text-cyan-300">
+                      <div className="flex items-center justify-between bg-background/80 px-3.5 py-2.5 font-mono text-primary-text">
                         <div className="flex items-center gap-2">
                           {t.status === "done" ? (
                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" aria-hidden />
                           ) : (
-                            <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
+                            <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
                           )}
                           <span className="font-semibold">🛠️ 已调用工具: {t.name}</span>
                         </div>
@@ -1495,7 +1572,7 @@ export function AssistantHomePage() {
                           className={
                             t.status === "done"
                               ? "rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300"
-                              : "rounded bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-300"
+                              : "rounded bg-primary/20 px-2 py-0.5 text-[10px] text-primary-text"
                           }
                         >
                           {t.status === "done" ? "✓ 完成" : "⏳ 执行中…"}
@@ -1517,7 +1594,7 @@ export function AssistantHomePage() {
             <div className="ai-input-inner">
             {/* 斜杠命令建议面板 */}
             {showCmds && (
-              <div className="ai-glass absolute bottom-full left-0 right-0 z-20 mb-2 overflow-hidden rounded-xl border border-white/10">
+              <div className="ai-glass absolute bottom-full left-0 right-0 z-20 mb-2 overflow-hidden rounded-xl border border-border">
                 {COMMANDS.filter((c) => c.cmd.startsWith(input.toLowerCase()) || input === "/").map(
                   (c) => (
                     <button
@@ -1527,14 +1604,14 @@ export function AssistantHomePage() {
                         setInput(c.prompt);
                         setShowCmds(false);
                       }}
-                      className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left hover:bg-cyan-500/10"
+                      className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left hover:bg-primary/10"
                     >
-                      <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-xs font-medium text-cyan-300">
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary-text">
                         {c.cmd}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm text-slate-100">{c.label}</span>
-                        <span className="block truncate text-[11px] text-slate-500">{c.desc}</span>
+                        <span className="block truncate text-sm text-foreground">{c.label}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground">{c.desc}</span>
                       </span>
                     </button>
                   ),
@@ -1548,28 +1625,25 @@ export function AssistantHomePage() {
               </p>
             )}
 
-            {/* 能力快捷按钮排 */}
+            {/* v3 技能芯片行：能力=芯片（点击注入意图模板，回车由 agent 路由到工具） */}
             <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2">
-              <span className="pr-1 text-[10px] uppercase tracking-wider text-slate-500">能力</span>
-              {CAPABILITY_GROUPS.map((g) => (
+              <span className="pr-1 text-[10px] uppercase tracking-wider text-muted-foreground">技能</span>
+              {SKILL_CHIPS.map((c) => (
                 <button
-                  key={g.title}
+                  key={c.label}
                   type="button"
-                  onClick={() => useSuggestion(g.items[0]!.prompt)}
-                  className={cn(
-                    "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-all hover:-translate-y-0.5",
-                    capAccent(g.accent),
-                  )}
+                  onClick={() => useSkillChip(c.prompt)}
+                  className="flex items-center gap-1 rounded-full border border-border bg-foreground/5 px-2.5 py-1 text-[11px] text-foreground/80 transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:text-primary-text"
                 >
-                  <span>{g.icon}</span> {g.title}
+                  <span>{c.icon}</span> {c.label}
                 </button>
               ))}
               <button
                 type="button"
-                onClick={() => setShowCaps(true)}
-                className="flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-slate-400 transition-all hover:-translate-y-0.5 hover:border-cyan-500/40 hover:text-cyan-300"
+                onClick={() => navigate("/studio")}
+                className="flex items-center gap-1 rounded-full border border-info/30 bg-info/10 px-2.5 py-1 text-[11px] text-info transition-all hover:-translate-y-0.5 hover:bg-indigo-500/20"
               >
-                <Wand2 className="h-3 w-3" aria-hidden /> 全部能力
+                ⚙️ 引擎直控
               </button>
             </div>
 
@@ -1577,38 +1651,38 @@ export function AssistantHomePage() {
               <div className="relative flex-1" ref={inputWrapRef}>
                 {/* @ 资源引用面板 */}
                 {showAt && (
-                  <div className="ai-glass absolute bottom-full left-0 right-0 z-20 mb-2 max-h-72 overflow-y-auto rounded-xl border border-white/10">
-                    <p className="flex items-center gap-1.5 px-3.5 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  <div className="ai-glass absolute bottom-full left-0 right-0 z-20 mb-2 max-h-72 overflow-y-auto rounded-xl border border-border">
+                    <p className="flex items-center gap-1.5 px-3.5 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       <span>@</span> 引用资源
-                      <span className="normal-case text-slate-600">
+                      <span className="normal-case text-muted-foreground/70">
                         {atBusy ? " · 搜索中…" : atQuery.trim() ? ` · “${atQuery.trim()}”` : ""}
                       </span>
                     </p>
                     {/* 动态搜索结果（前 8 条） */}
                     {atQuery.trim() && !atBusy && atResults.length === 0 && (
-                      <p className="px-3.5 py-2 text-[11px] text-slate-500">没有找到匹配的资源，可引用下方常用分类</p>
+                      <p className="px-3.5 py-2 text-[11px] text-muted-foreground">没有找到匹配的资源，可引用下方常用分类</p>
                     )}
                     {atResults.map((r) => (
                       <button
                         key={`${r.scope}-${r.id}`}
                         type="button"
                         onClick={() => insertAt(r)}
-                        className="flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-cyan-500/10"
+                        className="flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-primary/10"
                       >
-                        <span className="mt-0.5 shrink-0 rounded bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] text-cyan-300">
+                        <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary-text">
                           {AT_SCOPE_LABEL[r.scope] ?? r.scope}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm text-slate-100">{r.title}</span>
+                          <span className="block truncate text-sm text-foreground">{r.title}</span>
                           {r.snippet && (
-                            <span className="block truncate text-[11px] text-slate-500">{r.snippet}</span>
+                            <span className="block truncate text-[11px] text-muted-foreground">{r.snippet}</span>
                           )}
                         </span>
-                        <span className="shrink-0 text-[10px] text-slate-600">@ 引用</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground/70">@ 引用</span>
                       </button>
                     ))}
                     {/* 静态分类入口（支持输入过滤） */}
-                    <p className="px-3.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <p className="px-3.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       常用资源
                     </p>
                     {AT_RESOURCES.filter(
@@ -1621,14 +1695,14 @@ export function AssistantHomePage() {
                         key={r.kind}
                         type="button"
                         onClick={() => insertToken(r.label)}
-                        className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-cyan-500/10"
+                        className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-primary/10"
                       >
                         <span className="text-base">{r.icon}</span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm text-slate-100">{r.label}</span>
-                          <span className="block truncate text-[11px] text-slate-500">{r.desc}</span>
+                          <span className="block truncate text-sm text-foreground">{r.label}</span>
+                          <span className="block truncate text-[11px] text-muted-foreground">{r.desc}</span>
                         </span>
-                        <span className="shrink-0 text-[10px] text-slate-600">
+                        <span className="shrink-0 text-[10px] text-muted-foreground/70">
                           {r.to ? "🔗" : "@ 引用"}
                         </span>
                       </button>
@@ -1642,7 +1716,7 @@ export function AssistantHomePage() {
                     {atRefs.map((r) => (
                       <span
                         key={`${r.scope}-${r.id}`}
-                        className="flex items-center gap-1 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200"
+                        className="flex items-center gap-1 rounded-full border border-primary/45 bg-primary/10 px-2 py-0.5 text-[10px] text-primary-text"
                         title={r.snippet}
                       >
                         <span className="opacity-70">{AT_SCOPE_LABEL[r.scope] ?? r.scope}</span>
@@ -1651,7 +1725,7 @@ export function AssistantHomePage() {
                           type="button"
                           aria-label={`移除引用 ${r.title}`}
                           onClick={() => setAtRefs((prev) => prev.filter((x) => x.id !== r.id))}
-                          className="ml-0.5 text-cyan-400 hover:text-white"
+                          className="ml-0.5 text-primary-text hover:text-foreground"
                         >
                           ×
                         </button>
@@ -1660,7 +1734,7 @@ export function AssistantHomePage() {
                   </div>
                 )}
 
-                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">💬</span>
+                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">💬</span>
                 <Textarea
                   value={input}
                   onChange={(e) => handleInputChange(e.target.value)}
@@ -1687,14 +1761,14 @@ export function AssistantHomePage() {
                       void send();
                     }
                   }}
-                  className="max-h-40 min-h-[48px] w-full flex-1 resize-none border-none bg-transparent px-2 py-3 pl-9 text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                  className="max-h-40 min-h-[48px] w-full flex-1 resize-none border-none bg-transparent px-2 py-3 pl-9 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </div>
               {streaming ? (
                 <button
                   onClick={stop}
                   aria-label="停止"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition-all hover:bg-rose-500/20 hover:text-rose-300"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-foreground/5 text-foreground/80 transition-all hover:bg-rose-500/20 hover:text-rose-300"
                 >
                   <Square className="h-4 w-4" aria-hidden />
                 </button>
@@ -1723,17 +1797,17 @@ export function AssistantHomePage() {
             </div>
 
             <div className="flex items-center justify-between px-2 pb-1 pt-1.5">
-              <span className="text-[11px] text-slate-500">
+              <span className="text-[11px] text-muted-foreground">
                 可以让我：生图 🎨 写文 ✍️ 写歌 🎵 语音 🔊 故事 📖
               </span>
               <div className="flex items-center gap-3">
-                <span className="hidden font-mono text-[10px] text-slate-600 sm:inline">
+                <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
                   Enter 发送 · Shift+Enter 换行
                 </span>
                 {messages.length > 0 && (
                   <button
                     onClick={newChat}
-                    className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-200"
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
                   >
                     <Eraser className="mr-1 inline h-3.5 w-3.5" aria-hidden /> 新对话
                   </button>
@@ -1745,32 +1819,32 @@ export function AssistantHomePage() {
         </div>
       </section>
 
-      {/* 页面私有样式 */}
+      {/* 页面私有样式（双主题：变量随 data-theme 自动切换浅/深） */}
       <style>{`
-        .ai-page{background:#05070c;background-image:
-          linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+        .ai-page{background:var(--color-background);background-image:
+          linear-gradient(to right, rgba(28,27,24,0.035) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(28,27,24,0.035) 1px, transparent 1px);
           background-size:40px 40px;}
-        .ai-glass{background:rgba(10,15,26,0.7);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 16px 40px rgba(0,0,0,0.5)}
-        .ai-glass-input{background:rgba(15,23,42,0.7);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);transition:all .25s cubic-bezier(.4,0,.2,1)}
-        .ai-glass-input:focus-within{border-color:rgba(0,242,254,.6)!important;box-shadow:0 0 22px rgba(0,242,254,.25),inset 0 0 10px rgba(0,242,254,.05)}
-        .ai-bubble-user{background:linear-gradient(135deg,rgba(0,242,254,.15) 0%,rgba(79,172,254,.1) 100%);border:1px solid rgba(0,242,254,.3);backdrop-filter:blur(16px);color:#f1f5f9}
-        .ai-bubble-ai{background:rgba(15,23,42,.75);border:1px solid rgba(255,255,255,.09);backdrop-filter:blur(16px);color:#e2e8f0}
-        .ai-glow-btn{background:linear-gradient(135deg,#00f2fe 0%,#4facfe 50%,#9d4edd 100%);background-size:200% 200%;animation:aiShift 4s ease infinite;transition:all .3s ease}
-        .ai-glow-btn:hover{box-shadow:0 0 25px rgba(0,242,254,.5),0 0 10px rgba(157,78,221,.3)}
-        .ai-send-btn{background:linear-gradient(135deg,#00f2fe 0%,#4facfe 50%,#9d4edd 100%);background-size:200% 200%;animation:aiShift 4s ease infinite;transition:all .3s ease}
-        .ai-input-shell{position:relative;border-radius:18px;background:linear-gradient(135deg,rgba(0,242,254,.28),rgba(157,78,221,.22) 45%,rgba(0,242,254,.18)) padding-box,linear-gradient(135deg,rgba(0,242,254,.5),rgba(157,78,221,.4),rgba(0,242,254,.35)) border-box;border:1px solid transparent;padding:1px;box-shadow:0 0 24px rgba(0,242,254,.12),0 16px 40px rgba(0,0,0,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
-        .ai-input-shell:focus-within{box-shadow:0 0 34px rgba(0,242,254,.28),0 16px 44px rgba(0,0,0,.6)}
-        .ai-input-shell > .ai-input-inner{background:rgba(10,15,26,.85);border-radius:17px;padding:2px}
+        .ai-glass{background:var(--color-surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:var(--shadow-pop)}
+        .ai-glass-input{background:var(--color-surface-raised);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);transition:all .25s cubic-bezier(.4,0,.2,1)}
+        .ai-glass-input:focus-within{border-color:var(--color-ring)!important;box-shadow:0 0 18px color-mix(in srgb, var(--color-ring) 25%, transparent)}
+        .ai-bubble-user{background:color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));border:1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);backdrop-filter:blur(16px);color:var(--color-foreground)}
+        .ai-bubble-ai{background:var(--color-surface-raised);border:1px solid var(--color-border);backdrop-filter:blur(16px);color:var(--color-foreground)}
+        .ai-glow-btn{background:linear-gradient(135deg,var(--color-primary) 0%,var(--color-primary-hover) 100%);transition:all .3s ease}
+        .ai-glow-btn:hover{box-shadow:0 0 22px color-mix(in srgb, var(--color-primary) 45%, transparent)}
+        .ai-send-btn{background:linear-gradient(135deg,var(--color-primary) 0%,var(--color-primary-hover) 100%);transition:all .3s ease}
+        .ai-input-shell{position:relative;border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb, var(--color-primary) 30%, transparent),color-mix(in srgb, var(--color-primary) 16%, transparent)) padding-box,linear-gradient(135deg,color-mix(in srgb, var(--color-primary) 55%, transparent),color-mix(in srgb, var(--color-primary) 30%, transparent)) border-box;border:1px solid transparent;padding:1px;box-shadow:var(--shadow-lift);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+        .ai-input-shell:focus-within{box-shadow:0 0 26px color-mix(in srgb, var(--color-primary) 30%, transparent),var(--shadow-lift)}
+        .ai-input-shell > .ai-input-inner{background:var(--color-surface);border-radius:17px;padding:2px}
         @keyframes aiShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-        .ai-grad-text{background:linear-gradient(90deg,#fff 0%,#00f2fe 35%,#a855f7 70%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:aiShimmer 6s linear infinite}
+        .ai-grad-text{background:linear-gradient(90deg,var(--color-foreground) 0%,var(--color-primary) 40%,var(--color-foreground) 80%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:aiShimmer 6s linear infinite}
         @keyframes aiShimmer{to{background-position:-200% center}}
-        .ai-glow-cyan{position:fixed;width:600px;height:600px;background:radial-gradient(circle,rgba(0,242,254,.12) 0%,transparent 70%);border-radius:50%;pointer-events:none;z-index:0}
-        .ai-glow-purple{position:fixed;width:700px;height:700px;background:radial-gradient(circle,rgba(157,78,221,.12) 0%,transparent 70%);border-radius:50%;pointer-events:none;z-index:0}
+        .ai-glow-cyan{position:fixed;width:600px;height:600px;background:radial-gradient(circle,color-mix(in srgb, var(--color-primary) 10%, transparent) 0%,transparent 70%);border-radius:50%;pointer-events:none;z-index:0}
+        .ai-glow-purple{position:fixed;width:700px;height:700px;background:radial-gradient(circle,color-mix(in srgb, var(--color-primary) 8%, transparent) 0%,transparent 70%);border-radius:50%;pointer-events:none;z-index:0}
         .ai-scroll::-webkit-scrollbar{width:5px;height:5px}
-        .ai-scroll::-webkit-scrollbar-track{background:rgba(5,7,12,.9)}
-        .ai-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:4px}
-        .ai-scroll::-webkit-scrollbar-thumb:hover{background:rgba(0,242,254,.4)}
+        .ai-scroll::-webkit-scrollbar-track{background:transparent}
+        .ai-scroll::-webkit-scrollbar-thumb{background:var(--color-border-strong);border-radius:4px}
+        .ai-scroll::-webkit-scrollbar-thumb:hover{background:var(--color-ring)}
       `}</style>
     </div>
   );
@@ -1788,21 +1862,21 @@ function ThinkBlock({ text }: { text: string }) {
     "";
   const trimmed = summary.length > 64 ? `${summary.slice(0, 64)}…` : summary;
   return (
-    <div className="mb-2 rounded-xl border border-indigo-500/25 bg-indigo-500/5">
+    <div className="mb-2 rounded-xl border border-info/30 bg-info/5">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-indigo-300 hover:text-indigo-200"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-info hover:text-info"
       >
         <span aria-hidden>🧠</span>
         <span className="font-medium">思考过程</span>
         {!open && trimmed && (
-          <span className="min-w-0 flex-1 truncate text-indigo-400/70">{trimmed}</span>
+          <span className="min-w-0 flex-1 truncate text-info/70">{trimmed}</span>
         )}
-        <span className="shrink-0 text-indigo-400">{open ? "▲" : "▼"}</span>
+        <span className="shrink-0 text-info">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap border-t border-indigo-500/20 px-3 py-2 text-xs leading-relaxed text-slate-300">
+        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap border-t border-indigo-500/20 px-3 py-2 text-xs leading-relaxed text-foreground/80">
           {text}
         </div>
       )}
@@ -1818,16 +1892,16 @@ function ToolCallsBlock({ calls }: { calls: { name: string; status: "running" | 
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-[11px] text-cyan-400/80 hover:text-cyan-300"
+        className="flex items-center gap-1.5 text-[11px] text-primary-text/80 hover:text-primary-text"
       >
         <span aria-hidden>🛠️</span>
         本轮调用了 {calls.length} 个工具
-        <span className="text-cyan-500/60">{open ? "▲" : "▼"}</span>
+        <span className="text-primary-text/60">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
         <ul className="mt-1 flex flex-col gap-0.5">
           {calls.map((t, k) => (
-            <li key={`${t.name}-${k}`} className="font-mono text-[10px] text-cyan-300/70">
+            <li key={`${t.name}-${k}`} className="font-mono text-[10px] text-primary-text/70">
               {t.status === "done" ? "✓" : "⏳"} {t.name}
             </li>
           ))}
@@ -1890,7 +1964,7 @@ function AssistantMsgActions(props: {
     setTimeout(() => setCopied(false), 1200);
   }
   const btn =
-    "rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-200";
+    "rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground";
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
       <button type="button" onClick={() => void copy()} className={btn}>
@@ -1951,12 +2025,12 @@ function SessionMenu(props: {
     <div
       ref={menuRef}
       onClick={(e) => e.stopPropagation()}
-      className="ai-glass fixed z-50 w-44 overflow-hidden rounded-xl border border-white/10 py-1 text-left"
+      className="ai-glass fixed z-50 w-44 overflow-hidden rounded-xl border border-border py-1 text-left"
       style={{ left: props.left, top: props.top }}
     >
       {props.sessionId && (
         <>
-          <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             移动到分组
           </p>
           <div className="max-h-36 overflow-y-auto">
@@ -1968,11 +2042,11 @@ function SessionMenu(props: {
                   type="button"
                   onClick={() => props.onSetGroup(g)}
                   className={cn(
-                    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-cyan-500/10",
-                    active ? "text-cyan-300" : "text-slate-300",
+                    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-primary/10",
+                    active ? "text-primary-text" : "text-foreground/80",
                   )}
                 >
-                  <span className={cn("text-[10px]", active ? "text-cyan-300" : "text-slate-600")}>
+                  <span className={cn("text-[10px]", active ? "text-primary-text" : "text-muted-foreground/70")}>
                     {active ? "●" : "○"}
                   </span>
                   <span className="truncate">{g}</span>
@@ -1980,13 +2054,13 @@ function SessionMenu(props: {
               );
             })}
             {props.groupNames.length === 0 && (
-              <p className="px-3 py-1 text-[11px] text-slate-600">还没有分组</p>
+              <p className="px-3 py-1 text-[11px] text-muted-foreground/70">还没有分组</p>
             )}
           </div>
           <button
             type="button"
             onClick={props.onNewGroup}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-cyan-300 transition-colors hover:bg-cyan-500/10"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-primary-text transition-colors hover:bg-primary/10"
           >
             <FolderPlus className="h-3.5 w-3.5" aria-hidden /> 新建分组
           </button>
@@ -1994,12 +2068,12 @@ function SessionMenu(props: {
             <button
               type="button"
               onClick={props.onRemoveGroup}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-slate-300 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-foreground/80 transition-colors hover:bg-foreground/5"
             >
-              <X className="h-3.5 w-3.5 text-slate-500" aria-hidden /> 取消分组
+              <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> 取消分组
             </button>
           )}
-          <div className="my-1 border-t border-white/10" />
+          <div className="my-1 border-t border-border" />
           <button
             type="button"
             onClick={props.onArchive}
