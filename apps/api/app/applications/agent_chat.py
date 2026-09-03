@@ -63,6 +63,18 @@ async def agent_chat_stream(
         except Exception:
             pass
 
+    # Personal Voice Engine：有文风档案（manual/auto）时注入「像用户自己写作」指引
+    # ——失败静默；无档案自动跳过（与记忆注入同级，覆盖所有 agent 对话）
+    if user_id:
+        try:
+            from app.applications.voice_service import build_voice_injection
+
+            voice_text = await build_voice_injection(db, user_id)
+            if voice_text:
+                messages = [{"role": "system", "content": voice_text}, *messages]
+        except Exception:
+            pass
+
     # @引用内容 → 系统级上下文块（放在对话消息之前，明确标注来源）
     if context_blocks:
         ref_parts = [

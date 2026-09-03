@@ -33,6 +33,7 @@ from app.api.v1 import (
     teams,
     upstream,
     users,
+    voice,
     workflows,
 )
 from app.api.v1.generations import audio as gen_audio
@@ -53,6 +54,7 @@ router.include_router(teams.router, prefix="/teams", tags=["teams"])
 router.include_router(community.router, prefix="/community", tags=["community"])
 router.include_router(schedules.router, prefix="/schedules", tags=["schedules"])
 router.include_router(users.router, prefix="/users", tags=["users"])
+router.include_router(voice.router, prefix="/voice", tags=["voice"])
 router.include_router(prompts.router, prefix="/prompts", tags=["prompts"])
 router.include_router(projects.router, prefix="/projects", tags=["projects"])
 router.include_router(providers.router, prefix="/providers", tags=["providers"])
