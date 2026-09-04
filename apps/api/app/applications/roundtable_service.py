@@ -330,8 +330,13 @@ _DOMAIN_MIN_LEN = {
 }
 
 
-def _validate_final(domain: str, final: dict[str, Any]) -> list[str]:
-    """通用圆桌定稿结构自检：缺字段/正文过短/AI 腔给出警告列表。"""
+def _validate_final(
+    domain: str, final: dict[str, Any], voice_dna: dict | None = None
+) -> list[str]:
+    """通用圆桌定稿结构自检：缺字段/正文过短/AI 腔给出警告列表。
+
+    voice_dna（可选）：当前用户文风档案，提供时 AI 腔检测追加「个人忌讳/节奏偏好」。
+    """
     warnings: list[str] = []
     if not isinstance(final, dict):
         return ["定稿不是有效 JSON 对象"]  # type: ignore[unreachable]
@@ -349,7 +354,7 @@ def _validate_final(domain: str, final: dict[str, Any]) -> list[str]:
         try:
             from app.applications.ai_voice_checker import check_ai_voice
 
-            issues = check_ai_voice(content)
+            issues = check_ai_voice(content, voice_dna)
             serious = [i for i in issues if i["level"] in ("high", "medium")]
             if len(serious) >= 2:
                 samples = "、".join(i["sample"][:14] for i in serious[:3])
@@ -389,6 +394,14 @@ async def stream_roundtable(
         yield "data: [DONE]\n\n"
         return
     tpl = _DOMAINS[domain]
+    # 当前用户文风档案（失败/无档案静默降级 None → 检测退化为通用规则）
+    try:
+        from app.applications.voice_service import get_profile
+
+        _profile = await get_profile(db, user_id)
+        voice_dna = (_profile.voice_dna or {}) if _profile else None
+    except Exception:
+        voice_dna = None
     # 创作素材：知识库（已读懂）优先；命中不足且开启联网时，搜索兜底新鲜题材
     materials = ""
     material_titles: list[str] = []
@@ -466,7 +479,7 @@ async def stream_roundtable(
     checks: list[str] = []
     rewrote = False
     if not final.get("error"):
-        checks = _validate_final(domain, final)
+        checks = _validate_final(domain, final, voice_dna)
         if _severe_domain_checks(checks):
             rewrote = True
             final_prompt += (
@@ -480,7 +493,7 @@ async def stream_roundtable(
                 final = _extract_json(_result_text(result))
             except Exception as exc:
                 final = {"error": f"定稿失败：{str(exc)[:80]}"}
-            checks = [] if final.get("error") else _validate_final(domain, final)
+            checks = [] if final.get("error") else _validate_final(domain, final, voice_dna)
     yield _sse_event(
         {
             "type": "final",

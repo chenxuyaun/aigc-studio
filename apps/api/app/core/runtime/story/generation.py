@@ -99,11 +99,14 @@ async def stream_chapter_sse(
     except Exception:
         quality_report = None
     await db.commit()
-    # AI 腔体检（分级报告：套话/机械句式/连接词/宣传腔/空洞修饰）
+    # AI 腔体检（分级报告：套话/机械句式/连接词/宣传腔/空洞修饰 + 对照用户文风档案）
     try:
         from app.services.ai_voice_checker import check_ai_voice
+        from app.services.voice_service import get_profile
 
-        issues = check_ai_voice(content)
+        _profile = await get_profile(db, user_id)
+        _voice_dna = (_profile.voice_dna or {}) if _profile else None
+        issues = check_ai_voice(content, _voice_dna)
     except Exception:
         issues = []
     yield _sse(

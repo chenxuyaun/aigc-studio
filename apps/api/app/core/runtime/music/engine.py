@@ -101,10 +101,47 @@ async def generate_json_with_retry(
     return final
 
 
-async def _quality_gate(resolved: Any, prompt: str) -> dict[str, Any]:
+async def _load_voice_dna(db: AsyncSession, user_id: str | None) -> dict | None:
+    """取用户文风档案 voice_dna（失败/无档案静默降级 None，不影响创作主流程）。"""
+    if not user_id:
+        return None
+    try:
+        from app.applications.voice_service import get_profile
+
+        profile = await get_profile(db, user_id)
+        return (profile.voice_dna or {}) if profile else None
+    except Exception:
+        return None
+
+
+def _ai_voice_checks(text: str, voice_dna: dict | None) -> list[str]:
+    """AI 腔 + 个人文风对照自检（对照用户档案的优选/忌讳/节奏），命中返回警告列表。
+
+    仅作检测警告，不触发自动重写（歌词重写轮由结构缺陷决定，避免误伤口语化表达）。
+    """
+    try:
+        from app.applications.ai_voice_checker import check_ai_voice
+
+        issues = check_ai_voice(text, voice_dna)
+    except Exception:
+        return []
+    serious = [i for i in issues if i["level"] in ("high", "medium")]
+    if not serious:
+        return []
+    voice_avoid = [i for i in serious if i["kind"] == "voice_avoid"]
+    if voice_avoid:
+        return [f"文风档案忌讳的表达出现在歌词中（{voice_avoid[0]['sample'][:20]}…）——换成你自己的说法"]
+    samples = "、".join(i["sample"][:12] for i in serious[:3])
+    return [f"AI 腔过重（{len(serious)} 处：{samples}…）——歌词是能唱的人话，删掉套话/机械句式/宣传腔"]
+
+
+async def _quality_gate(
+    resolved: Any, prompt: str, *, voice_dna: dict | None = None
+) -> dict[str, Any]:
     """质量闭环：生成 → 解析 → 结构修复 → 自检 → 严重问题自动重写一轮。
 
     compose（单次写歌）与圆桌单次版共用同一套把关（与圆桌定稿同源）。
+    voice_dna（可选）：当前用户文风档案，提供时追加「个人忌讳/节奏不符」AI 腔自检。
     """
     # 温度 0.95：增加每次生成的风格/表达差异（避免"都是一个调调"）
     result = await resolved.provider.generate(  # type: ignore[attr-defined]
@@ -122,6 +159,8 @@ async def _quality_gate(resolved: Any, prompt: str) -> dict[str, Any]:
     if not data.get("error"):
         data["lyrics"] = _repair_lyrics(str(data.get("lyrics") or ""))
     checks = [] if data.get("error") else _validate_lyrics(str(data.get("lyrics") or ""))
+    if voice_dna:
+        checks += _ai_voice_checks(str(data.get("lyrics") or ""), voice_dna)
     data["checks"] = checks
     if not data.get("error") and _severe_checks(checks):
         rewrite_prompt = (
@@ -137,7 +176,10 @@ async def _quality_gate(resolved: Any, prompt: str) -> dict[str, Any]:
             data2 = _extract_json(_provider_text(r2))
             if not data2.get("error"):
                 data2["lyrics"] = _repair_lyrics(str(data2.get("lyrics") or ""))
-                data2["checks"] = _validate_lyrics(str(data2.get("lyrics") or ""))
+                checks2 = _validate_lyrics(str(data2.get("lyrics") or ""))
+                if voice_dna:
+                    checks2 += _ai_voice_checks(str(data2.get("lyrics") or ""), voice_dna)
+                data2["checks"] = checks2
                 data2["rewrote"] = True
                 data2["provider"] = resolved.model
                 data = data2
@@ -147,11 +189,12 @@ async def _quality_gate(resolved: Any, prompt: str) -> dict[str, Any]:
 
 
 async def compose_song(
-    db: AsyncSession, req: Any, *, extra_prompt_block: str = ""
+    db: AsyncSession, req: Any, *, extra_prompt_block: str = "", user_id: str | None = None
 ) -> dict[str, Any]:
     """AI 写歌（免费）：主题 → 原创歌词 + 风格描述 JSON。走平台文本 Provider（cpa）。
 
     extra_prompt_block：调用方（路由/mission）注入的创作素材块（词曲专业常驻笔记等）。
+    user_id：当前用户 id（可选），用于对照文风档案做 AI 腔自检（静默降级）。
     """
     style_profile = _STYLE_PROFILES.get(req.style, _STYLE_PROFILES["流行"])
     prompt = _COMPOSE_PROMPT.format(
@@ -165,11 +208,18 @@ async def compose_song(
     if extra_prompt_block:
         prompt += extra_prompt_block
     resolved = await resolve_text_provider(db, req.model)
-    return await _quality_gate(resolved, prompt)
+    voice_dna = await _load_voice_dna(db, user_id)
+    return await _quality_gate(resolved, prompt, voice_dna=voice_dna)
 
 
 async def roundtable_single(
-    db: AsyncSession, *, theme: str, style: str, mood: str, model: str
+    db: AsyncSession,
+    *,
+    theme: str,
+    style: str,
+    mood: str,
+    model: str,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     """多角色圆桌（单次版）：四位 AI 创作者相互讨论后定稿（用户只需给主题）。"""
     prompt = _ROUNDTABLE_PROMPT.format(
@@ -178,7 +228,8 @@ async def roundtable_single(
         mood=mood or "（自由，由讨论决定）",
     ) + _style_profile_block(style)
     resolved = await resolve_text_provider(db, model)
-    return await _quality_gate(resolved, prompt)
+    voice_dna = await _load_voice_dna(db, user_id)
+    return await _quality_gate(resolved, prompt, voice_dna=voice_dna)
 
 
 async def discuss_reply(

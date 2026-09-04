@@ -420,7 +420,7 @@ async def _execute_music(
         verse_count=2,
         model="",
     )
-    data = await compose_song(db, req)
+    data = await compose_song(db, req, user_id=user_id)
     if data.get("error"):
         return {"summary": f"写歌失败：{data['error']}", "ok": False}
     title = str(data.get("title") or "未命名")

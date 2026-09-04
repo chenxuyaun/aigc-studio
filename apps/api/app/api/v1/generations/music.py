@@ -160,7 +160,9 @@ async def compose_song(
             extra_prompt_block = "\n\n" + pro_notes
     except Exception:
         pass
-    return await music_engine.compose_song(db, req, extra_prompt_block=extra_prompt_block)
+    return await music_engine.compose_song(
+        db, req, extra_prompt_block=extra_prompt_block, user_id=getattr(user, "id", None)
+    )
 
 
 @router.post("/discuss")
@@ -216,7 +218,12 @@ async def roundtable_music(
     """多角色圆桌（单次版）：四位 AI 创作者相互讨论后定稿（用户只需给主题）。"""
     style = req.style or _detect_style(req.theme)
     return await music_engine.roundtable_single(
-        db, theme=req.theme, style=style, mood=req.mood, model=req.model
+        db,
+        theme=req.theme,
+        style=style,
+        mood=req.mood,
+        model=req.model,
+        user_id=getattr(user, "id", None),
     )
 
 

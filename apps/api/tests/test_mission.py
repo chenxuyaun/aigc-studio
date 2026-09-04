@@ -368,7 +368,7 @@ async def test_execute_music_injects_agent_role(client):
 
     captured: dict[str, str] = {}
 
-    async def _fake_compose(_db, req):
+    async def _fake_compose(_db, req, **kwargs):
         captured["theme"] = req.theme
         return {
             "title": "车站",
@@ -454,7 +454,7 @@ async def test_execute_music_truncates_long_theme(client):
     """多轮对话长目标：theme 超 500 字时截断，不触发 validation error。"""
     captured: dict[str, str] = {}
 
-    async def _fake_compose(_db, req):
+    async def _fake_compose(_db, req, **kwargs):
         captured["theme"] = req.theme
         return {
             "title": "x",
