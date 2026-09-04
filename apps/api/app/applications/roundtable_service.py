@@ -402,6 +402,16 @@ async def stream_roundtable(
         voice_dna = (_profile.voice_dna or {}) if _profile else None
     except Exception:
         voice_dna = None
+    # Experience Injector：用户真实经历素材（长期记忆事件/情绪类）→ 并入 extra，
+    # 所有发言人轮次与定稿轮都能化用；失败/无素材静默跳过
+    try:
+        from app.applications.experience_injector import build_experience_prompt
+
+        exp_block = await build_experience_prompt(db, user_id)
+        if exp_block:
+            extra = f"{extra}\n\n{exp_block}" if extra else exp_block
+    except Exception:
+        pass
     # 创作素材：知识库（已读懂）优先；命中不足且开启联网时，搜索兜底新鲜题材
     materials = ""
     material_titles: list[str] = []

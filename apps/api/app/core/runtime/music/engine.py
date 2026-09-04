@@ -114,6 +114,18 @@ async def _load_voice_dna(db: AsyncSession, user_id: str | None) -> dict | None:
         return None
 
 
+async def _load_experience(db: AsyncSession, user_id: str | None) -> str:
+    """取用户真实经历素材块（长期记忆 event/emotion 类；失败/无素材空串，静默降级）。"""
+    if not user_id:
+        return ""
+    try:
+        from app.applications.experience_injector import build_experience_prompt
+
+        return await build_experience_prompt(db, user_id)
+    except Exception:
+        return ""
+
+
 def _ai_voice_checks(text: str, voice_dna: dict | None) -> list[str]:
     """AI 腔 + 个人文风对照自检（对照用户档案的优选/忌讳/节奏），命中返回警告列表。
 
@@ -207,6 +219,9 @@ async def compose_song(
     )
     if extra_prompt_block:
         prompt += extra_prompt_block
+    exp = await _load_experience(db, user_id)
+    if exp:
+        prompt += "\n\n" + exp
     resolved = await resolve_text_provider(db, req.model)
     voice_dna = await _load_voice_dna(db, user_id)
     return await _quality_gate(resolved, prompt, voice_dna=voice_dna)
@@ -227,6 +242,9 @@ async def roundtable_single(
         style=style or "（自由，由讨论决定）",
         mood=mood or "（自由，由讨论决定）",
     ) + _style_profile_block(style)
+    exp = await _load_experience(db, user_id)
+    if exp:
+        prompt += "\n\n" + exp
     resolved = await resolve_text_provider(db, model)
     voice_dna = await _load_voice_dna(db, user_id)
     return await _quality_gate(resolved, prompt, voice_dna=voice_dna)

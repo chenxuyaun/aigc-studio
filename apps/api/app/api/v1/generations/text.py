@@ -198,5 +198,10 @@ async def agent_chat(
             from app.services.growth_service import reflect_session_bg
 
             asyncio.create_task(reflect_session_bg(str(user.id), session_id))
+        # Voice 3：对话积累后后台自动提炼文风档案（节流：语料量 + 24h，失败静默）
+        if str(user.id).strip():
+            from app.services.voice_service import maybe_auto_extract_bg
+
+            maybe_auto_extract_bg(str(user.id))
 
     return StreamingResponse(gen(), media_type="text/event-stream")

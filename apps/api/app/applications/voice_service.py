@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -42,6 +43,9 @@ _CORPUS_KINDS = ("article", "chat", "note", "lyric", "story")
 _EXTRACT_CORPUS_CHARS = 4000  # 送入 LLM 提炼的语料总预算
 _SAMPLE_INJECT_CHARS = 200  # 注入时单条范文截断
 _MAX_SAMPLES_INJECT = 2  # 注入时最多带几条范文
+# 对话积累后自动提取的节流参数（避免每次对话都跑 LLM 提炼）
+_AUTO_EXTRACT_MIN_CORPUS = 12  # 语料至少 12 条才值得自动提炼（再少是噪音）
+_AUTO_EXTRACT_COOLDOWN_S = 86400  # 两次自动提炼最小间隔 24h（还语料在涨）
 
 # Voice DNA 字段默认值（JSON 可序列化，前端表单可编辑）
 _DNA_DEFAULTS: dict[str, Any] = {
@@ -163,6 +167,54 @@ async def auto_extract_profile(
     await db.commit()
     await db.refresh(p)
     return p
+
+
+async def maybe_auto_extract(db: AsyncSession, user_id: str) -> bool:
+    """对话积累后自动提炼 Voice DNA（节流入口，供对话流结束后台调用）。
+
+    - manual 档案永不覆盖（用户显式配过就是最大）
+    - 语料不足 _AUTO_EXTRACT_MIN_CORPUS 条 → 跳过
+    - auto 档案距上次提炼 < 24h → 跳过（节流防烧 token）
+    - 通过 → 走 auto_extract_profile（LLM 失败自动降级规则统计，全程静默）
+    """
+    p = await get_profile(db, user_id)
+    if p is not None and p.source == "manual":
+        return False
+    corpus = await _gather_corpus(db, user_id)
+    if len(corpus) < _AUTO_EXTRACT_MIN_CORPUS:
+        return False
+    if p is not None and p.source == "auto" and p.updated_at is not None:
+        # DB 存 naive UTC（func.now()），与 aware now 相减前先补时区，否则 TypeError
+        ts = p.updated_at.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - ts).total_seconds()
+        if age < _AUTO_EXTRACT_COOLDOWN_S:
+            return False
+    refreshed = await auto_extract_profile(db, user_id)
+    return refreshed is not None
+
+
+def maybe_auto_extract_bg(user_id: str) -> None:
+    """后台自动提炼入口：自开短生命周期 session（请求结束后原 db 已不可用）。
+
+    调用方（路由层）fire-and-forget；内部所有异常静默（含任务创建失败），
+    与 growth_service.reflect_session_bg 同一模式。
+    """
+
+    async def _run() -> None:
+        from app.core.database import AsyncSessionLocal
+
+        try:
+            async with AsyncSessionLocal() as s:
+                await maybe_auto_extract(s, user_id)
+        except Exception:
+            logger.warning("voice_auto_extract_bg_failed", exc_info=True)
+
+    try:
+        import asyncio
+
+        asyncio.create_task(_run())
+    except Exception:
+        pass
 
 
 async def build_voice_injection(

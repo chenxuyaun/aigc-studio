@@ -708,6 +708,16 @@ async def _build_chapter_prompt(
             f"{instruction}\n"
             "- 指令中的具体素材（回忆/场景/对话/细节）必须写成具体情节融入本章正文"
         )
+    # Experience Injector：用户真实经历素材（长期记忆事件/情绪类），
+    # 供执笔作者化用细节/情绪；失败或无素材静默跳过（创作不因注入中断）
+    try:
+        from app.applications.experience_injector import build_experience_prompt
+
+        exp_block = await build_experience_prompt(db, user_id)
+        if exp_block:
+            parts.append(exp_block)
+    except Exception:
+        pass
     parts.append(
         "【写作要求】\n"
         "- 以第三人称叙事，场景/动作/对话自然流畅\n"

@@ -213,3 +213,150 @@ async def test_story_done_event_includes_voice_issues(monkeypatch) -> None:
     voice_avoid = [i for i in done["ai_voice"] if i["kind"] == "voice_avoid"]
     assert voice_avoid, f"应命中个人忌讳：{done['ai_voice']}"
     assert "示例" in voice_avoid[0]["sample"]
+
+# ===== ③ 自动提取时机：maybe_auto_extract 节流 =====
+
+async def _seed_corpus(db, user_id: str, n: int = 12) -> None:
+    from app.applications.voice_service import add_corpus
+
+    for i in range(n):
+        await add_corpus(
+            db, user_id, "note", f"第{i}条想法：桥东的粥摊，五点四十的煤灰味。老陈说今天多加点姜。"
+        )
+
+
+@pytest.mark.asyncio
+async def test_auto_extract_skips_when_corpus_too_small() -> None:
+    """语料不足阈值时跳过（不建档、不跑提炼）。"""
+    from app.core.database import AsyncSessionLocal
+    from app.applications.voice_service import get_profile, maybe_auto_extract
+
+    async with AsyncSessionLocal() as db:
+        ok = await maybe_auto_extract(db, "u-autoskip")
+    assert ok is False
+    async with AsyncSessionLocal() as db:
+        assert await get_profile(db, "u-autoskip") is None
+
+
+@pytest.mark.asyncio
+async def test_auto_extract_runs_when_corpus_ready(monkeypatch) -> None:
+    """语料达标且无档案 → 自动提炼出 auto 档案（LLM 路径真实走通）。"""
+    from app.core.database import AsyncSessionLocal
+    from app.applications.voice_service import get_profile, maybe_auto_extract
+
+    class _FakeLLM:
+        async def generate(self, prompt, model, **kw) -> SimpleNamespace:
+            return SimpleNamespace(
+                content=(
+                    '{"sentence_length": "short", "formality": "casual", '
+                    '"avoid": ["赋能", "硬凑"], "preferred": ["短句"]}'
+                )
+            )
+
+    async def _fake_resolve(db, model, **kw) -> SimpleNamespace:
+        return SimpleNamespace(provider=_FakeLLM(), model="mock-llm")
+
+    async with AsyncSessionLocal() as db:
+        await _seed_corpus(db, "u-autofirst")
+        monkeypatch.setattr(
+            "app.applications.voice_service.resolve_text_provider", _fake_resolve
+        )
+        ok = await maybe_auto_extract(db, "u-autofirst")
+    assert ok is True
+    async with AsyncSessionLocal() as db:
+        p = await get_profile(db, "u-autofirst")
+    assert p is not None and p.source == "auto"
+    assert p.voice_dna.get("avoid") == ["赋能", "硬凑"]  # LLM 提炼结果真实入库
+
+
+@pytest.mark.asyncio
+async def test_auto_extract_respects_manual_profile() -> None:
+    """manual 档案永不覆盖（用户显式配置优先）。"""
+    from app.core.database import AsyncSessionLocal
+    from app.applications.voice_service import (
+        get_profile,
+        maybe_auto_extract,
+        update_profile,
+    )
+
+    async with AsyncSessionLocal() as db:
+        await update_profile(db, "u-autoor2", name="我亲手写的", dna={"avoid": ["赋能"]})
+        await _seed_corpus(db, "u-autoor2")
+        ok = await maybe_auto_extract(db, "u-autoor2")
+        p = await get_profile(db, "u-autoor2")
+    assert ok is False
+    assert p is not None and p.source == "manual" and p.name == "我亲手写的"
+
+
+@pytest.mark.asyncio
+async def test_auto_extract_respects_cooldown(monkeypatch) -> None:
+    """auto 档案 24h 冷却期内不重复提炼。"""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import update
+
+    from app.core.database import AsyncSessionLocal
+    from app.applications.voice_service import (
+        auto_extract_profile,
+        maybe_auto_extract,
+    )
+    from app.data.models.voice import VoiceProfile
+
+    async with AsyncSessionLocal() as db:
+        await _seed_corpus(db, "u-autocool")
+        async def _fuse_llm(*_a, **_k):
+            raise RuntimeError("llm down")
+
+        monkeypatch.setattr(
+            "app.applications.voice_service.resolve_text_provider", _fuse_llm
+        )
+        p = await auto_extract_profile(db, "u-autocool")  # 走规则兜底建档
+        await db.execute(
+            update(VoiceProfile)
+            .where(VoiceProfile.user_id == "u-autocool")
+            .values(updated_at=datetime.now(timezone.utc).replace(tzinfo=None))
+        )
+        await db.commit()
+        ok = await maybe_auto_extract(db, "u-autocool")  # 刚建 → 冷却中
+    assert p is not None and ok is False
+
+
+@pytest.mark.asyncio
+async def test_extract_after_cooldown_refreshes(monkeypatch) -> None:
+    """冷却期过后且语料在涨 → 重新提炼。"""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import update
+
+    from app.core.database import AsyncSessionLocal
+    from app.applications.voice_service import (
+        get_profile,
+        maybe_auto_extract,
+        _extract_dna_rules,
+    )
+    from app.data.models.voice import VoiceProfile
+
+    from app.applications.voice_service import auto_extract_profile
+
+    async with AsyncSessionLocal() as db:
+        await _seed_corpus(db, "u-autorefresh")
+        async def _fuse_llm(*_a, **_k):
+            raise RuntimeError("upstream down")
+
+        monkeypatch.setattr(
+            "app.applications.voice_service.resolve_text_provider", _fuse_llm
+        )
+        await auto_extract_profile(db, "u-autorefresh")  # 规则兜底建档
+        await db.execute(
+            update(VoiceProfile)
+            .where(VoiceProfile.user_id == "u-autorefresh")
+            .values(
+                updated_at=(datetime.now(timezone.utc) - timedelta(hours=25)).replace(
+                    tzinfo=None
+                )
+            )
+        )
+        await db.commit()
+        ok = await maybe_auto_extract(db, "u-autorefresh")  # 已过 24h → 重新提炼
+        p = await get_profile(db, "u-autorefresh")
+    assert ok is True and p is not None and p.source == "auto"
