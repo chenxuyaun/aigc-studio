@@ -163,20 +163,42 @@ if user_id:
 - `tests/test_voice_api.py` 5 个：CRUD 流/extract 无料/prompt 含与不含文风注入
 - `tests/test_voice_mcp.py` 5 个：建档读取/入库/过短/注册（fixture 自插 admin——测试库只建表不 seed）
 - `tests/test_ai_voice.py` +5 voice-aware；`test_mcp_tools.py` 计数 20→22
+- `tests/test_voice_vertical.py` 11 个（§12-1 垂直接入 + §12-3 自动提取）
+- `tests/test_experience_injector.py` 7 个（§12-2 Experience Injector 三处注入）
 - 每批全量 pytest 绿；前端 tsc 零错误 + vite build 通过
 - ⚠️ 既有 flaky：`test_security_hardening::test_task_cancel_marks_cancelled`
   （cancel 竞态，AGENTS.md 已记录，与 voice 无关）
 
-## 12. 后续方向（未做，需用户拍板）
+## 12. 后续方向（1/2/3/5 已完成，2026-09-04 落地）
 
-1. **music/roundtable/story 垂直接入**：engine 出稿后跑 voice-aware check_ai_voice
-   （传当前用户档案），命中触发 rewrite 轮（音乐场景已有 quality 自检，可传 profile）
-2. **Experience Injector**：创作时注入用户真实经历（记忆里有 event 类）——现只注入了
-   voice 档案，事件素材未注入创作 prompt
-3. **自动提取时机**：现在 extract 是手动触发（前端按钮/API）；可加「对话积累后自动
-   auto_extract」或「每日一次」
-4. **Style evaluator（P3 multi-agent）**：story_crew 加 style 审查环节
-5. **前端展示**：VoiceBadge 可升级为可编辑表单（现只能贴样本 + 停用，dna 字段不能手改）
+1. **✅ music/roundtable/story 垂直接入**（`tests/test_voice_vertical.py` 11 个）：
+   - music engine 新增 `_load_voice_dna`（compose_song / roundtable_single 出稿后对照用户
+     档案做 _ai_voice_checks：命中 voice_avoid 返回「文风档案忌讳」警告；voice 警告只升级
+     检测不触发重写轮，结构缺陷才重写）
+   - roundtable `_validate_final(domain, final, voice_dna=None)`：传档案时追加个人忌讳检测，
+     不传退化为通用规则；`stream_roundtable` 加载 voice_dna 传给定稿检查
+   - story `stream_chapter_sse`：done 事件 `ai_voice` 字段对照用户档案（voice_dna 命中
+     voice_avoid，样例「鞭策/抓手/共振」）
+2. **✅ Experience Injector**（`app/applications/experience_injector.py` + facade
+   `app/services/experience_injector.py`，§12-2）：
+   - `build_experience_prompt(db, user_id)`：取 ai_memory_entries 最近 event/emotion 类记忆
+     （limit=3，600 字截断，超长单行也保底给一条），格式「【你的真实经历素材（长期记忆）】
+     创作时可化用…不整段照抄/隐私模糊处理」
+   - 注入三处：story `_build_chapter_prompt`（system parts）、roundtable `stream_roundtable`
+     （并入 extra → 所有发言人轮 + 定稿轮）、music engine `_load_experience`（compose_song/
+     roundtable_single prompt 末尾）
+   - 全部 try/except 静默降级（无素材/失败返回空串，创作流程不受影响）；
+     素材只进创作 prompt，不进 SSE 事件（不向用户泄露素材文本）
+   - 测试 `tests/test_experience_injector.py` 7 个：空素材过滤（preference/fact 不入）、
+     标签格式/截断、music 注入与匿名跳过、roundtable 轮次含素材、story system prompt
+3. **✅ 自动提取时机**（§12-3）：agent chat 流正常结束后 fire-and-forget
+   `maybe_auto_extract_bg(user_id)`（`text.py` agent_chat 尾部，与 reflect_session_bg 同级）；
+   `maybe_auto_extract` 三闸门：manual 档案永不覆盖 / 语料 < 12 条跳过 / auto 档案 24h
+   冷却（修复 coop DB naive updated_at 与 aware now 相减 TypeError 的线上 bug）
+4. **Style evaluator（P3 multi-agent）**：⏳ 未做（story_crew 一致性审查可扩展 style 审查）
+5. **✅ 前端可编辑表单**：VoiceBadge 新增「编辑」态——六维下拉（句式/用词/正式度/情绪/幽默/
+   观点强度）+ 偏爱/忌讳 ChipEditor（Enter 添加、×删除）→ PUT /voice/profile 保存；
+   只读态补展示六维摘要；tsc + vite build 过
 
 ## 13. 部署注意（上线时执行）
 
