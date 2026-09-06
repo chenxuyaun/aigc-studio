@@ -791,15 +791,10 @@ export function AssistantHomePage() {
   // v11 双态：当前展示哪个心流视域（auto 时无消息=初态命题，有消息=作品回显）
   const showProposition = hubMode === "empty" || (hubMode === "auto" && empty);
 
-  // v11 禅意收敛：能力卡统一青瓷点缀（差异化靠图标，不再四色拼盘）
-  const capAccent = (_a: string) => "text-primary-text border-primary/30";
-
   return (
     <div className="ai-page absolute inset-0 flex min-h-0 overflow-hidden">
       {/* 粒子背景 + 环境光晕 */}
-      <canvas id="ai-bg-canvas" className="pointer-events-none fixed inset-0 z-0 opacity-40" aria-hidden />
-      <div className="ai-glow-cyan -left-24 -top-24 animate-pulse-slow" />
-      <div className="ai-glow-purple -bottom-32 -right-24 animate-pulse-slow" />
+      {/* v11 素版：无粒子、无光晕，留白即装饰 */}
 
       {/* ============ 能力中心抽屉 ============ */}
       {showCaps && (
@@ -943,7 +938,7 @@ export function AssistantHomePage() {
         <div className="space-y-2.5 border-b border-border p-3.5">
           <button
             onClick={newChat}
-            className="ai-glow-btn flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold text-slate-950 shadow-[0_0_20px_rgba(0,242,254,0.3)] transition-all hover:-translate-y-0.5"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
             <Plus className="h-4 w-4" aria-hidden /> 开启新创作对话
           </button>
@@ -1345,14 +1340,14 @@ export function AssistantHomePage() {
                         onClick={() => useSuggestion("帮我画一张：宋瓷天青釉色中的江南初春雨景，孤舟蓑笠，远山如黛")}
                         className="flex items-center gap-1 transition-colors hover:text-ink"
                       >
-                        <span className="text-celadon">🖼</span> 画面
+                        画面
                       </button>
                       <button
                         type="button"
                         onClick={() => useSuggestion("帮我写一首歌：初夏的江南细雨，古筝与轻笛")}
                         className="flex items-center gap-1 transition-colors hover:text-ink"
                       >
-                        <span className="text-celadon">🎵</span> 音乐
+                        音乐
                       </button>
                     </div>
                     <button
@@ -1374,15 +1369,9 @@ export function AssistantHomePage() {
                   <button
                     key={g.title}
                     onClick={() => useSuggestion(g.items[0]!.prompt)}
-                    className={cn(
-                      "ai-glass group rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5",
-                      capAccent(g.accent),
-                    )}
+                    className="rounded-2xl border border-line bg-surface p-4 text-left shadow-zen transition-colors hover:border-primary/40"
                   >
-                    <div className="mb-2.5 flex h-8 w-8 items-center justify-center rounded-xl bg-foreground/10 text-lg transition-transform group-hover:scale-110">
-                      {g.icon}
-                    </div>
-                    <div className={cn("text-xs font-bold text-foreground", capAccent(g.accent))}>{g.icon} {g.title}</div>
+                    <div className="text-xs font-bold text-primary-text">{g.title}</div>
                     <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
                       {g.items.map((it) => it.label).join(" · ")}
                     </p>
@@ -1478,7 +1467,7 @@ export function AssistantHomePage() {
                               if (v) void send(v, i);
                             }}
                             disabled={!editVal.trim() || streaming}
-                            className="ai-glow-btn rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-950"
+                            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                           >
                             编辑重发
                           </button>
@@ -1702,9 +1691,9 @@ export function AssistantHomePage() {
                   key={c.label}
                   type="button"
                   onClick={() => useSkillChip(c.prompt)}
-                  className="flex items-center gap-1 rounded-full border border-border bg-foreground/5 px-2.5 py-1 text-[11px] text-foreground/80 transition-all hover:-translate-y-0.5 hover:border-primary/45 hover:text-primary-text"
+                  className="flex items-center rounded-full border border-border bg-foreground/5 px-2.5 py-1 text-[11px] text-foreground/80 transition-colors hover:border-primary/45 hover:text-primary-text"
                 >
-                  <span>{c.icon}</span> {c.label}
+                  {c.label}
                 </button>
               ))}
               <button
@@ -1899,17 +1888,11 @@ export function AssistantHomePage() {
         .ai-glass-input:focus-within{border-color:var(--color-ring)!important;box-shadow:0 0 18px color-mix(in srgb, var(--color-ring) 25%, transparent)}
         .ai-bubble-user{background:color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));border:1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);backdrop-filter:blur(16px);color:var(--color-foreground)}
         .ai-bubble-ai{background:var(--color-surface-raised);border:1px solid var(--color-border);backdrop-filter:blur(16px);color:var(--color-foreground)}
-        .ai-glow-btn{background:linear-gradient(135deg,var(--color-primary) 0%,var(--color-primary-hover) 100%);transition:all .3s ease}
-        .ai-glow-btn:hover{box-shadow:0 0 22px color-mix(in srgb, var(--color-primary) 45%, transparent)}
         .ai-send-btn{background:linear-gradient(135deg,var(--color-primary) 0%,var(--color-primary-hover) 100%);transition:all .3s ease}
-        .ai-input-shell{position:relative;border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb, var(--color-primary) 30%, transparent),color-mix(in srgb, var(--color-primary) 16%, transparent)) padding-box,linear-gradient(135deg,color-mix(in srgb, var(--color-primary) 55%, transparent),color-mix(in srgb, var(--color-primary) 30%, transparent)) border-box;border:1px solid transparent;padding:1px;box-shadow:var(--shadow-lift);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
-        .ai-input-shell:focus-within{box-shadow:0 0 26px color-mix(in srgb, var(--color-primary) 30%, transparent),var(--shadow-lift)}
-        .ai-input-shell > .ai-input-inner{background:var(--color-surface);border-radius:17px;padding:2px}
-        @keyframes aiShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-        .ai-grad-text{background:linear-gradient(90deg,var(--color-foreground) 0%,var(--color-primary) 40%,var(--color-foreground) 80%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:aiShimmer 6s linear infinite}
-        @keyframes aiShimmer{to{background-position:-200% center}}
-        .ai-glow-cyan{position:fixed;width:600px;height:600px;background:radial-gradient(circle,color-mix(in srgb, var(--color-primary) 10%, transparent) 0%,transparent 70%);border-radius:50%;pointer-events:none;z-index:0}
-        .ai-glow-purple{position:fixed;width:700px;height:700px;background:radial-gradient(circle,color-mix(in srgb, var(--color-primary) 8%, transparent) 0%,transparent 70%);border-radius:50%;pointer-events:none;z-index:0}
+        .ai-input-shell{position:relative;border-radius:18px;background:var(--color-surface);border:1px solid var(--color-border);box-shadow:var(--shadow-soft);transition:border-color .2s ease}
+        .ai-input-shell:focus-within{border-color:var(--color-ring)}
+        .ai-input-shell > .ai-input-inner{background:transparent;border-radius:17px;padding:2px}
+        /* v11 素版：渐变字/流光动画已移除 */
         .ai-scroll::-webkit-scrollbar{width:5px;height:5px}
         .ai-scroll::-webkit-scrollbar-track{background:transparent}
         .ai-scroll::-webkit-scrollbar-thumb{background:var(--color-border-strong);border-radius:4px}
