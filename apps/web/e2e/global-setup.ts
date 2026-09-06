@@ -14,10 +14,10 @@ export default async function globalSetup(_config: FullConfig) {
   await page.goto(baseURL + "/saios/login", { waitUntil: "domcontentloaded" });
   await page.getByPlaceholder(/输入系统账户名称/).fill(process.env.E2E_ADMIN_USER ?? "admin");
   await page.getByPlaceholder(/输入访问密码/).fill(process.env.E2E_ADMIN_PASS ?? "admin123");
-  await page.getByRole("button", { name: /登 录 创 作 中 枢/ }).click();
+  await page.getByRole("button", { name: /登录创作中枢/ }).click();
   await page.waitForURL(/^(?!.*\/login)/, { timeout: 20000 }).catch(async () => {
     // 登录页可能因限流偶发失败：重试一次
-    await page.getByRole("button", { name: /登 录 创 作 中 枢/ }).click();
+    await page.getByRole("button", { name: /登录创作中枢/ }).click();
     await page.waitForURL(/^(?!.*\/login)/, { timeout: 20000 });
   });
   await page.context().storageState({ path: authFile });
