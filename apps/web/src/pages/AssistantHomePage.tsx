@@ -37,7 +37,7 @@ import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { VoiceBadge } from "@/components/voice/VoiceBadge";
 import { useChatSessions } from "@/hooks/useChatSessions";
 import { AppError, apiClient, streamSse } from "@/lib/apiClient";
-import { refreshAssetUrl } from "@/lib/assetUrl";
+import { downloadAsset, refreshAssetUrl } from "@/lib/assetUrl";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { Link, useNavigate } from "react-router-dom";
@@ -212,6 +212,7 @@ export function AssistantHomePage() {
   const [showCaps, setShowCaps] = useState(false);
   // 生成画廊（本会话产出）开关
   const [showGallery, setShowGallery] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   // 是否显示工具调用过程（顶部开关真实控制）
   const [showTools, setShowTools] = useState(true);
   // 本会话所有生成媒体（图/漫画/音频），供画廊展示
@@ -856,6 +857,42 @@ export function AssistantHomePage() {
             </div>
             <div className="rounded-lg border border-dashed border-border-strong px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
               提示：在输入框输入 <span className="font-mono text-primary-text">/</span> 也能快速打开命令面板。
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============ 站内大图灯箱 ============ */}
+      {lightbox && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-ink/80 p-6"
+          onClick={() => setLightbox(null)}
+          onKeyDown={(e) => e.key === "Escape" && setLightbox(null)}
+        >
+          <div
+            className="flex max-h-full flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={lightbox}
+              alt="作品大图"
+              className="max-h-[78dvh] max-w-full rounded-2xl border border-line bg-surface object-contain shadow-zen"
+            />
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => void downloadAsset(lightbox, `saios-${Date.now()}`)}
+                className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                下载
+              </button>
+              <button
+                type="button"
+                onClick={() => setLightbox(null)}
+                className="rounded-xl border border-border bg-surface px-4 py-2 text-xs text-foreground/80 transition-colors hover:text-foreground"
+              >
+                关闭
+              </button>
             </div>
           </div>
         </div>
@@ -1558,7 +1595,8 @@ export function AssistantHomePage() {
                               const fresh = await refreshAssetUrl(m.image!);
                               if (fresh) el.src = fresh;
                             }}
-                            className="max-h-96 w-full rounded-xl border border-line border-b-4 border-b-celadon/30 object-cover"
+                            onClick={() => setLightbox(m.image!)}
+                            className="max-h-96 w-full cursor-zoom-in rounded-xl border border-line border-b-4 border-b-celadon/30 object-cover"
                           />
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] font-serif text-ink">
@@ -1566,13 +1604,10 @@ export function AssistantHomePage() {
                             </span>
                             <button
                               type="button"
-                              onClick={async () => {
-                                const fresh = await refreshAssetUrl(m.image!);
-                                window.open(fresh ?? m.image!, "_blank", "noopener");
-                              }}
+                              onClick={() => void downloadAsset(m.image!, `saios-${m.taskType || "asset"}`)}
                               className="rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] text-inkSub transition-colors hover:bg-foreground/10 hover:text-ink"
                             >
-                              下载 / 查看
+                              下载
                             </button>
                             <button
                               onClick={() => {

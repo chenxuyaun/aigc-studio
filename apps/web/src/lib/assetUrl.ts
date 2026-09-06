@@ -36,3 +36,22 @@ export function makeAssetErrorHandler(getEl: () => { src: string } | null, setSr
     if (fresh) setSrc(fresh);
   };
 }
+
+/** 下载资产：过期自动重签，blob 触发真实下载（文件名按 mime 推断扩展名）。 */
+export async function downloadAsset(url: string, basename = "saios"): Promise<void> {
+  let res = await fetch(url);
+  if (res.status === 401 || res.status === 403) {
+    const fresh = await refreshAssetUrl(url);
+    if (!fresh) return;
+    res = await fetch(fresh);
+  }
+  if (!res.ok) return;
+  const blob = await res.blob();
+  const ext = (blob.type.split("/")[1] || "bin").split(";")[0];
+  const obj = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = obj;
+  a.download = `${basename}.${ext}`;
+  a.click();
+  URL.revokeObjectURL(obj);
+}
