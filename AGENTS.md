@@ -2,6 +2,25 @@
 
 > 任何 AI 助手/工具接手本项目前，先读此文件 + `docs/PROJECT_SUMMARY.md`（完整全景）。
 
+## 剧本→分镜→视频 全流程（2026-09-04 打通，生产实证）
+
+**链路**：saiOS 故事页写剧本 → `/api/v1/generations/video/storyboard` 拆分镜（hub 文本链 LLM, Claude 主选）
+→ 每镜一个 video 任务（`model=""` 走 hub video 链）→ 160 GPU 节点 ComfyUI Wan2.1 出 mp4 落资产库。
+**生产实证**：POST storyboard（2 镜）→ 66s/129s 双双 succeeded → mp4 945KB/683KB 公网拉取 200；
+修复 context 丢传后 4 镜全部贴合章节（夜临双城/书房灯下/双城地图/旧剪报），首镜 64s 出片。
+
+**实现**：
+- `apps/api/app/api/v1/generations/video.py`：`POST /storyboard`（`{chapter_id, scenes:1-12, model}`）
+  → `get_chapter` 校验 → 章节正文前 2000 字当提示词（**必须走 `provider.generate(context, model, system=…, max_tokens=2048)`**，
+  context 是 user prompt 首参，system_prompt 是第 2 参 system=，曾经只传 system 导致 LLM 完全无视章节自由发挥）→
+  `_parse_scene_json` 容错解析；解析失败退回 `_split_chapter_fallback`（按段落直切，前缀「根据小说章节改编的镜头画面：」）。
+- 前端 `apps/web/src/pages/StoryboardPage.tsx`：`/storyboard/:projectId` 页面（章节选择/镜头数 4-6-8-12/生成分镜/失败重试/空格直接改 prompt/6s 轮询 recent 接口）。
+- `StoryProjectPage.tsx` 正文页新增「🎬 影视化」按钮 → `/storyboard/{projectId}?chapter={id}`。
+
+**部署注意**：改后端 → `_server_sync.py` 同步 → 服务器 `docker compose up -d --build api`；
+nginx SPA 白名单正则在 `/etc/nginx/sites-enabled/yuncai.site` 第 42 行大正则（`story|prompts|` 之间加 `storyboard`），
+新路由忘记加白名单会 404（已加）。改 nginx 后 `sudo nginx -t && sudo systemctl reload nginx`。
+
 ## 项目一句话
 
 AI 创作工作台（提示词库 / ASMR 资源 / 角色陪伴记忆 / 故事创作 / 多模态生成），
@@ -626,5 +645,35 @@ freeagentidentity —— grok 注册/翻墙工具链（服务器已有 Clash 可
 
 **✅ QuarkProvider 生产验证 + 旧脚本退役(482b9a6)**：api 容器内真实 WebDAV 往返 PUT→GET 字节一致→DELETE→删后 404 全过；`app/{applications,services}/quark_backup.py` 已删（能力由 `app/storage/quark_provider.py` 承接；asset_quark_backups 表与迁移保留）。
 
-**模型中心现状（2026-09-01）**：text=[cpa·Claude(主), cpa·GPT-OSS, 160·Qwen3-27B(本地兜底)]、image=[本地GPU·FLUX, cpa·Gemini-Image, grok2api]、video=[本地GPU·ComfyUI, MiniMax·H3(无 key，占位)]、audio=[Edge-TTS]、music=[本地GPU·MusicGen]。已删无效 provider：OpenRouter·GPT-Image、zarklab、本地GPU·MiniMax-H3(误标)。hub DELETE 必须传**完整 uuid**（8 位截断回「provider 不存在」）。
+**模型中心现状（2026-09-04 清理后，删光 160 相关 + 实测不可用）**：
+- 槽位链：text=[我的, 达叔]、image=[grok2api]、audio=[Edge-TTS]、video=[]、music=[]。
+- 现有 provider：我的(Deepseek-v4-flash)、达叔(GLM-5.2)、gmi(MiniMax-M3)、cpa·GPT-OSS、grok2api(生图)、Edge-TTS(本地型)。**全部实测可用**（POST /api/providers/{id}/test 最小请求：text 候选 200 / Grok chat 200 / cpa-OSS 200 / Gemini-M 200；Edge-TTS 无 base_url 本地型）。
+- 本轮已删 6 个：160 相关（本地 ComfyUI·Wan2.1、GPU·MusicGen）+ 探测不可用（cpa·Gemini-Image、cpa·Claude：antigravity oauth2 token EOF 上游 500；OpenAI：401 余额不足；MiniMax·H3：无 api key）。cpa 的模型列表本身可达（8317 /v1/models 正常），是 antigravity 账号 token 失效，非网关问题。
+- 160 已退出所有链；video/music 槽清空（无 160 节点 + 无云端 key，如实空槽）。
+- hub DELETE 必须传**完整 uuid**（8 位截断回「provider 不存在」）。
 
+
+## 160 转入「数据集标注」模式（2026-09-04）
+
+**用户决策**：暂停媒体生成，专注人工标注数据集（后接 YOLOv26x 训练）。已执行清理，**GPU 生成模型全部停掉**：
+
+| 组件 | 状态 | 备注 |
+|---|---|---|
+| gpu-node-comfyui-1（FLUX/Wan2.1） | ❌ 停 | `docker stop`（exit 137 正常） |
+| gpu-node-musicgen-1 | ❌ 停 | 同上 |
+| 8188 宿主 ComfyUI | ❌ 未运行 | 无监听无进程（如需恢复：`/data/ai-video/comfyui/venv_conda/bin/python main.py --listen 0.0.0.0 --port 8188`） |
+| myolotrain×2 / gitlab-runner | ❌ 停（早前已 Exited） | — |
+| **label-studio** | ✅ **8090**（新） | 原 8080 被 jpai-j 占用（jpai 用户保留）→ 容器已重建，数据挂载保留 |
+| ollama（qwen3.8-27b） | ✅ 保留 | 11434，hub text 链兜底（frp 7004） |
+| frpc 隧道 | ✅ 保留 | 7001/7002 指向已停容器（7004 qwen 仍通） |
+| jpai-p / jpai-j / elk / jenkins | ✅ 按用户要求保留 | jpai-j 占宿主 8080 |
+
+**label-studio 详情**：
+- 入口：`http://172.168.10.160:8090`（局域网直连），容器 `label-studio`（heartexlabs/label-studio:latest，--restart unless-stopped）
+- 账号：`yueshewushuang`（htx_user id=1）
+- 数据：宿主 `/data/ai-video/label-studio-data`（sqlite+media，含 3 个项目：New Project #1 / 反光检测 ×2）
+- 数据集挂载：宿主 `/opt/ai-video-raw`（ro）→ 容器 `/label-studio/data/images`，**68.3 万张**（frames/3 批抽帧 + person_count + raw_images/frames）
+- 重建命令（以后换端口）：`docker run -d --name label-studio -p 8090:8080 -v /data/ai-video/label-studio-data:/label-studio/data -v /opt/ai-video-raw:/label-studio/data/images:ro heartexlabs/label-studio:latest`
+
+**恢复生成**：`cd /root/gpu-node && docker-compose up -d comfyui musicgen`（/root/gpu-node/docker-compose.yml，该麒麟机只有 docker-compose 无 compose 子命令，别写错；frpc 容器不受影响）。
+**GPU 现状**：空闲 57 MiB / 16 GiB（qwen 未常驻，按需加载）。

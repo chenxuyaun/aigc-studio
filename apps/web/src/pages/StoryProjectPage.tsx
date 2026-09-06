@@ -228,6 +228,14 @@ export function StoryProjectPage() {
           >
             {consistencyBusy ? "检查中…" : "一致性检查"}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-primary"
+            onClick={() => navigate(`/storyboard/${projectId}?chapter=${selected?.id ?? ""}`)}
+          >
+            🎬 影视化
+          </Button>
           <select
             value={p.status}
             onChange={(e) => void updateProject({ status: e.target.value as StoryProject["status"] })}
