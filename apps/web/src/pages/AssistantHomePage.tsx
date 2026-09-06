@@ -37,6 +37,7 @@ import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import { VoiceBadge } from "@/components/voice/VoiceBadge";
 import { useChatSessions } from "@/hooks/useChatSessions";
 import { AppError, apiClient, streamSse } from "@/lib/apiClient";
+import { refreshAssetUrl } from "@/lib/assetUrl";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { Link, useNavigate } from "react-router-dom";
@@ -880,7 +881,18 @@ export function AssistantHomePage() {
               {mediaItems.map((m, idx) => (
                 <div key={idx} className="overflow-hidden rounded-xl border border-border bg-surface-raised/60">
                   {m.media === "audio" ? (
-                    <audio controls src={m.image} className="w-full" />
+                    <audio
+                            controls
+                            src={m.image}
+                            onError={async (e) => {
+                              const el = e.currentTarget;
+                              if (el.dataset.refreshed) return;
+                              el.dataset.refreshed = "1";
+                              const fresh = await refreshAssetUrl(m.image!);
+                              if (fresh) el.src = fresh;
+                            }}
+                            className="w-full"
+                          />
                   ) : (
                     <img
                       src={m.image}
@@ -1521,27 +1533,47 @@ export function AssistantHomePage() {
                               🔄 再生成
                             </button>
                           </p>
-                          <audio controls src={m.image} className="w-full" />
+                          <audio
+                            controls
+                            src={m.image}
+                            onError={async (e) => {
+                              const el = e.currentTarget;
+                              if (el.dataset.refreshed) return;
+                              el.dataset.refreshed = "1";
+                              const fresh = await refreshAssetUrl(m.image!);
+                              if (fresh) el.src = fresh;
+                            }}
+                            className="w-full"
+                          />
                         </div>
                       ) : (
                         <div className="max-w-full">
                           <img
                             src={m.image}
                             alt={m.media === "comic" ? "AI 漫画" : "AI 生成"}
+                            onError={async (e) => {
+                              const el = e.currentTarget;
+                              if (el.dataset.refreshed) return;
+                              el.dataset.refreshed = "1";
+                              const fresh = await refreshAssetUrl(m.image!);
+                              if (fresh) el.src = fresh;
+                            }}
                             className="max-h-96 w-full rounded-xl border border-line border-b-4 border-b-celadon/30 object-cover"
                           />
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] font-serif text-ink">
                               {m.media === "comic" ? "🎴 AI 漫画" : "🖼 AI 生成 · 题跋钤印"}
                             </span>
-                            <a
-                              href={m.image}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const fresh = await refreshAssetUrl(m.image!);
+                                window.open(fresh ?? m.image!, "_blank", "noopener");
+                              }}
                               className="rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] text-inkSub transition-colors hover:bg-foreground/10 hover:text-ink"
                             >
-                              ⬇ 下载 / 查看
-                            </a>
+                              下载 / 查看
+                            </button>
                             <button
                               onClick={() => {
                                 const prompt = [...messages.slice(0, i)]
