@@ -6,8 +6,8 @@ export type ThemeMode = "light" | "dark" | "system";
 export type SkinName = "cyan" | "purple" | "emerald" | "mono";
 
 export const SKINS: { key: SkinName; label: string; dot: string }[] = [
-  { key: "cyan", label: "赛博冷青", dot: "#06b6d4" },
-  { key: "purple", label: "量子紫罗兰", dot: "#8b5cf6" },
+  { key: "cyan", label: "宣纸青瓷（v11 默认）", dot: "#2f6359" },
+  { key: "purple", label: "朱砂紫檀", dot: "#8b5cf6" },
   { key: "emerald", label: "黑曜翡翠", dot: "#10b981" },
   { key: "mono", label: "钛银极简", dot: "#94a3b8" },
 ];

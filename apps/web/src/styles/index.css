@@ -23,36 +23,48 @@
  * 子树继承覆盖值。不要用 --color-x: var(--自定义) 的间接引用——那样 :root 解析不到
  * 作用域变量会导致颜色为空（琥珀金不显示的根因）。
  */
+/*
+ * 设计 v11「极简心流」（saios_v11_0.html）：宣纸白 × 青瓷 · 玄墨深色 × 夜青。
+ * 只换变量值，全站组件（bg-primary/text-primary…）自动变脸，零 class 改动。
+ */
 @theme {
-  --color-background: #faf9f6;
-  --color-foreground: #1c1b18;
+  --color-background: #f9f8f6;
+  --color-foreground: #141518;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-border: #ece9e1;
-  --color-border-strong: #e2ded3;
-  --color-input: #e2ded3;
-  --color-ring: #e8912a;
-  --color-primary: #e8912a;
-  --color-primary-hover: #d0801e;
+  --color-border: #edeae3;
+  --color-border-strong: #e0dcd2;
+  --color-input: #e0dcd2;
+  --color-ring: #2f6359;
+  --color-primary: #2f6359;
+  --color-primary-hover: #27534a;
   --color-primary-foreground: #ffffff;
-  /* 文字场景琥珀（背景上的正文/链接/标签，对比度≥4.5:1，WCAG AA）；
+  /* 文字场景青瓷（背景上的正文/链接/标签，对比度≥4.5:1，WCAG AA）；
    * 填充场景（按钮底色）继续用 --color-primary 品牌色 */
-  --color-primary-text: #a5630f;
-  --color-secondary: #f2efe8;
+  --color-primary-text: #2b584e;
+  --color-secondary: #f3f2ee;
   --color-secondary-foreground: #33302a;
-  --color-muted: #f2efe8;
-  --color-muted-foreground: #78736a;
+  --color-muted: #f3f2ee;
+  --color-muted-foreground: #60646c;
   --color-success: #2f9e6a;
-  --color-warning: #c98a1e;
-  --color-danger: #cf4a34;
+  --color-warning: #c07f14;
+  --color-danger: #a82e35;
   --color-info: #2b7fc4;
-  --radius-card: 18px;
-  /* 展示字体：拉丁/数字走 Fraunces（编辑感衬线），中文回落系统黑体 */
-  --font-display: "Fraunces Variable", "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Noto Sans SC", serif;
+  --radius-card: 20px;
+  /* v11 极简心流语义 token（hub 桌面/展卷卡用）：青瓷=品牌主色同值；ink=玄墨正文；
+   * inkSub=次级正文；line=发丝线（rgba 灰） */
+  --color-celadon: #2f6359;
+  --color-ink: #141518;
+  --color-inkSub: #60646c;
+  --color-line: rgba(72, 68, 60, 0.14);
+  --shadow-zen: 0 12px 32px -8px rgba(0, 0, 0, 0.06), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  /* 展示字体：拉丁/数字走 Fraunces（编辑感衬线），中文回退到宋体系衬线（Noto Serif SC/Songti） */
+  --font-display: "Fraunces Variable", "Noto Serif SC", "Songti SC",
+    "SimSun", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans SC", serif;
   --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
-  --radius-button: 12px;
+  --radius-button: 14px;
 }
 
 [data-aigc-studio-root] {
@@ -68,29 +80,37 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* 深色（暖炭底 + 琥珀金）——覆盖 --color-* */
+/* 深色（玄墨底 + 夜青）——覆盖 --color-* */
 @media (prefers-color-scheme: dark) {
   [data-aigc-studio-root][data-theme="system"] {
-    --color-background: #05070c;
-    --color-foreground: #f1f5f9;
-    --color-surface: #0c111d;
-    --color-surface-raised: #131a2b;
-    --color-border: #233349;
-    --color-border-strong: #2e415c;
-    --color-input: #1e293b;
-    --color-ring: #00f2fe;
-    --color-primary: #00f2fe;
-    --color-primary-hover: #22c8d8;
-    --color-primary-foreground: #06202a;
-    --color-primary-text: #22d3ee;
-    --color-secondary: #131a2b;
-    --color-secondary-foreground: #dbe4f0;
-    --color-muted: #0d1424;
-    --color-muted-foreground: #9aa3b5;
-    --color-success: #10b981;
-    --color-warning: #f59e0b;
-    --color-danger: #f43f5e;
-    --color-info: #4facfe;
+    --color-background: #111215;
+    --color-foreground: #f0f2f5;
+    --color-surface: #1a1c20;
+    --color-surface-raised: #22252a;
+    --color-border: #2c2f35;
+    --color-border-strong: #3a3e46;
+    --color-input: #2e3138;
+    --color-ring: #448275;
+    --color-primary: #448275;
+    --color-primary-hover: #52917f;
+    --color-primary-foreground: #0b1412;
+    --color-primary-text: #6fa896;
+    --color-secondary: #22252a;
+    --color-secondary-foreground: #dbe0e6;
+    --color-muted: #202328;
+    --color-muted-foreground: #9197a3;
+    --color-success: #3d9a6f;
+    --color-warning: #d39a2e;
+    --color-success: #3d9a6f;
+    --color-warning: #d39a2e;
+    --color-danger: #c23b43;
+    --color-info: #5b96d6;
+    /* v11 深色：夜青 celadon、玄墨反白 ink */
+    --color-celadon: #448275;
+    --color-ink: #f0f2f5;
+    --color-inkSub: #9197a3;
+    --color-line: rgba(255, 255, 255, 0.1);
+    --shadow-zen: 0 12px 32px -8px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
     --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 34px -18px rgba(0, 0, 0, 0.7);
     --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.45), 0 20px 48px -16px rgba(0, 0, 0, 0.75);
     --shadow-pop: 0 4px 12px rgba(0, 0, 0, 0.5), 0 28px 72px -20px rgba(0, 0, 0, 0.8);
@@ -99,26 +119,32 @@
 }
 
 [data-aigc-studio-root][data-theme="dark"] {
-  --color-background: #05070c;
-  --color-foreground: #f1f5f9;
-  --color-surface: #0c111d;
-  --color-surface-raised: #131a2b;
-  --color-border: #233349;
-  --color-border-strong: #2e415c;
-  --color-input: #1e293b;
-  --color-ring: #00f2fe;
-  --color-primary: #00f2fe;
-  --color-primary-hover: #22c8d8;
-  --color-primary-foreground: #06202a;
-  --color-primary-text: #22d3ee;
-  --color-secondary: #131a2b;
-  --color-secondary-foreground: #dbe4f0;
-  --color-muted: #0d1424;
-  --color-muted-foreground: #9aa3b5;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #f43f5e;
-  --color-info: #4facfe;
+  --color-background: #111215;
+  --color-foreground: #f0f2f5;
+  --color-surface: #1a1c20;
+  --color-surface-raised: #22252a;
+  --color-border: #2c2f35;
+  --color-border-strong: #3a3e46;
+  --color-input: #2e3138;
+  --color-ring: #448275;
+  --color-primary: #448275;
+  --color-primary-hover: #5a9180;
+  --color-primary-foreground: #0b1412;
+  --color-primary-text: #6fa896;
+  --color-secondary: #22252a;
+  --color-secondary-foreground: #dbe0e6;
+  --color-muted: #202328;
+  --color-muted-foreground: #9197a3;
+  --color-success: #3d9a6f;
+  --color-warning: #d9a02e;
+  --color-danger: #c23b43;
+  --color-info: #5b96d6;
+  /* v11 深色：夜青 celadon、玄墨反白 ink */
+  --color-celadon: #448275;
+  --color-ink: #f0f2f5;
+  --color-inkSub: #9197a3;
+  --color-line: rgba(255, 255, 255, 0.1);
+  --shadow-zen: 0 12px 32px -8px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 34px -18px rgba(0, 0, 0, 0.7);
   --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.45), 0 20px 48px -16px rgba(0, 0, 0, 0.75);
   --shadow-pop: 0 4px 12px rgba(0, 0, 0, 0.5), 0 28px 72px -20px rgba(0, 0, 0, 0.8);
@@ -280,16 +306,16 @@ body {
   box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-ring);
 }
 
-/* 琥珀渐变文字（大标题点缀） */
+/* 青瓷渐变文字（大标题点缀） */
 .gradient-text-amber {
-  background: linear-gradient(120deg, var(--color-primary) 0%, #f2b45e 55%, var(--color-primary-hover) 100%);
+  background: linear-gradient(120deg, var(--color-primary) 0%, #5a8d71 55%, var(--color-primary-hover) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 ::selection {
-  background: rgba(232, 145, 42, 0.28);
+  background: rgba(47, 99, 89, 0.28);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -301,11 +327,11 @@ body {
   }
 }
 
-/* ═══ saiOS v2 P2: Cyber Quantum Studio（设计稿 saios_v2 落地）═══ */
+/* ═══ saiOS v11: Studio 引擎形制（设计稿 v11 心流）═══ */
 .st-root {
-  --st-accent: #06b6d4;
-  --st-accent-rgb: 6, 182, 212;
-  --st-border: rgba(6, 182, 212, 0.22);
+  --st-accent: #2f6359;
+  --st-accent-rgb: 47, 99, 89;
+  --st-border: rgba(47, 99, 89, 0.22);
 }
 .st-root[data-theme="purple"] { --st-accent: #8b5cf6; --st-accent-rgb: 139, 92, 246; --st-border: rgba(139, 92, 246, 0.25); }
 .st-root[data-theme="emerald"] { --st-accent: #10b981; --st-accent-rgb: 16, 185, 129; --st-border: rgba(16, 185, 129, 0.25); }
@@ -332,7 +358,7 @@ body {
 }
 
 .st-panel {
-  background: rgba(11, 16, 29, 0.72);
+  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
   border: 1px solid var(--st-border);
   backdrop-filter: blur(14px);
   border-radius: 18px;
