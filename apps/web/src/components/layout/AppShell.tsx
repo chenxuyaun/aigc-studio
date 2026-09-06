@@ -1,43 +1,23 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
 
 import {
-  Bot,
-  BookOpen,
-  Globe,
-  Clapperboard,
-  Camera,
-  Film,
-  FolderOpen,
-  Headphones,
-  Image,
   Layers,
   Library,
-  Lightbulb,
-  ListChecks,
   LogOut,
   MessageCircle,
-  Mic,
   Monitor,
   Moon,
   MoreHorizontal,
-  Music,
   Palette,
-  PenLine,
-  PenTool,
   ScrollText,
   Search,
   Server,
   Sun,
-  UserPlus,
   Users,
-  Video,
-  Wand2,
-  Workflow,
   Sparkles,
-  Sprout,
   BarChart3,
 } from "lucide-react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 
 import { useHost } from "@/microfrontend/hostContext";
 import { cn } from "@/lib/cn";
@@ -57,73 +37,24 @@ interface NavItem {
 }
 
 /**
- * 导航分组（saiOS v2 IA）：对齐设计稿七大类——对话 / 创作引擎 / 资产中心 /
- * 角色故事 / 自动化 / 资源库 / 系统。v2 终态路由（/studio 等）在 P1-P2 落地，
- * P0 阶段先把全部 27 个悬空页露出，确保任何路由 ≤2 次点击可达。
+ * v11 四场所导航（设计稿 saios_v11_0.html）：派活中枢 / 创作工坊 / 资产藏馆 / 角色宇宙。
+ * 顶栏居中胶囊四键；系统组（adminOnly）收进右上「更多」抽屉。
+ * 能力=对话芯片与 Studio 引擎 tab；产物=/library 类型 tab；场所才配拥有导航项。
  */
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
-    label: "对话",
+    label: "场所",
     items: [
-      { to: "/", label: "AI 调度大厅", short: "调度", icon: Sparkles, mobile: true },
-    ],
-  },
-  {
-    label: "创作引擎",
-    items: [
-      { to: "/studio", label: "统一 Studio", short: "Studio", icon: Layers, mobile: true },
-      { to: "/inspiration", label: "灵感画廊", short: "灵感", icon: Lightbulb, mobile: false },
-      { to: "/create/image", label: "图像生成", short: "图像", icon: Image, mobile: false },
-      { to: "/create/comic", label: "漫画分镜", short: "漫画", icon: PenTool, mobile: false },
-      { to: "/create/text", label: "文本写作", short: "写作", icon: PenLine, mobile: false },
-      { to: "/create/audio", label: "语音合成", short: "语音", icon: Mic, mobile: false },
-      { to: "/create/music", label: "音乐创作", short: "音乐", icon: Music, mobile: false },
-      { to: "/create/video", label: "视频生成", short: "视频", icon: Video, mobile: false },
-      { to: "/create/character-card", label: "角色捏卡", short: "捏卡", icon: UserPlus, mobile: false },
-      { to: "/create/studio", label: "AI 导演", short: "导演", icon: Film, mobile: false },
-      { to: "/create/prompt", label: "提示词工坊", short: "造词", icon: Wand2, mobile: false },
-    ],
-  },
-  {
-    label: "资产中心",
-    items: [
-      { to: "/works", label: "我的作品", short: "作品", icon: Clapperboard, mobile: true },
-      { to: "/tasks", label: "任务中心", short: "任务", icon: ListChecks, mobile: true },
-      { to: "/assets", label: "素材库", short: "素材", icon: FolderOpen, mobile: false },
-      { to: "/photography", label: "写真摄影", short: "摄影", icon: Camera, mobile: false },
-    ],
-  },
-  {
-    label: "角色 & 故事",
-    items: [
-      { to: "/persona", label: "角色中心", short: "角色中心", icon: Users, mobile: false },
-      { to: "/roleplay", label: "角色扮演", short: "角色", icon: MessageCircle, mobile: true },
-      { to: "/story", label: "故事工作室", short: "故事", icon: BookOpen, mobile: false },
-    ],
-  },
-  {
-    label: "自动化",
-    items: [
-      { to: "/workflows", label: "工作流编排", short: "工作流", icon: Workflow, mobile: false },
-      { to: "/team", label: "Agent 团队", short: "团队", icon: Users, mobile: false },
-    ],
-  },
-  {
-    label: "资源库",
-    items: [
-      { to: "/prompts", label: "提示词库", short: "提示词", icon: Library, mobile: false },
-      { to: "/knowledge", label: "知识库", short: "知识库", icon: BookOpen, mobile: false },
-      { to: "/asmr", label: "ASMR 库", short: "ASMR", icon: Headphones, mobile: false },
-      { to: "/agents", label: "Agent 库", short: "Agent", icon: Bot, mobile: false },
-      { to: "/search", label: "全域搜索", short: "搜索", icon: Search, mobile: false },
-      { to: "/community", label: "分享墙", short: "分享墙", icon: Globe, mobile: false },
+      { to: "/", label: "派活中枢", short: "派活", icon: Sparkles, mobile: true },
+      { to: "/studio", label: "创作工坊", short: "工坊", icon: Layers, mobile: true },
+      { to: "/library/works", label: "资产藏馆", short: "藏馆", icon: Library, mobile: true },
+      { to: "/roleplay", label: "角色宇宙", short: "角色", icon: MessageCircle, mobile: true },
     ],
   },
   {
     label: "系统",
     items: [
-      { to: "/dashboard", label: "数据看板", short: "看板", icon: BarChart3, mobile: false },
-      { to: "/growth", label: "AI 成长足迹", short: "成长", icon: Sprout, mobile: false },
+      { to: "/dashboard", label: "系统看板", short: "看板", icon: BarChart3, mobile: false, adminOnly: true },
       {
         to: "/settings/providers",
         label: "模型中心",
@@ -152,7 +83,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
 ];
 
-// 扁平导航（移动端底部/悬浮导航用）
+// 扁平导航（移动端底部/悬浮导航用）：底栏 = 主导航 4 项 + 更多抽屉
 const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 const SCOPE_LABELS: Record<string, string> = {
@@ -174,15 +105,15 @@ function resultTarget(item: SearchResultItem): string {
         : "/story";
     }
     case "knowledge":
-      return "/knowledge";
+      return "/library/knowledge";
     case "prompts":
-      return `/prompts?q=${encodeURIComponent(item.title)}`;
+      return `/library/prompts?q=${encodeURIComponent(item.title)}`;
     case "agents":
-      return `/agents?search=${encodeURIComponent(item.title)}`;
+      return `/library/agents?search=${encodeURIComponent(item.title)}`;
     case "asmr":
-      return `/asmr?q=${encodeURIComponent(item.title)}`;
+      return `/library/asmr?q=${encodeURIComponent(item.title)}`;
     default:
-      return "/assets";
+      return "/library/assets";
   }
 }
 
@@ -206,17 +137,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const debounceRef = useRef<number | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
-  const location = useLocation();
-  // 收敛：默认折叠「资源/角色/系统」组，只展开「创作」主入口（点组标题展开，功能不删只收纳）
-  const [collapsedGroups, setCollapsedGroups] = useState<string[]>(() =>
-    NAV_GROUPS.filter((g) => g.label !== "创作").map((g) => g.label),
-  );
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const visibleNav = NAV.filter((n) => !n.adminOnly || user?.role === "admin");
   const mobileNav = visibleNav.filter((n) => n.mobile);
-  // 底部导航：前 5 项 + 「更多」抽屉（含其余移动项 + 桌面项 + 管理项）
-  const primaryNav = mobileNav.slice(0, 5);
+  // 底部导航：前 4 项 + 「更多」抽屉（含其余移动项 + 桌面项 + 管理项）
+  const primaryNav = mobileNav.slice(0, 4);
   const restNav = [
-    ...mobileNav.slice(5),
+    ...mobileNav.slice(4),
     ...visibleNav.filter((n) => !n.mobile),
   ];
 
@@ -293,145 +220,161 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background md:flex-row">
-      {/* 桌面侧栏 */}
-      {!compact && (
-        <aside className="hidden h-dvh w-[228px] shrink-0 flex-col border-r border-border bg-surface px-3.5 py-4 md:flex">
-          <div className="flex items-center gap-2.5 px-2 pb-4">
-            <img
-              src="/logo.png"
-              alt="SAIOS"
-              className="h-8 w-8 rounded-[10px] object-cover"
-              draggable={false}
-            />
-            <span className="font-bold leading-tight tracking-tight">
-              SAIOS
-              <span className="block text-[10px] font-normal text-muted-foreground">
-                AIGC Studio
+    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+      <div className="flex h-dvh min-w-0 flex-1 flex-col overflow-hidden">
+        {!compact && (
+          <header className="relative z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-3 backdrop-blur md:px-5">
+            {/* v11 品牌标 */}
+            <div
+              className="flex shrink-0 cursor-pointer select-none items-center gap-2"
+              onClick={() => navigate("/")}
+            >
+              <span className="grid h-7 w-7 place-items-center rounded-xl bg-foreground font-serif text-xs font-medium text-background">
+                s
               </span>
-            </span>
-          </div>
-          <nav className="flex-1 space-y-1 overflow-y-auto" aria-label="主导航">
-            {NAV_GROUPS.map((group) => {
-              const items = group.items.filter((n) => !n.adminOnly || user?.role === "admin");
-              if (items.length === 0) return null;
-              const isCollapsed = collapsedGroups.includes(group.label);
-              // 组内有当前激活项时强制展开（保证用户不会迷路）
-              const activeInGroup = items.some((it) => it.to === location.pathname);
-              const showItems = !isCollapsed || activeInGroup;
-              return (
-                <div key={group.label} className="mb-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCollapsedGroups((prev) =>
-                        prev.includes(group.label)
-                          ? prev.filter((g) => g !== group.label)
-                          : [...prev, group.label],
-                      )
-                    }
-                    className="mb-1 flex w-full items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 hover:text-foreground"
-                  >
-                    <span>{group.label}</span>
-                    <span className="text-[9px]">{showItems ? "▾" : "▸"}</span>
-                  </button>
-                  {showItems &&
-                    items.map((item) => (
+              <span className="hidden items-baseline gap-1.5 md:flex">
+                <span className="font-serif text-sm font-medium tracking-wide">saiOS</span>
+                <span className="rounded border border-primary/25 bg-primary/10 px-1 py-px font-mono text-[9px] text-primary-text">
+                  v11.0
+                </span>
+              </span>
+            </div>
+
+            {/* 顶栏胶囊四键（设计稿中心分段导航，md+ 显示） */}
+            <nav
+              className="mx-auto hidden items-center gap-1 rounded-full border border-border bg-black/[0.03] p-1 dark:bg-white/[0.04] md:flex"
+              aria-label="场所"
+            >
+              {primaryNav.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === "/"}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all",
+                      isActive
+                        ? "bg-surface text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground",
+                    )
+                  }
+                >
+                  <item.icon className="h-3.5 w-3.5" aria-hidden />
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+
+            {/* 右侧动作：搜索（浮层）＋皮肤＋主题＋更多下拉＋头像 */}
+            <div className="ml-auto flex items-center gap-2">
+              <div ref={boxRef} className="relative">
+                <button
+                  onClick={() => setSearchOpen((v) => !v)}
+                  aria-label="搜索全部"
+                  title="搜索全部"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-border-strong text-muted-foreground hover:border-primary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Search className="h-4.5 w-4.5" aria-hidden />
+                </button>
+                {searchOpen && (
+                  <div className="absolute right-0 top-11 z-50 w-[min(92vw,26rem)] rounded-2xl border border-border bg-surface-raised p-2 shadow-2xl">
+                    <form
+                      className="flex h-9 items-center"
+                      onSubmit={(e: FormEvent) => {
+                        e.preventDefault();
+                        goSearchPage(searchQ.trim());
+                      }}
+                    >
+                      <input
+                        value={searchQ}
+                        onChange={(e) => setSearchQ(e.target.value)}
+                        onFocus={() => {
+                          if (searchResults?.length) setSearchOpen(true);
+                        }}
+                        placeholder="搜索全部（知识库/章节/提示词…）"
+                        aria-label="搜索全部"
+                        autoFocus
+                        className="h-9 w-full rounded-xl border border-border-strong bg-surface py-0 pl-3 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </form>
+                    {searchResults && searchResults.length > 0 && (
+                      <div className="max-h-[60vh] overflow-y-auto pt-1">
+                        {Object.entries(grouped).map(([scope, items]) => (
+                          <div key={scope} className="mb-1">
+                            <p className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {SCOPE_LABELS[scope] ?? scope}
+                            </p>
+                            {items.slice(0, 5).map((item) => (
+                              <button
+                                key={`${scope}-${item.id}`}
+                                onClick={() => openResult(item)}
+                                className="flex w-full flex-col gap-0.5 rounded-xl px-2.5 py-2 text-left hover:bg-secondary"
+                              >
+                                <span className="truncate text-sm font-medium text-foreground">
+                                  {item.title}
+                                </span>
+                                <span className="line-clamp-1 text-xs text-muted-foreground">
+                                  {item.snippet}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => goSearchPage(searchQ.trim())}
+                          className="mt-1 w-full rounded-xl border-t border-border px-2.5 py-2 text-xs font-medium text-primary-text"
+                        >
+                          查看全部结果 →
+                        </button>
+                      </div>
+                    )}
+                    {searchResults && searchResults.length === 0 && !searchBusy && searchQ.trim() !== "" && (
+                      <div className="px-3 py-3 text-sm text-muted-foreground">未找到匹配内容</div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {/* 系统「更多」下拉（md+，含 admin 专属项，restNav 已按角色过滤） */}
+              <div className="relative hidden md:block">
+                <button
+                  onClick={() => setMoreMenuOpen((v) => !v)}
+                  aria-label="更多"
+                  title="更多"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-border-strong text-muted-foreground hover:border-primary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <MoreHorizontal className="h-4.5 w-4.5" aria-hidden />
+                </button>
+                {moreMenuOpen && (
+                  <div className="absolute right-0 top-11 z-50 w-52 rounded-2xl border border-border bg-surface-raised p-1.5 shadow-2xl">
+                    <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                      系统
+                    </p>
+                    {restNav.map((item) => (
                       <NavLink
                         key={item.to}
                         to={item.to}
-                        end={item.to === "/"}
+                        onClick={() => setMoreMenuOpen(false)}
                         className={({ isActive }) =>
                           cn(
-                            "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
-                            isActive
-                              ? "bg-primary/12 font-semibold text-primary-text"
-                              : "font-medium text-muted-foreground hover:bg-secondary hover:text-foreground",
+                            "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted-foreground hover:bg-muted",
+                            isActive ? "text-primary-text" : "",
                           )
                         }
                       >
-                        <item.icon className="h-[18px] w-[18px]" aria-hidden />
+                        <item.icon className="h-4 w-4" aria-hidden />
                         {item.label}
                       </NavLink>
                     ))}
-                </div>
-              );
-            })}
-          </nav>
-          <button
-            onClick={logout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
-          >
-            <LogOut className="h-[18px] w-[18px]" aria-hidden />
-            退出登录
-          </button>
-        </aside>
-      )}
-
-      <div className="flex h-dvh min-w-0 flex-1 flex-col overflow-hidden">
-        {!compact && (
-          <header className="relative z-40 flex h-15 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur md:px-6">
-            <div ref={boxRef} className="relative flex-1 md:max-w-sm">
-              <form
-                className="relative flex h-9 items-center"
-                onSubmit={(e: FormEvent) => {
-                  e.preventDefault();
-                  goSearchPage(searchQ.trim());
-                }}
-              >
-                <Search
-                  className="pointer-events-none absolute left-3 h-4 w-4 text-muted-foreground"
-                  aria-hidden
-                />
-                <input
-                  value={searchQ}
-                  onChange={(e) => setSearchQ(e.target.value)}
-                  onFocus={() => {
-                    if (searchResults?.length) setSearchOpen(true);
-                  }}
-                  placeholder="搜索全部（知识库/章节/提示词…）"
-                  aria-label="搜索全部"
-                  className="h-9 w-full rounded-full border border-border-strong bg-surface py-0 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </form>
-              {searchOpen && searchResults && searchResults.length > 0 && (
-                <div className="absolute left-0 right-0 top-11 z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-border bg-surface-raised p-2 shadow-2xl">
-                  {Object.entries(grouped).map(([scope, items]) => (
-                    <div key={scope} className="mb-1">
-                      <p className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {SCOPE_LABELS[scope] ?? scope}
-                      </p>
-                      {items.slice(0, 5).map((item) => (
-                        <button
-                          key={`${scope}-${item.id}`}
-                          onClick={() => openResult(item)}
-                          className="flex w-full flex-col gap-0.5 rounded-xl px-2.5 py-2 text-left hover:bg-secondary"
-                        >
-                          <span className="truncate text-sm font-medium text-foreground">
-                            {item.title}
-                          </span>
-                          <span className="line-clamp-1 text-xs text-muted-foreground">
-                            {item.snippet}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => goSearchPage(searchQ.trim())}
-                    className="mt-1 w-full rounded-xl border-t border-border px-2.5 py-2 text-xs font-medium text-primary-text"
-                  >
-                    查看全部结果 →
-                  </button>
-                </div>
-              )}
-              {searchOpen && searchResults && searchResults.length === 0 && !searchBusy && (
-                <div className="absolute left-0 right-0 top-11 z-50 rounded-2xl border border-border bg-surface-raised px-3 py-3 text-sm text-muted-foreground shadow-2xl">
-                  未找到匹配内容
-                </div>
-              )}
-            </div>
-            <div className="ml-auto flex items-center gap-2">
+                    <button
+                      onClick={logout}
+                      className="mt-1 flex w-full items-center gap-2.5 rounded-xl border-t border-border px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted"
+                    >
+                      <LogOut className="h-4 w-4" aria-hidden />
+                      退出登录
+                    </button>
+                  </div>
+                )}
+              </div>
               {/* v2 P3 皮肤引擎：四皮肤全局切换（品牌主色即时生效） */}
               <div className="relative">
                 <button
