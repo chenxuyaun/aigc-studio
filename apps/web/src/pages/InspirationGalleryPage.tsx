@@ -317,7 +317,7 @@ export function InspirationGalleryPage() {
               <button
                 key={c.id}
                 onClick={() => setDetail(c)}
-                className="group overflow-hidden rounded-xl border border-border bg-surface text-left shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)]"
+                className="group overflow-hidden rounded-xl border border-border bg-surface text-left shadow-[var(--shadow-soft)] transition-[box-shadow,border-color] hover:border-primary hover:shadow-[var(--shadow-lift)]"
               >
                 <div className="relative aspect-square overflow-hidden bg-muted">
                   <img
@@ -327,7 +327,7 @@ export function InspirationGalleryPage() {
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                   />
                   {c.f && (
-                    <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-bold text-amber-300 backdrop-blur">
+                    <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold text-primary-text backdrop-blur">
                       ★ 精选
                     </span>
                   )}

@@ -376,7 +376,7 @@ function StatusBadge({ status }: { status: string }) {
     failed: "失败",
   };
   const cls: Record<string, string> = {
-    queued: "bg-amber-500/15 text-amber-600",
+    queued: "bg-muted text-muted-foreground",
     processing: "bg-blue-500/15 text-blue-600",
     succeeded: "bg-emerald-500/15 text-emerald-600",
     failed: "bg-destructive/15 text-destructive",

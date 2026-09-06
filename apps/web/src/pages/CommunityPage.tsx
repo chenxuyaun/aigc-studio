@@ -116,21 +116,21 @@ export default function CommunityPage() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
       <header>
-        <h1 className="text-xl font-semibold text-slate-100">🌍 分享墙</h1>
-        <p className="mt-1 text-xs text-slate-400">
+        <h1 className="text-xl font-semibold text-foreground">分享墙</h1>
+        <p className="mt-1 text-xs text-muted-foreground">
           展示你的创作成果，看看其他创作者在做什么。共 {total} 个分享。
         </p>
       </header>
 
       {/* 发布表单 */}
       <section className="ai-glass rounded-2xl p-4">
-        <h2 className="text-sm font-medium text-slate-200">✍️ 分享我的作品</h2>
+        <h2 className="text-sm font-medium text-foreground">分享我的作品</h2>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="标题（必填）"
           maxLength={120}
-          className="ai-glass-input mt-2 w-full rounded-lg px-3 py-2 text-sm text-slate-100 outline-none"
+          className="ai-glass-input mt-2 w-full rounded-lg px-3 py-2 text-sm text-foreground outline-none"
         />
         <textarea
           value={content}
@@ -138,21 +138,21 @@ export default function CommunityPage() {
           rows={3}
           placeholder="介绍一下这个作品…"
           maxLength={4000}
-          className="ai-glass-input mt-2 w-full resize-y rounded-lg px-3 py-2 text-sm text-slate-100 outline-none"
+          className="ai-glass-input mt-2 w-full resize-y rounded-lg px-3 py-2 text-sm text-foreground outline-none"
         />
         <input
           value={imageUrl}
           onChange={(e) => setImageUrl(e.target.value)}
           placeholder="图片链接（可选，填了就以图片帖展示）"
           maxLength={500}
-          className="ai-glass-input mt-2 w-full rounded-lg px-3 py-2 text-xs text-slate-100 outline-none"
+          className="ai-glass-input mt-2 w-full rounded-lg px-3 py-2 text-xs text-foreground outline-none"
         />
         <div className="mt-2 flex items-center gap-3">
           <button
             type="button"
             onClick={() => void publish()}
             disabled={publishing || !title.trim()}
-            className="rounded-lg bg-cyan-600/80 px-4 py-1.5 text-sm font-medium text-white hover:bg-cyan-600 disabled:opacity-50"
+            className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {publishing ? "发布中…" : "🚀 发布到分享墙"}
           </button>
@@ -163,7 +163,7 @@ export default function CommunityPage() {
 
       {/* 墙 */}
       {!error && posts.length === 0 && !loading && (
-        <p className="text-center text-xs text-slate-500">
+        <p className="text-center text-xs text-muted-foreground">
           还没有人分享。发第一帖，让大家看到你的作品！
         </p>
       )}
@@ -185,14 +185,14 @@ export default function CommunityPage() {
               />
             )}
             <div className="flex flex-1 flex-col p-4">
-              <h3 className="text-sm font-medium leading-snug text-slate-100">{p.title}</h3>
+              <h3 className="text-sm font-medium leading-snug text-foreground">{p.title}</h3>
               {p.content && (
-                <p className="mt-1.5 line-clamp-4 flex-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-300">
+                <p className="mt-1.5 line-clamp-4 flex-1 whitespace-pre-wrap text-xs leading-relaxed text-foreground/80">
                   {p.content}
                 </p>
               )}
               <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2.5">
-                <div className="text-[11px] text-slate-500">
+                <div className="text-[11px] text-muted-foreground">
                   👤 {p.author_name} · {fmtDate(p.created_at)}
                 </div>
                 <div className="flex items-center gap-2">
@@ -203,7 +203,7 @@ export default function CommunityPage() {
                       "rounded-full px-2.5 py-1 text-[11px] transition-colors",
                       p.liked_by_me
                         ? "bg-rose-500/20 text-rose-300"
-                        : "bg-white/5 text-slate-400 hover:text-rose-300",
+                        : "bg-white/5 text-muted-foreground hover:text-rose-300",
                     )}
                   >
                     ❤️ {p.likes}
@@ -213,7 +213,7 @@ export default function CommunityPage() {
                       type="button"
                       onClick={() => void remove(p)}
                       title="删除这条分享"
-                      className="text-[11px] text-slate-500 hover:text-rose-300"
+                      className="text-[11px] text-muted-foreground hover:text-rose-300"
                     >
                       🗑
                     </button>
@@ -229,7 +229,7 @@ export default function CommunityPage() {
           type="button"
           onClick={() => void load(page + 1)}
           disabled={loading}
-          className="ai-glass-input mx-auto rounded-lg px-4 py-1.5 text-xs text-slate-300 hover:text-slate-100 disabled:opacity-50"
+          className="ai-glass-input mx-auto rounded-lg px-4 py-1.5 text-xs text-foreground/80 hover:text-foreground disabled:opacity-50"
         >
           {loading ? "加载中…" : "加载更多"}
         </button>

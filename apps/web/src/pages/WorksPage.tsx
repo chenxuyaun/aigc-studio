@@ -438,7 +438,7 @@ function WorkCard({
             {typeof work.progress === "number" && (
               <div className="h-1.5 w-28 overflow-hidden rounded-full bg-muted">
                 <div
-                  className="h-full rounded-full bg-primary transition-all"
+                  className="h-full rounded-full bg-primary transition-[width]"
                   style={{ width: `${Math.min(100, Math.max(4, work.progress))}%` }}
                 />
               </div>
@@ -491,7 +491,7 @@ function WorkCard({
               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               : work.status === "failed"
                 ? "bg-destructive/10 text-destructive"
-                : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                : "bg-muted text-muted-foreground"
           }`}
         >
           {work.status === "succeeded"

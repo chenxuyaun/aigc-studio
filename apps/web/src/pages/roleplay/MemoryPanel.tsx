@@ -211,7 +211,7 @@ export function MemoryPanel({ assetId }: MemoryPanelProps) {
           aria-label={overview?.config.inject ? "关闭记忆注入" : "开启记忆注入"}
         >
           <span
-            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${overview?.config.inject ? "left-4.5" : "left-0.5"}`}
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white ${overview?.config.inject ? "left-4.5" : "left-0.5"}`}
           />
         </button>
       </div>

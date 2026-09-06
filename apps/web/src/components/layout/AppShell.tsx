@@ -16,6 +16,7 @@ import {
   Users,
   Sparkles,
   BarChart3,
+  X,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 
@@ -146,6 +147,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     ...mobileNav.slice(4),
     ...visibleNav.filter((n) => !n.mobile),
   ];
+
+  // Escape 关闭任一弹出层（搜索/皮肤/更多菜单）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setSearchOpen(false);
+      setSkinOpen(false);
+      setMoreMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   // 防抖搜索：输入停止 300ms 后查询
   useEffect(() => {
@@ -303,7 +316,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       <div className="max-h-[60vh] overflow-y-auto pt-1">
                         {Object.entries(grouped).map(([scope, items]) => (
                           <div key={scope} className="mb-1">
-                            <p className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            <p className="px-2.5 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">
                               {SCOPE_LABELS[scope] ?? scope}
                             </p>
                             {items.slice(0, 5).map((item) => (
@@ -326,7 +339,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                           onClick={() => goSearchPage(searchQ.trim())}
                           className="mt-1 w-full rounded-xl border-t border-border px-2.5 py-2 text-xs font-medium text-primary-text"
                         >
-                          查看全部结果 →
+                          查看全部结果
                         </button>
                       </div>
                     )}
@@ -348,7 +361,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </button>
                 {moreMenuOpen && (
                   <div className="absolute right-0 top-11 z-50 w-52 rounded-2xl border border-border bg-surface-raised p-1.5 shadow-2xl">
-                    <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    <p className="px-3 pb-1 pt-1.5 text-[11px] font-medium text-muted-foreground/60">
                       系统
                     </p>
                     {restNav.map((item) => (
@@ -400,7 +413,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       >
                         <span className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ background: s.dot }} />
                         {s.label}
-                        {skin === s.key && <span className="ml-auto font-bold">✓</span>}
+                        {skin === s.key && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" aria-label="当前皮肤" />}
                       </button>
                     ))}
                   </div>
@@ -415,7 +428,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <ThemeIcon className="h-4.5 w-4.5" aria-hidden />
               </button>
               <span
-                className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-primary to-primary-hover text-sm font-bold text-primary-foreground"
+                className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-bold text-primary-foreground"
                 title={user?.username}
               >
                 {user?.username?.[0]?.toUpperCase() ?? "U"}
@@ -441,7 +454,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               aria-label="关闭提示"
               className="text-muted-foreground hover:text-foreground"
             >
-              ✕
+              <X className="h-4 w-4" aria-hidden />
             </button>
           </div>
         )}

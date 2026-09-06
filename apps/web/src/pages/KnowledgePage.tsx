@@ -236,12 +236,12 @@ export function KnowledgePage() {
                   onClick={() => setShowPendingOnly(true)}
                   className={`rounded-full px-3 py-1 ${showPendingOnly ? "bg-surface font-medium shadow-sm" : "text-muted-foreground"}`}
                 >
-                  🕐 待确认（{docItems.filter((d) => d.status === "pending").length}）
+                  待确认（{docItems.filter((d) => d.status === "pending").length}）
                 </button>
               </div>
             </div>
             {showPendingOnly && (
-              <p className="mb-2 rounded-lg bg-amber-500/5 border border-amber-500/25 px-3 py-2 text-[11px] text-amber-600">
+              <p className="mb-2 rounded-lg border border-line bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
                 AI 自动写入的素材（创作范例回填等）默认待确认——确认前不参与创作检索，防幻觉污染。看过觉得好，点「确认」；不要就删。
               </p>
             )}
@@ -268,7 +268,7 @@ export function KnowledgePage() {
                         <span className="flex items-center gap-2">
                           <span className="block truncate font-medium">{doc.title}</span>
                           {doc.status === "pending" && (
-                            <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-600">
+                            <span className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
                               AI 待确认
                             </span>
                           )}

@@ -277,7 +277,7 @@ export function AssetsPage() {
           {uploadMutation.isPending && (
             <div className="h-1.5 w-48 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full bg-primary transition-all"
+                className="h-full bg-primary transition-[width]"
                 style={{
                   width: `${((uploadDone + uploadPercent / 100) / Math.max(uploadTotal, 1)) * 100}%`,
                 }}

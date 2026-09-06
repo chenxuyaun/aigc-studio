@@ -167,7 +167,7 @@ export function DashboardPage() {
             </div>
             <button
               onClick={generate}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_6px_16px_-8px_rgba(232,145,42,0.7)] transition-all duration-200 hover:-translate-y-px hover:bg-primary-hover hover:shadow-[0_10px_24px_-8px_rgba(232,145,42,0.8)] active:scale-[0.98]"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
             >
               <Sparkles className="h-4 w-4" aria-hidden />
               开始创作
@@ -184,7 +184,7 @@ export function DashboardPage() {
             <button
               key={t.to}
               onClick={() => navigate(t.to)}
-              className="inline-flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm font-medium transition-all duration-200 hover:-translate-y-px hover:border-primary hover:shadow-soft active:scale-[0.98]"
+              className="inline-flex items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm font-medium transition-colors hover:border-primary"
             >
               <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/12 text-primary-text">
                 <t.icon className="h-4 w-4" aria-hidden />
@@ -348,7 +348,7 @@ export function DashboardPage() {
                         </span>
                         <div
                           className={cn(
-                            "bar-grow w-full rounded-t-md transition-all",
+                            "bar-grow w-full rounded-t-md transition-[width]",
                             d.count > 0
                               ? "bg-primary/70 hover:bg-primary"
                               : "bg-muted",

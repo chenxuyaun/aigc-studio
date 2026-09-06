@@ -193,7 +193,7 @@ function AlbumCard({
   return (
     <button
       onClick={() => onOpen(album.id)}
-      className="group overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface-raised text-left transition-all hover:-translate-y-0.5 hover:border-primary"
+      className="group overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface-raised text-left transition-colors hover:border-primary"
     >
       <div className="relative aspect-[4/3] bg-muted">
         {album.cover_photo_id || album.cover_access_url_endpoint || album.cover_url ? (

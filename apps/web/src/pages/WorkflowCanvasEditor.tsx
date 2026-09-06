@@ -717,7 +717,7 @@ export function WorkflowCanvasEditor() {
   const saveStatusColor = saveMutation.isPending
     ? "text-muted-foreground"
     : isDirty
-      ? "text-amber-500"
+      ? "text-primary-text"
       : "text-emerald-500";
 
   return (
@@ -1217,7 +1217,7 @@ function CanvasEditorInner({
 
         {/* ── Side Panel ───────────────────────────────────── */}
         <aside
-          className={`flex flex-none flex-col border-l border-border bg-surface-raised transition-all duration-200 ${
+          className={`flex flex-none flex-col border-l border-border bg-surface-raised ${
             sidebarCollapsed ? "w-12" : "w-80"
           }`}
         >
@@ -1507,7 +1507,7 @@ function CanvasEditorInner({
                 执行日志
               </span>
               {isRunning && (
-                <span className="flex items-center gap-1 text-[10px] text-amber-500">
+                <span className="flex items-center gap-1 text-[10px] text-primary-text">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   运行中…
                 </span>

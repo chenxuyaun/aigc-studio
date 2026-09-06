@@ -29,10 +29,10 @@ interface TeamRun {
 }
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
-  planning: { label: "规划分工中…", cls: "bg-amber-500/15 text-amber-300 border-amber-500/40" },
-  running: { label: "成员接力执行中…", cls: "bg-cyan-500/15 text-cyan-300 border-cyan-500/40 animate-pulse" },
-  done: { label: "✅ 已完成", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40" },
-  failed: { label: "❌ 失败", cls: "bg-rose-500/15 text-rose-300 border-rose-500/40" },
+  planning: { label: "规划分工中…", cls: "border-line bg-muted/40 text-muted-foreground" },
+  running: { label: "成员接力执行中…", cls: "border-primary/40 bg-primary/10 text-primary-text" },
+  done: { label: "已完成", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40" },
+  failed: { label: "失败", cls: "bg-rose-500/15 text-rose-300 border-rose-500/40" },
 };
 
 export default function TeamPage() {
@@ -107,8 +107,8 @@ export default function TeamPage() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6">
       <header>
-        <h1 className="text-xl font-semibold text-slate-100">🤖 Agent 团队协作</h1>
-        <p className="mt-1 text-xs text-slate-400">
+        <h1 className="text-xl font-semibold text-foreground">Agent 团队协作</h1>
+        <p className="mt-1 text-xs text-muted-foreground">
           给一个目标，AI 自动组建团队（策划→执行→审校），成员接力完成并交付最终报告。
         </p>
       </header>
@@ -120,16 +120,16 @@ export default function TeamPage() {
           onChange={(e) => setGoal(e.target.value)}
           rows={2}
           placeholder="例：为一款手冲咖啡壶写一套上市文案（含名字、slogan、详情页要点）"
-          className="ai-glass-input w-full resize-y rounded-lg px-3 py-2 text-sm text-slate-100 outline-none"
+          className="ai-glass-input w-full resize-y rounded-lg px-3 py-2 text-sm text-foreground outline-none"
         />
         <div className="mt-2 flex items-center gap-3">
           <button
             type="button"
             onClick={() => void start()}
             disabled={starting || goal.trim().length < 2}
-            className="rounded-lg bg-cyan-600/80 px-4 py-1.5 text-sm font-medium text-white hover:bg-cyan-600 disabled:opacity-50"
+            className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
           >
-            {starting ? "组建中…" : "🚀 组建团队开工"}
+            {starting ? "组建中…" : "组建团队开工"}
           </button>
           {error && <span className="text-xs text-rose-300">{error}</span>}
         </div>
@@ -139,8 +139,8 @@ export default function TeamPage() {
       {run && (
         <section className="ai-glass rounded-2xl p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="max-w-[60%] truncate text-sm font-medium text-slate-200">
-              🎯 {run.goal}
+            <h2 className="max-w-[60%] truncate text-sm font-medium text-foreground">
+              {run.goal}
             </h2>
             <span className={cn("rounded-full border px-3 py-1 text-[11px]", statusMeta?.cls)}>
               {statusMeta?.label}
@@ -158,7 +158,7 @@ export default function TeamPage() {
                       "rounded-lg border px-3 py-1.5 text-xs",
                       started
                         ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                        : "border-white/10 bg-white/5 text-slate-400",
+                        : "border-border bg-foreground/5 text-muted-foreground",
                     )}
                     title={m.task}
                   >
@@ -171,11 +171,11 @@ export default function TeamPage() {
 
           <ol className="mt-4 flex flex-col gap-3">
             {(run.steps ?? []).map((s, i) => (
-              <li key={i} className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
-                <div className="text-xs font-medium text-cyan-300">
-                  👤 {s.name} · {s.role}
+              <li key={i} className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+                <div className="text-xs font-medium text-primary-text">
+                  {s.name} · {s.role}
                 </div>
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                   {s.output}
                 </p>
               </li>
@@ -184,8 +184,8 @@ export default function TeamPage() {
 
           {run.status === "done" && !!run.final_report && (
             <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
-              <div className="text-xs font-medium text-emerald-300">📦 最终交付报告</div>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-100">
+                <div className="text-xs font-medium text-emerald-300">最终交付报告</div>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                 {run.final_report}
               </p>
             </div>
@@ -199,19 +199,19 @@ export default function TeamPage() {
       {/* 历史 */}
       {!!history.length && (
         <section className="ai-glass rounded-2xl p-4">
-          <h2 className="text-sm font-medium text-slate-200">🗂️ 最近协作</h2>
+          <h2 className="text-sm font-medium text-foreground">最近协作</h2>
           <ul className="mt-3 flex flex-col gap-2">
             {history.map((h) => {
               const meta = STATUS_META[h.status] ?? {
                 label: "规划分工中…",
-                cls: "bg-amber-500/15 text-amber-300 border-amber-500/40",
+                cls: "border-line bg-muted/40 text-muted-foreground",
               };
               return (
                 <li key={h.id}>
                   <button
                     type="button"
                     onClick={() => setRun(h)}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-300 hover:bg-white/5"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground/80 hover:bg-foreground/5"
                   >
                     <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[10px]", meta.cls)}>
                       {meta.label}

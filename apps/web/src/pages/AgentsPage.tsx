@@ -229,7 +229,7 @@ export function AgentsPage() {
                   <span className="truncate">{a.model || "默认模型"}</span>
                   {a.source_type === "mission" ? (
                     <>
-                      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-600">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary-text">
                         🤖 Mission 角色
                       </span>
                       <button

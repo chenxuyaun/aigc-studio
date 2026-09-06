@@ -15,28 +15,24 @@ const CARDS = [
     icon: UserRound,
     title: "角色捏卡",
     desc: "世界书 · 头像生成 · SillyTavern PNG 卡导出，一分钟立起一个完整人设",
-    accent: "from-violet-500/20 to-fuchsia-500/10",
   },
   {
     to: "/roleplay",
     icon: MessageCircle,
     title: "角色扮演",
     desc: "长期记忆陪伴对话，L0-L3 记忆分层自动沉淀你们的每一段经历",
-    accent: "from-cyan-500/20 to-sky-500/10",
   },
   {
     to: "/story",
     icon: BookOpen,
     title: "故事工作室",
     desc: "AI 剧本工坊：大纲→章节→连载，支持多线叙事与角色一致性",
-    accent: "from-emerald-500/20 to-teal-500/10",
   },
   {
     to: "/sillytavern",
     icon: Server,
     title: "SillyTavern",
     desc: "专业前端直连管理：环境自适应地址、token 掩码、卡池互通",
-    accent: "from-amber-500/20 to-orange-500/10",
   },
 ];
 
@@ -71,8 +67,8 @@ export function PersonaPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8">
       <header className="mb-8">
-        <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary-text">
-          <Users className="h-4 w-4" aria-hidden /> Persona Hub
+        <p className="flex items-center gap-2 text-xs font-medium text-primary-text">
+          <Users className="h-4 w-4" aria-hidden /> Persona hub
         </p>
         <h1 className="mt-2 font-display text-3xl font-bold tracking-tight">角色中心</h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
@@ -86,9 +82,8 @@ export function PersonaPage() {
           <Link
             key={c.to}
             to={c.to}
-            className={`group relative overflow-hidden rounded-card border border-border bg-surface p-5 shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-[var(--shadow-lift)]`}
+            className="group relative overflow-hidden rounded-card border border-border bg-surface p-5 shadow-[var(--shadow-soft)] transition-colors hover:border-primary"
           >
-            <div className={`pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br ${c.accent} blur-xl`} />
             <div className="relative">
               <span className="grid h-11 w-11 place-items-center rounded-xl bg-muted text-primary-text">
                 <c.icon className="h-5.5 w-5.5" aria-hidden />

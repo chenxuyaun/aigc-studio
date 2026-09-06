@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { Clock, Eye, Search as SearchIcon, Star } from "lucide-react";
+import { Clock, Eye, FileText, Folder, Heart, Search as SearchIcon, Star } from "lucide-react";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -499,7 +499,7 @@ export function AsmrPage() {
                       className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2"
                     >
                       <span className="shrink-0 text-muted-foreground">
-                        {d.is_dir ? "📁" : "📄"}
+                        {d.is_dir ? <Folder className="h-4 w-4" aria-hidden /> : <FileText className="h-4 w-4" aria-hidden />}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-foreground">{d.name}</p>
@@ -538,7 +538,7 @@ export function AsmrPage() {
                     src={`${apiBaseUrl()}/asmr/cover/${w.id}`}
                     alt={w.title}
                     loading="lazy"
-                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    className="h-full w-full object-cover"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = "none";
                     }}
@@ -577,13 +577,13 @@ export function AsmrPage() {
                     }
                   }}
                   aria-label={favorites.has(w.id) ? "取消收藏" : "收藏"}
-                  className={`absolute bottom-1.5 right-1.5 grid h-7 w-7 cursor-pointer place-items-center rounded-full text-sm shadow ${
+                  className={`absolute bottom-1.5 right-1.5 grid h-7 w-7 cursor-pointer place-items-center rounded-full shadow ${
                     favorites.has(w.id)
                       ? "bg-danger/90 text-white"
                       : "bg-black/45 text-white/90 hover:bg-black/65"
                   }`}
                 >
-                  {favorites.has(w.id) ? "♥" : "♡"}
+                  <Heart className={`h-3.5 w-3.5 ${favorites.has(w.id) ? "fill-current" : ""}`} aria-hidden />
                 </span>
               </div>
               <div className="space-y-1 p-2.5">
@@ -599,7 +599,7 @@ export function AsmrPage() {
                         .map((l, i) => (
                           <span
                             key={`${l}-${i}`}
-                            className="rounded bg-secondary px-1 py-px text-[9px]"
+                            className="rounded bg-secondary px-1 py-px text-[10px]"
                           >
                             {l}
                           </span>
@@ -607,7 +607,7 @@ export function AsmrPage() {
                     </span>
                   )}
                   {w.rate_average > 0 && (
-                    <span className="flex items-center gap-0.5 text-amber-500">
+                    <span className="flex items-center gap-0.5 text-primary-text">
                       <Star className="h-3 w-3" aria-hidden /> {w.rate_average.toFixed(2)}
                     </span>
                   )}
@@ -657,7 +657,7 @@ export function AsmrPage() {
                   <p className="text-xs text-muted-foreground">社团：{detail.circle_name}</p>
                 )}
                 {detail.rate_average > 0 && (
-                  <p className="flex items-center gap-1 text-xs text-amber-500">
+                  <p className="flex items-center gap-1 text-xs text-primary-text">
                     <Star className="h-3.5 w-3.5" aria-hidden />
                     {detail.rate_average.toFixed(2)} · {detail.dl_count.toLocaleString()} 下载
                   </p>

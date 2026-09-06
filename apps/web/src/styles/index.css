@@ -366,23 +366,14 @@ body {
   background: color-mix(in srgb, var(--color-surface) 78%, transparent);
   border: 1px solid var(--st-border);
   backdrop-filter: blur(14px);
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   transition: border-color .3s, box-shadow .3s;
 }
 .st-panel:hover { border-color: rgba(var(--st-accent-rgb), 0.55); box-shadow: 0 10px 30px -5px rgba(var(--st-accent-rgb), 0.28); }
 
-@keyframes st-scan { 0% { top: -12%; } 100% { top: 104%; } }
-.st-scan-beam {
-  position: absolute; left: 4%; width: 92%; height: 90px; pointer-events: none;
-  background: linear-gradient(180deg, transparent 0%, rgba(var(--st-accent-rgb), 0.22) 45%, rgba(var(--st-accent-rgb), 0.85) 100%);
-  filter: blur(2px); animation: st-scan 1.9s linear infinite;
-}
-
-@keyframes st-pulse-ring { 0% { transform: scale(.7); opacity: .85; } 100% { transform: scale(2.1); opacity: 0; } }
-.st-node-pulse::after {
-  content: ""; position: absolute; inset: 0; border-radius: inherit;
-  border: 1px solid rgba(var(--st-accent-rgb), .65); animation: st-pulse-ring 1.8s ease-out infinite;
-}
+/* v11 动效纪律：扫描线/网格漂移/循环脉冲全部静止（设计语言 §五：动效只回应动作） */
+.st-scan-beam { display: none; }
+.st-node-pulse::after { content: none; }
 
 .st-hud-corner { position: relative; }
 .st-hud-corner::before, .st-hud-corner::after {
@@ -392,12 +383,11 @@ body {
 .st-hud-corner::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
 .st-hud-corner::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
 
-@keyframes st-grid-drift { from { background-position: 0 0; } to { background-position: 44px 44px; } }
 .st-grid-bg {
   background-image:
     linear-gradient(rgba(var(--st-accent-rgb), .07) 1px, transparent 1px),
     linear-gradient(90deg, rgba(var(--st-accent-rgb), .07) 1px, transparent 1px);
-  background-size: 44px 44px; animation: st-grid-drift 12s linear infinite;
+  background-size: 44px 44px;
 }
 .st-chip-active {
   background: rgba(var(--st-accent-rgb), .16) !important;

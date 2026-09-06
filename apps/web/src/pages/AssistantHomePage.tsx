@@ -1478,7 +1478,7 @@ export function AssistantHomePage() {
                         </div>
                       </div>
                     ) : m.dispatch ? (
-                      <div className="w-full max-w-md rounded-2xl border border-primary/35 bg-cyan-500/5 p-4">
+                      <div className="w-full max-w-md rounded-2xl border border-primary/35 bg-primary/5 p-4">
                         <p className="flex items-center gap-2 text-xs font-bold text-primary-text">
                           ⚡ 已解析派发指令 ·{" "}
                           {m.dispatch.kind === "image"

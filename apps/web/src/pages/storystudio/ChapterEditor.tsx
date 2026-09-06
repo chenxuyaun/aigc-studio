@@ -286,10 +286,10 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
 
       {/* AI 腔体检报告（生成完成后自动出现；分级展示 + 一键消除） */}
       {aiVoice.length > 0 && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+        <div className="rounded-xl border border-line bg-muted/30 p-3">
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs font-semibold text-amber-600">
-              🤖 AI 腔体检：发现 {aiVoice.length} 处
+            <span className="text-xs font-semibold">
+              AI 腔体检：发现 {aiVoice.length} 处
             </span>
             <span className="text-[10px] text-muted-foreground">
               {aiVoice.filter((i) => i.level === "high").length} 处严重 ·{" "}
@@ -330,9 +330,9 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
                 <span
                   className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
                     i.level === "high"
-                      ? "bg-destructive/10 text-destructive"
+                      ? "bg-danger/10 text-danger"
                       : i.level === "medium"
-                        ? "bg-amber-500/15 text-amber-600"
+                        ? "bg-warning/15 text-warning"
                         : "bg-muted text-muted-foreground"
                   }`}
                 >
@@ -355,25 +355,23 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
       {qualityReport && (
         <div
           className={`rounded-xl border p-3 ${
-            qualityReport.final_status === "HUMAN_REVIEW_REQUIRED"
-              ? "border-destructive/40 bg-destructive/5"
-              : qualityReport.critical_issues.length > 0
-                ? "border-red-500/40 bg-red-500/5"
-                : "border-emerald-500/30 bg-emerald-500/5"
+            qualityReport.final_status === "HUMAN_REVIEW_REQUIRED" || qualityReport.critical_issues.length > 0
+              ? "border-danger/40 bg-danger/5"
+              : "border-success/30 bg-success/5"
           }`}
         >
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs font-semibold">🧠 创作质量报告</span>
+            <span className="text-xs font-semibold">创作质量报告</span>
             {qualityReport.final_status === "HUMAN_REVIEW_REQUIRED" ? (
-              <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+              <span className="rounded bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
                 L0 未通过 · 需人工审查
               </span>
             ) : qualityReport.critical_issues.length > 0 ? (
-              <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+              <span className="rounded bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
                 有 Critical 问题
               </span>
             ) : (
-              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+              <span className="rounded bg-success/15 px-1.5 py-0.5 text-[10px] font-medium text-success">
                 L0 通过
               </span>
             )}
@@ -389,7 +387,7 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
               return (
                 <div key={label} className="rounded-md bg-surface px-2 py-1.5">
                   <p className="text-[10px] text-muted-foreground">{label}</p>
-                  <p className={`text-sm font-semibold ${ok ? "text-emerald-600" : "text-destructive"}`}>
+                  <p className={`text-sm font-semibold ${ok ? "text-success" : "text-danger"}`}>
                     {value > 0 ? value.toFixed(2) : "—"}
                   </p>
                 </div>
@@ -397,7 +395,7 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
             })}
           </div>
           {qualityReport.cliche_risk > 0 && (
-            <p className="mt-2 text-[11px] text-amber-600">
+            <p className="mt-2 text-[11px] text-warning">
               情绪捷径风险：{(qualityReport.cliche_risk * 100).toFixed(0)}%
             </p>
           )}
@@ -408,8 +406,8 @@ export function ChapterEditor({ projectId, chapter, models, unhealthyModels, onC
                   <span
                     className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
                       i.level === "critical"
-                        ? "bg-destructive/10 text-destructive"
-                        : "bg-amber-500/15 text-amber-600"
+                        ? "bg-danger/10 text-danger"
+                        : "bg-warning/15 text-warning"
                     }`}
                   >
                     {i.level === "critical" ? "Critical" : "Major"}

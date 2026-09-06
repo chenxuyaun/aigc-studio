@@ -319,10 +319,10 @@ export function CreationPage() {
                         导演模型：{plan.provider}
                         {plan.materials_hits && (
                           <span
-                            className="ml-2 rounded-full bg-sky-500/10 px-2 py-0.5 text-sky-600"
+                            className="ml-2 rounded-full border border-line bg-muted/40 px-2 py-0.5 text-muted-foreground"
                             title="选角前检索了你的知识库文档，角色设定基于资料生成"
                           >
-                            📚 已参考知识库资料
+                            已参考知识库资料
                           </span>
                         )}
                       </p>
@@ -359,10 +359,10 @@ export function CreationPage() {
                       )}
                       {!c.reused && c.asset_id && (
                         <span
-                          className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-600"
+                          className="rounded-full border border-line bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground"
                           title="AI 从你的演员库（已有角色卡）中选中，建组时直接复用"
                         >
-                          🎭 演员库
+                          演员库
                         </span>
                       )}
                       <span className="ml-auto rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground">
@@ -503,7 +503,7 @@ export function CreationPage() {
                               </p>
                               {sc.beat && <p className="mt-1 leading-relaxed">{sc.beat}</p>}
                               {sc.dialogue_hint && (
-                                <p className="mt-1 italic text-muted-foreground">💬 {sc.dialogue_hint}</p>
+                                <p className="mt-1 italic text-muted-foreground">{sc.dialogue_hint}</p>
                               )}
                             </div>
                           ))}
@@ -521,18 +521,18 @@ export function CreationPage() {
 
                 {/* AI 评审 */}
                 {review && !review.error && (
-                  <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                  <div className="flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
                     <p className="flex items-center gap-2 text-sm font-semibold">
-                      🎬 制片人评审
+                      制片人评审
                       {typeof review.score === "number" && (
-                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs">
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary-text">
                           {review.score}/10
                         </span>
                       )}
                     </p>
                     {review.strengths?.length ? (
                       <div className="text-xs">
-                        <p className="font-semibold text-emerald-600">✅ 亮点</p>
+                        <p className="font-semibold text-emerald-600">亮点</p>
                         <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-muted-foreground">
                           {review.strengths.map((s, i) => (
                             <li key={i}>{s}</li>
@@ -542,7 +542,7 @@ export function CreationPage() {
                     ) : null}
                     {review.weaknesses?.length ? (
                       <div className="text-xs">
-                        <p className="font-semibold text-danger">⚠️ 弱点</p>
+                        <p className="font-semibold text-danger">弱点</p>
                         <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-muted-foreground">
                           {review.weaknesses.map((w, i) => (
                             <li key={i}>{w}</li>
@@ -552,7 +552,7 @@ export function CreationPage() {
                     ) : null}
                     {review.suggestions?.length ? (
                       <div className="text-xs">
-                        <p className="font-semibold text-primary-text">💡 改进建议</p>
+                        <p className="font-semibold text-primary-text">改进建议</p>
                         <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-muted-foreground">
                           {review.suggestions.map((s, i) => (
                             <li key={i}>{s}</li>
