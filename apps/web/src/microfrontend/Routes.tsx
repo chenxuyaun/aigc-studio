@@ -51,6 +51,9 @@ const StoryProjectPage = lazy(() =>
 const StoryboardPage = lazy(() =>
   import("@/pages/StoryboardPage").then((m) => ({ default: m.StoryboardPage })),
 );
+const CreationPage = lazy(() =>
+  import("@/pages/CreationPage").then((m) => ({ default: m.CreationPage })),
+);
 const SearchPage = lazy(() =>
   import("@/pages/SearchPage").then((m) => ({ default: m.SearchPage })),
 );
@@ -140,7 +143,7 @@ export function AppRoutes() {
       <Route path="/create/music" element={<StudioRedirect engine="music" />} />
       <Route path="/create/video" element={<StudioRedirect engine="video" />} />
       <Route path="/create/character-card" element={<StudioRedirect engine="story" />} />
-      <Route path="/create/studio" element={<StudioRedirect engine="story" />} />
+      <Route path="/create/studio" element={<Page><CreationPage /></Page>} />
       <Route path="/create/prompt" element={<Navigate to="/library/prompts" replace />} />
       <Route path="/create/prompt-optimize" element={<Navigate to="/library/prompts" replace />} />
 

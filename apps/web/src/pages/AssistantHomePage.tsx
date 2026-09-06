@@ -94,6 +94,7 @@ const CAPABILITY_GROUPS: {
 
 // 资源库入口（收纳进能力中心，避免侧栏平铺；功能不删只收敛）
 const RESOURCE_LINKS: { to: string; icon: string; label: string; desc: string }[] = [
+  { to: "/create/studio", icon: "🎬", label: "创作规划", desc: "AI 导演两步成片" },
   { to: "/library/prompts", icon: "📚", label: "提示词库", desc: "1.3 万 + 提示词" },
   { to: "/library/knowledge", icon: "📖", label: "知识库", desc: "创作知识沉淀" },
   { to: "/library/assets", icon: "🗂️", label: "素材库", desc: "图片 / 音频素材" },
@@ -1577,8 +1578,12 @@ export function AssistantHomePage() {
                       )
                     ) : m.role === "assistant" && m.content ? (
                       <MarkdownContent content={m.content} />
+                    ) : m.content ? (
+                      <span className="whitespace-pre-wrap text-foreground/80">{m.content}</span>
+                    ) : streaming && i === messages.length - 1 ? (
+                      <span className="whitespace-pre-wrap text-foreground/80">思考中…</span>
                     ) : (
-                      <span className="whitespace-pre-wrap text-foreground/80">{m.content || "思考中…"}</span>
+                      <span className="whitespace-pre-wrap text-muted-foreground">（本轮没有返回内容——上游模型限流或中断，请重试或换模型）</span>
                     )}
                     {m.role === "assistant" && !!m.toolCalls?.length && (
                       <ToolCallsBlock calls={m.toolCalls} />
