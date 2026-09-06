@@ -18,20 +18,20 @@ const PromptNodeInner = memo(function PromptNode({ data, selected }: NodeProps) 
   return (
     <div
       className={cn(
-        "rounded-xl border bg-background p-3 shadow-sm min-w-[160px] max-w-[220px] transition-all hover:shadow-md",
-        "border-green-200 dark:border-green-800",
-        selected && "ring-2 ring-green-500 shadow-lg shadow-green-500/20",
-        Boolean(data.executionActive) && "ring-2 ring-amber-400 shadow-lg shadow-amber-400/30 animate-pulse",
+        "rounded-xl border bg-background p-3 shadow-sm min-w-[160px] max-w-[220px] transition-[border-color,box-shadow] hover:shadow-md",
+        "border-primary/40",
+        selected && "ring-2 ring-primary",
+        Boolean(data.executionActive) && "ring-2 ring-primary/70",
       )}
     >
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2 !h-2 !bg-green-400"
+        className="!w-2 !h-2 !bg-primary"
       />
       <div className="flex items-center gap-2">
-        <div className="rounded-lg bg-green-100 dark:bg-green-900 p-1.5 flex-none">
-          <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
+        <div className="rounded-lg bg-primary/10 p-1.5 flex-none">
+          <FileText className="h-4 w-4 text-primary-text" />
         </div>
         <div className="min-w-0 flex-1">
           <span className="font-medium text-sm truncate block">
@@ -41,7 +41,7 @@ const PromptNodeInner = memo(function PromptNode({ data, selected }: NodeProps) 
       </div>
       <div className="mt-1.5 space-y-0.5">
         {modelLabel && (
-          <div className="text-[11px] font-medium text-green-600 dark:text-green-400 truncate">
+          <div className="text-[11px] font-medium text-primary-text truncate">
             {modelLabel}
           </div>
         )}
@@ -62,7 +62,7 @@ const PromptNodeInner = memo(function PromptNode({ data, selected }: NodeProps) 
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2 !h-2 !bg-green-400"
+        className="!w-2 !h-2 !bg-primary"
       />
     </div>
   );

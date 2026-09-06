@@ -3,7 +3,7 @@ export function ProgressBar({ progress, status }: { progress: number; status: st
     <div className="space-y-1">
       <div className="h-2 overflow-hidden rounded-full bg-secondary">
         <div
-          className="h-full bg-primary transition-all"
+          className="h-full bg-primary transition-[width] duration-500"
           style={{ width: `${progress}%` }}
           role="progressbar"
           aria-valuenow={progress}

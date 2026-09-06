@@ -20,20 +20,20 @@ const SkillNodeInner = memo(function SkillNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        "rounded-xl border bg-background p-3 shadow-sm min-w-[160px] max-w-[220px] transition-all hover:shadow-md",
-        "border-blue-200 dark:border-blue-800",
-        selected && "ring-2 ring-blue-500 shadow-lg shadow-blue-500/20",
-        Boolean(data.executionActive) && "ring-2 ring-amber-400 shadow-lg shadow-amber-400/30 animate-pulse",
+        "rounded-xl border bg-background p-3 shadow-sm min-w-[160px] max-w-[220px] transition-[border-color,box-shadow] hover:shadow-md",
+        "border-primary/40",
+        selected && "ring-2 ring-primary",
+        Boolean(data.executionActive) && "ring-2 ring-primary/70",
       )}
     >
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2 !h-2 !bg-blue-400"
+        className="!w-2 !h-2 !bg-primary"
       />
       <div className="flex items-center gap-2">
-        <div className="rounded-lg bg-blue-100 dark:bg-blue-900 p-1.5 flex-none">
-          <Zap className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        <div className="rounded-lg bg-primary/10 p-1.5 flex-none">
+          <Zap className="h-4 w-4 text-primary-text" />
         </div>
         <div className="min-w-0 flex-1">
           <span className="font-medium text-sm truncate block">
@@ -43,7 +43,7 @@ const SkillNodeInner = memo(function SkillNode({ data, selected }: NodeProps) {
       </div>
       <div className="mt-1.5 space-y-0.5">
         {skillLabel && (
-          <div className="text-[11px] font-medium text-blue-600 dark:text-blue-400 truncate">
+          <div className="text-[11px] font-medium text-primary-text truncate">
             {skillLabel}
           </div>
         )}
@@ -59,7 +59,7 @@ const SkillNodeInner = memo(function SkillNode({ data, selected }: NodeProps) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2 !h-2 !bg-blue-400"
+        className="!w-2 !h-2 !bg-primary"
       />
     </div>
   );

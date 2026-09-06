@@ -75,7 +75,7 @@ function ChipEditor({
   };
   return (
     <div>
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mb-1 text-[10px] font-medium text-muted-foreground">{label}</p>
       <div className="flex flex-wrap gap-1">
         {values.map((v) => (
           <span
@@ -277,7 +277,7 @@ export function VoiceBadge({ className }: { className?: string }) {
               <div className="space-y-3 text-xs">
                 {DNA_OPTIONS.map(({ key: k, label, options }) => (
                   <label key={k} className="flex items-center justify-between gap-3">
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span className="text-[10px] font-medium text-muted-foreground">
                       {label}
                     </span>
                     <select
@@ -336,7 +336,7 @@ export function VoiceBadge({ className }: { className?: string }) {
                 </p>
                 {preferred.length > 0 && (
                   <div>
-                    <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <p className="mb-1 text-[10px] font-medium text-muted-foreground">
                       你的表达习惯
                     </p>
                     <div className="flex flex-wrap gap-1">
@@ -353,7 +353,7 @@ export function VoiceBadge({ className }: { className?: string }) {
                 )}
                 {avoid.length > 0 && (
                   <div>
-                    <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <p className="mb-1 text-[10px] font-medium text-muted-foreground">
                       忌讳的腔调
                     </p>
                     <div className="flex flex-wrap gap-1">
@@ -381,7 +381,7 @@ export function VoiceBadge({ className }: { className?: string }) {
                   })}
                 </div>
                 <label className="block">
-                  <span className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <span className="mb-1 flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
                     <Plus className="h-3 w-3" aria-hidden /> 贴新样本（自动更新文风）
                   </span>
                   <textarea

@@ -24,7 +24,7 @@ export const NodePalette = memo(function NodePalette({
 
   return (
     <div className="border-b border-border p-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2 text-xs font-medium text-muted-foreground">
         添加节点
       </p>
       <div className="flex gap-2">
