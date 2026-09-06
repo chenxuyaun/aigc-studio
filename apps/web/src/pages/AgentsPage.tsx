@@ -192,7 +192,7 @@ export function AgentsPage() {
             {items.map((a) => (
               <article
                 key={a.id}
-                className="flex flex-col gap-2 rounded-xl border border-border bg-surface-raised p-4 transition-colors hover:border-border-strong"
+                className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 shadow-zen transition-colors hover:border-primary/40"
               >
                 <div className="flex items-start justify-between gap-2">
                   <button
@@ -342,7 +342,7 @@ function AgentDetail({
           </div>
         )}
       </div>
-      <div className="sticky bottom-0 flex gap-2 border-t border-border bg-surface-raised p-4">
+      <div className="sticky bottom-0 flex gap-2 border-t border-line bg-surface p-4">
         <Button
           variant="outline"
           size="icon"

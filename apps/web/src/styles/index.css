@@ -266,9 +266,9 @@ body {
     transform: none;
   }
 }
+/* v11 动效纪律：入场序列已禁用（类名保留避免 JSX 报样式缺失） */
 .animate-enter {
-  animation: aigc-enter 0.55s var(--ease-spring) both;
-  animation-delay: var(--stagger, 0ms);
+  animation: none;
 }
 
 @keyframes aigc-bar-grow {

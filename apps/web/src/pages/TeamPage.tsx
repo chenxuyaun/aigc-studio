@@ -114,13 +114,13 @@ export default function TeamPage() {
       </header>
 
       {/* 发起 */}
-      <section className="ai-glass rounded-2xl p-4">
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
         <textarea
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
           rows={2}
           placeholder="例：为一款手冲咖啡壶写一套上市文案（含名字、slogan、详情页要点）"
-          className="ai-glass-input w-full resize-y rounded-lg px-3 py-2 text-sm text-foreground outline-none"
+          className="w-full resize-y rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus-visible:border-primary/60"
         />
         <div className="mt-2 flex items-center gap-3">
           <button
@@ -137,7 +137,7 @@ export default function TeamPage() {
 
       {/* 当前运行 */}
       {run && (
-        <section className="ai-glass rounded-2xl p-4">
+        <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="max-w-[60%] truncate text-sm font-medium text-foreground">
               {run.goal}
@@ -198,7 +198,7 @@ export default function TeamPage() {
 
       {/* 历史 */}
       {!!history.length && (
-        <section className="ai-glass rounded-2xl p-4">
+        <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
           <h2 className="text-sm font-medium text-foreground">最近协作</h2>
           <ul className="mt-3 flex flex-col gap-2">
             {history.map((h) => {

@@ -166,7 +166,7 @@ export function KnowledgePage() {
       <div className="grid gap-4 p-4 md:grid-cols-[360px_1fr] md:p-6">
         {/* 左列：文档管理 */}
         <div className="flex flex-col gap-4">
-          <div className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
+          <div className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
               <Plus className="h-4 w-4" aria-hidden />
               新建文档
@@ -217,9 +217,9 @@ export function KnowledgePage() {
             </div>
           </div>
 
-          <div className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
+          <div className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <h3 className="flex items-center gap-2 text-sm font-medium">
+              <h3 className="flex items-center gap-2 text-sm font-medium tabular-nums">
                 <BookOpen className="h-4 w-4" aria-hidden />
                 文档列表（{docTotal}）
               </h3>
@@ -227,40 +227,47 @@ export function KnowledgePage() {
                 <button
                   type="button"
                   onClick={() => setShowPendingOnly(false)}
-                  className={`rounded-full px-3 py-1 ${!showPendingOnly ? "bg-surface font-medium shadow-sm" : "text-muted-foreground"}`}
+                  className={`rounded-full px-3 py-1 transition-colors ${!showPendingOnly ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted-foreground"}`}
                 >
                   全部
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowPendingOnly(true)}
-                  className={`rounded-full px-3 py-1 ${showPendingOnly ? "bg-surface font-medium shadow-sm" : "text-muted-foreground"}`}
+                  className={`rounded-full px-3 py-1 tabular-nums transition-colors ${showPendingOnly ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted-foreground"}`}
                 >
                   待确认（{docItems.filter((d) => d.status === "pending").length}）
                 </button>
               </div>
             </div>
             {showPendingOnly && (
-              <p className="mb-2 rounded-lg border border-line bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+              <p className="mb-2 rounded-xl border border-line bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
                 AI 自动写入的素材（创作范例回填等）默认待确认——确认前不参与创作检索，防幻觉污染。看过觉得好，点「确认」；不要就删。
               </p>
             )}
             {docs.isLoading ? (
               <p className="py-4 text-center text-sm text-muted-foreground">加载中…</p>
             ) : !docItems.length ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                还没有文档，先新建或上传一个
-              </p>
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <BookOpen className="h-7 w-7 text-muted-foreground/50" aria-hidden />
+                <p className="max-w-xs text-sm text-muted-foreground">
+                  还没有知识文档——上传第一份，或用上方表单直接新建
+                </p>
+                <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+                  <FileUp className="h-4 w-4" aria-hidden />
+                  上传文件
+                </Button>
+              </div>
             ) : (
-              <ul className="flex flex-col gap-2">
+              <ul className="flex flex-col gap-2.5">
                 {docItems
                   .filter((doc) => (showPendingOnly ? doc.status === "pending" : true))
                   .map((doc) => (
-                  <li key={doc.id} className="rounded-lg border border-border">
-                    <div className="flex items-center gap-2 px-3 py-2">
+                  <li key={doc.id} className="rounded-xl border border-line">
+                    <div className="flex items-center gap-2 px-3 py-2.5">
                       <button
                         type="button"
-                        className="min-w-0 flex-1 text-left text-sm hover:text-primary-text"
+                        className="min-w-0 flex-1 text-left text-sm transition-colors hover:text-primary-text"
                         onClick={() =>
                           setExpandedId((prev) => (prev === doc.id ? null : doc.id))
                         }
@@ -268,12 +275,12 @@ export function KnowledgePage() {
                         <span className="flex items-center gap-2">
                           <span className="block truncate font-medium">{doc.title}</span>
                           {doc.status === "pending" && (
-                            <span className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            <span className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground">
                               AI 待确认
                             </span>
                           )}
                         </span>
-                        <span className="block text-xs text-muted-foreground">
+                        <span className="block text-[11px] tabular-nums text-muted-foreground">
                           {doc.char_count} 字 · {formatDate(doc.updated_at)}
                         </span>
                       </button>
@@ -283,7 +290,7 @@ export function KnowledgePage() {
                           size="sm"
                           onClick={() => confirmDoc.mutate(doc.id)}
                         >
-                          ✓ 确认
+                          确认
                         </Button>
                       )}
                       <Button
@@ -311,6 +318,7 @@ export function KnowledgePage() {
                   <Button
                     type="button"
                     variant="ghost"
+                    className="tabular-nums"
                     disabled={docs.isFetchingNextPage}
                     onClick={() => void docs.fetchNextPage()}
                   >
@@ -320,7 +328,7 @@ export function KnowledgePage() {
                   </Button>
                 ) : (
                   docTotal > 50 && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs tabular-nums text-muted-foreground">
                       已全部加载（{docTotal} 条）
                     </span>
                   )
@@ -331,7 +339,7 @@ export function KnowledgePage() {
         </div>
 
         {/* 右列：知识问答 */}
-        <div className="flex min-h-[420px] flex-col rounded-[var(--radius-card)] border border-border bg-surface p-4">
+        <div className="flex min-h-[420px] flex-col rounded-2xl border border-line bg-surface p-4 shadow-zen">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
             <MessageSquareText className="h-4 w-4" aria-hidden />
             向知识库提问
@@ -343,7 +351,7 @@ export function KnowledgePage() {
                   id={id}
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-10 w-full rounded-xl border border-input bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {modelOptions.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -386,7 +394,7 @@ export function KnowledgePage() {
                     <span
                       key={s.doc_id}
                       title={s.snippet}
-                      className="max-w-full truncate rounded-full border border-border bg-surface-raised px-2.5 py-1 text-xs text-muted-foreground"
+                      className="max-w-full truncate rounded-full border border-line bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground"
                     >
                       参考 · {s.title}
                     </span>
@@ -397,8 +405,8 @@ export function KnowledgePage() {
                 className={cn(
                   "rounded-xl border p-3.5 text-sm leading-relaxed",
                   askResult.error
-                    ? "border-warning/30 bg-warning/10 text-warning"
-                    : "border-border bg-surface-raised",
+                    ? "border-danger/30 bg-danger/10 text-danger"
+                    : "border-line bg-muted/30",
                 )}
               >
                 {askResult.answer ? (

@@ -97,7 +97,7 @@ export default function GrowthPage() {
       </header>
 
       {/* 记忆区 */}
-      <section className="ai-glass rounded-2xl p-4">
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-foreground">
             AI 记得的你
@@ -135,7 +135,7 @@ export default function GrowthPage() {
       </section>
 
       {/* 日记时间线 */}
-      <section className="ai-glass rounded-2xl p-4">
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
         <h2 className="text-sm font-medium text-foreground">
           成长日记
           <span className="ml-2 text-[11px] text-muted-foreground">共 {total} 篇</span>
@@ -181,7 +181,7 @@ export default function GrowthPage() {
             type="button"
             onClick={() => void load(page + 1)}
             disabled={loading}
-            className="ai-glass-input mt-4 rounded-lg px-4 py-1.5 text-xs text-foreground/80 hover:text-foreground disabled:opacity-50"
+            className="mt-4 rounded-xl border border-border bg-surface px-4 py-1.5 text-xs text-foreground/80 transition-colors hover:text-foreground disabled:opacity-50"
           >
             {loading ? "加载中…" : "加载更早的日记"}
           </button>

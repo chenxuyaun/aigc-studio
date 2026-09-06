@@ -3,15 +3,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Clock3,
+  Copy,
   Film,
   ImageIcon,
   Layers,
   MessageCircle,
   Music,
   RefreshCw,
+  Share2,
   Sparkles,
+  Trash2,
   Users,
   Wand2,
+  X,
   XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -19,6 +23,7 @@ import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Dialog } from "@/components/ui/Dialog";
 import { apiClient } from "@/lib/apiClient";
+import { refreshAssetUrl } from "@/lib/assetUrl";
 import { copyShareUrl } from "@/lib/share";
 import type { ChatSession } from "@/pages/roleplay/types";
 import { copyText } from "@/lib/clipboard";
@@ -88,10 +93,19 @@ const TYPE_ICONS: Record<string, typeof ImageIcon> = {
 
 const STATUS_CHIPS = [
   { v: "all", label: "全部" },
-  { v: "succeeded", label: "✅ 成品" },
-  { v: "active", label: "⏳ 进行中" },
-  { v: "failed", label: "❌ 失败" },
+  { v: "succeeded", label: "成品" },
+  { v: "active", label: "进行中" },
+  { v: "failed", label: "失败" },
 ] as const;
+
+/** 签名 URL 10 分钟过期：媒体加载失败时自动刷新一次 src（每元素仅一次） */
+async function refreshMediaOnError(e: React.SyntheticEvent<HTMLImageElement | HTMLVideoElement | HTMLAudioElement>) {
+  const el = e.currentTarget;
+  if (el.dataset.refreshed) return;
+  el.dataset.refreshed = "1";
+  const fresh = await refreshAssetUrl(el.src);
+  if (fresh) el.src = fresh;
+}
 
 const ACTIVE_STATUSES = new Set(["queued", "processing"]);
 const PAGE_STEP = 24;
@@ -120,8 +134,8 @@ export function WorksPage() {
       <div className="flex gap-1 border-b border-border px-4 md:px-6">
         {(
           [
-            { k: "gallery", label: "🎨 创作产物" },
-            { k: "music", label: "🎵 音乐作品（圆桌定稿）" },
+            { k: "gallery", label: "创作产物" },
+            { k: "music", label: "音乐作品（圆桌定稿）" },
           ] as const
         ).map((t) => (
           <button
@@ -170,7 +184,7 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
         kind: "image",
         image_url: url,
       });
-      setShareTip("✓ 已发布到分享墙");
+      setShareTip("已发布到分享墙");
       setTimeout(() => setShareTip(""), 2500);
     } catch {
       setShareTip("分享失败，请稍后再试");
@@ -267,7 +281,7 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
       {shareTip && (
         <div className="mb-2">
           <span
-            className={`text-xs ${shareTip.startsWith("✓") ? "text-emerald-500" : "text-destructive"}`}
+            className={`text-xs ${shareTip.includes("失败") ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`}
           >
             {shareTip}
           </span>
@@ -282,7 +296,7 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
               onClick={() => setTypeFilter(c.v)}
               className={`rounded-full px-3 py-1 text-xs transition-colors ${
                 typeFilter === c.v
-                  ? "bg-primary text-primary-text"
+                  ? "bg-primary text-primary-foreground"
                   : "bg-muted text-muted-foreground hover:bg-primary/15"
               }`}
             >
@@ -299,7 +313,7 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
               className={`rounded-full px-3 py-1 text-xs transition-colors ${
                 statusFilter === c.v
                   ? "border border-primary bg-primary/15 text-primary-text"
-                  : "border border-border text-muted-foreground hover:border-primary"
+                  : "border border-line text-muted-foreground hover:border-primary"
               }`}
             >
               {c.label}
@@ -308,7 +322,7 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
         </div>
         <button
           onClick={() => void load()}
-          className="ml-auto flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-primary"
+          className="ml-auto flex items-center gap-1 rounded-xl border border-line px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary-text"
           title="刷新"
         >
           <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} aria-hidden />
@@ -317,8 +331,8 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
       </div>
 
       {hasActive && (
-        <p className="mb-3 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary-text">
-          <Clock3 className="h-3.5 w-3.5 animate-pulse" aria-hidden />
+        <p className="mb-3 flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary-text">
+          <Clock3 className="h-3.5 w-3.5" aria-hidden />
           有任务进行中，每 5 秒自动刷新…
         </p>
       )}
@@ -329,11 +343,11 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
       )}
 
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="h-52 animate-pulse rounded-[var(--radius-card)] border border-border bg-muted/30"
+              className="aspect-[4/3] animate-pulse rounded-2xl border border-line bg-muted/30"
             />
           ))}
         </div>
@@ -341,16 +355,18 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
         <div className="py-16 text-center">
           <Sparkles className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" aria-hidden />
           <p className="text-sm text-muted-foreground">
-            这里还没有作品。去{" "}
-            <button onClick={() => navigate("/studio")} className="text-primary-text underline">
-              创作 Studio
-            </button>{" "}
-            派一单，成品会自动汇聚到这里
+            还没有作品——派第一件活，成品会自动汇聚到这里
           </p>
+          <button
+            onClick={() => navigate("/studio")}
+            className="mt-4 rounded-xl bg-primary px-4 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            前往创作工坊
+          </button>
         </div>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {items.map((w) => (
               <WorkCard
                 key={w.id}
@@ -369,7 +385,7 @@ function GalleryTab({ navigate }: { navigate: ReturnType<typeof useNavigate> }) 
             <div className="mt-4 text-center">
               <button
                 onClick={() => setLimit((l) => l + PAGE_STEP)}
-                className="rounded-full border border-border px-4 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-primary-text"
+                className="rounded-xl border border-line px-4 py-2 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary-text"
               >
                 加载更多（已显示 {items.length} 条）
               </button>
@@ -419,14 +435,14 @@ function WorkCard({
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-[var(--radius-card)] border bg-surface transition-shadow hover:shadow-md ${
-        work.status === "failed" ? "border-destructive/40" : "border-border"
+      className={`group overflow-hidden rounded-2xl border bg-surface shadow-zen ${
+        work.status === "failed" ? "border-destructive/40" : "border-line"
       }`}
     >
       {/* 视觉区 */}
       <button
         onClick={onOpen}
-        className="block h-44 w-full cursor-pointer overflow-hidden bg-muted/30 text-left"
+        className="block aspect-[4/3] w-full cursor-pointer overflow-hidden bg-muted/30 text-left"
         title="查看详情"
       >
         {active ? (
@@ -450,7 +466,8 @@ function WorkCard({
               src={(work.asset_url || work.cover_url) as string}
               alt={work.title ?? ""}
               loading="lazy"
-              className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
+              onError={refreshMediaOnError}
+              className="h-full w-full object-cover"
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-1.5">
@@ -459,7 +476,13 @@ function WorkCard({
             </div>
           )
         ) : work.task_type === "video" && work.asset_url && work.status === "succeeded" ? (
-          <video src={work.asset_url} className="h-full w-full object-cover" muted preload="metadata" />
+          <video
+            src={work.asset_url}
+            className="h-full w-full object-cover"
+            muted
+            preload="metadata"
+            onError={refreshMediaOnError}
+          />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-1.5">
             <Icon
@@ -477,16 +500,16 @@ function WorkCard({
 
       {/* 信息条 */}
       <div className="flex items-center gap-1.5 px-2.5 py-2">
-        <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary-text">
+        <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary-text">
           {TYPE_LABELS[work.task_type] ?? work.task_type}
         </span>
         {work.panel_count != null && work.panel_count > 0 && (
-          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
             {work.panel_count} 格
           </span>
         )}
         <span
-          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] ${
             work.status === "succeeded"
               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               : work.status === "failed"
@@ -502,13 +525,13 @@ function WorkCard({
                 ? "进行中"
                 : work.status}
         </span>
-        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+        <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
           {fmtTime(work.created_at)}
         </span>
       </div>
 
       {/* 操作条 */}
-      <div className="flex items-center gap-2 border-t border-border px-2.5 py-1.5">
+      <div className="flex items-center gap-2 border-t border-line px-2.5 py-1.5">
         {work.status === "succeeded" && (
           <button
             onClick={onOpen}
@@ -522,20 +545,21 @@ function WorkCard({
           work.status === "succeeded" && (
             <button
               onClick={onOpen}
-              className="hidden text-[11px] text-primary-text group-hover:inline hover:underline"
+              className="hidden items-center gap-0.5 text-[11px] text-primary-text group-hover:inline-flex hover:underline"
               title="带参数回 Studio 再创作"
             >
-              ✨ 再创作
+              <Wand2 className="h-3 w-3" aria-hidden /> 再创作
             </button>
           )}
         {work.status === "succeeded" && (work.asset_url || work.cover_url) && (
           <button
             disabled={sharing}
             onClick={() => void onShare()}
-            className="hidden text-[11px] text-primary-text group-hover:inline hover:underline disabled:opacity-50"
+            className="hidden items-center gap-0.5 text-[11px] text-primary-text group-hover:inline-flex hover:underline disabled:opacity-50"
             title="发布到社区分享墙"
           >
-            {sharing ? "分享中…" : "🌍 分享"}
+            <Share2 className="h-3 w-3" aria-hidden />
+            {sharing ? "分享中…" : "分享"}
           </button>
         )}
         {active && (
@@ -559,14 +583,14 @@ function WorkCard({
             <button
               disabled={busy}
               onClick={onDelete}
-              className="ml-auto text-[11px] text-muted-foreground hover:text-destructive disabled:opacity-50"
+              className="ml-auto text-[11px] text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
             >
               删除
             </button>
           </>
         )}
         {work.status === "succeeded" && (
-          <span className="ml-auto text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100">
+          <span className="ml-auto truncate text-[11px] text-muted-foreground opacity-0 group-hover:opacity-100">
             {work.model?.slice(0, 18)}
           </span>
         )}
@@ -586,25 +610,36 @@ function WorkDetail({ work, onRehydrate }: { work: WorkPreview; onRehydrate: () 
           <img
             src={(work.asset_url || work.cover_url) as string}
             alt={work.title ?? ""}
-            className="max-h-[46vh] w-full rounded-lg object-contain"
+            onError={refreshMediaOnError}
+            className="max-h-[46vh] w-full rounded-xl border border-line object-contain"
           />
         )}
       {work.status === "succeeded" && work.task_type === "video" && work.asset_url && (
-        <video src={work.asset_url} controls className="max-h-[46vh] w-full rounded-lg" />
+        <video
+          src={work.asset_url}
+          controls
+          onError={refreshMediaOnError}
+          className="max-h-[46vh] w-full rounded-xl border border-line"
+        />
       )}
       {work.status === "succeeded" &&
         (work.task_type === "audio" || work.task_type === "music") && (
-          <div className="flex flex-col items-center gap-3 rounded-lg bg-muted/30 p-5">
+          <div className="flex flex-col items-center gap-3 rounded-xl bg-muted/30 p-5">
             <Music className="h-8 w-8 text-primary-text/70" aria-hidden />
             {work.asset_url ? (
-              <audio src={work.asset_url} controls className="w-full" />
+              <audio
+                src={work.asset_url}
+                controls
+                onError={refreshMediaOnError}
+                className="w-full"
+              />
             ) : (
               <span className="text-xs text-muted-foreground">音频链接已过期</span>
             )}
           </div>
         )}
       {!ACTIVE_STATUSES.has(work.status) && work.status !== "succeeded" && (
-        <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+        <p className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
           该任务{work.status === "failed" ? "生成失败" : `状态为 ${work.status}`}，可在作品库卡片上重试或删除
         </p>
       )}
@@ -618,35 +653,35 @@ function WorkDetail({ work, onRehydrate }: { work: WorkPreview; onRehydrate: () 
           <span className="rounded bg-muted px-2 py-0.5">{Math.round(work.progress)}%</span>
         )}
         {work.created_at && <span>{new Date(work.created_at).toLocaleString("zh-CN")}</span>}
-        <span className="font-mono text-[10px] opacity-60">{work.id.slice(0, 8)}</span>
+        <span className="font-mono text-[11px] opacity-60">{work.id.slice(0, 8)}</span>
       </div>
       {/* Prompt 全文 */}
       {work.prompt && (
         <div>
           <p className="mb-1 text-xs font-semibold text-foreground">Prompt</p>
-          <pre className="whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-xs leading-relaxed">
+          <pre className="whitespace-pre-wrap rounded-xl bg-muted/40 p-3 text-xs leading-relaxed">
             {work.prompt}
           </pre>
         </div>
       )}
       {/* 动作 */}
-      <div className="mt-auto flex flex-wrap gap-2 border-t border-border pt-3">
+      <div className="mt-auto flex flex-wrap gap-2 border-t border-line pt-3">
         {work.status === "succeeded" &&
           ["image", "comic", "video", "audio", "music"].includes(work.task_type) && (
             <button
               onClick={onRehydrate}
-              className="flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs text-primary-text hover:opacity-90"
+              className="flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              <Wand2 className="h-3.5 w-3.5" aria-hidden /> ✨ 在 Studio 再创作
+              <Wand2 className="h-3.5 w-3.5" aria-hidden /> 在 Studio 再创作
             </button>
           )}
         <button
           onClick={() => {
             if (work.prompt) void copyText(work.prompt);
           }}
-          className="rounded-full border border-border px-3 py-1.5 text-xs hover:border-primary"
+          className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary-text"
         >
-          📋 复制 Prompt
+          <Copy className="h-3.5 w-3.5" aria-hidden /> 复制 Prompt
         </button>
       </div>
     </div>
@@ -754,7 +789,7 @@ function MusicTab() {
   return (
     <div className="grid gap-4 p-4 md:p-6 lg:grid-cols-2">
       {/* 音乐作品 */}
-      <section className="rounded-[var(--radius-card)] border border-border bg-surface p-4 lg:col-span-2">
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen lg:col-span-2">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Music className="h-4 w-4 text-primary-text" aria-hidden />
@@ -767,20 +802,20 @@ function MusicTab() {
               void loadMusicWorks(e.target.value, activeTag);
             }}
             placeholder="搜索歌名/主题/风格…"
-            className="ml-auto h-8 w-48 rounded-lg border border-input bg-surface px-3 text-xs outline-none focus:border-primary"
+            className="ml-auto h-8 w-48 rounded-xl border border-line bg-surface px-3 text-xs outline-none transition-colors focus:border-primary"
             aria-label="搜索音乐作品"
           />
         </div>
         {allTags.length > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-muted-foreground">🏷 按标签浏览：</span>
+            <span className="text-[11px] text-muted-foreground">按标签浏览：</span>
             {allTags.map((t) => (
               <button
                 key={t}
                 onClick={() => toggleTag(t)}
                 className={`rounded-full px-2.5 py-0.5 text-[11px] transition-colors ${
                   activeTag === t
-                    ? "bg-primary text-primary-text"
+                    ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:bg-primary/15"
                 }`}
               >
@@ -790,9 +825,9 @@ function MusicTab() {
             {activeTag && (
               <button
                 onClick={() => toggleTag(activeTag)}
-                className="text-[11px] text-destructive hover:underline"
+                className="flex items-center gap-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
               >
-                ✕ 清除筛选
+                <X className="h-3 w-3" aria-hidden /> 清除筛选
               </button>
             )}
           </div>
@@ -809,7 +844,7 @@ function MusicTab() {
               {musicWorks.slice(0, 9).map((w) => (
                 <div
                   key={w.id}
-                  className="flex flex-col gap-1.5 rounded-lg border border-border p-3"
+                  className="flex flex-col gap-1.5 rounded-xl border border-line p-3"
                 >
                   <div className="flex items-center gap-2">
                     <button
@@ -821,12 +856,12 @@ function MusicTab() {
                       {w.title}
                     </button>
                     {w.style && (
-                      <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary-text">
+                      <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary-text">
                         {w.style}
                       </span>
                     )}
                     {workVersionOf(w) > 1 && (
-                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                         第 {workVersionOf(w)} 稿
                       </span>
                     )}
@@ -841,7 +876,7 @@ function MusicTab() {
                         .map((t) => (
                           <span
                             key={t}
-                            className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                            className="rounded bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground"
                           >
                             {t}
                           </span>
@@ -871,7 +906,7 @@ function MusicTab() {
                     {w.lyrics.slice(0, 120)}
                     {w.lyrics.length > 120 ? "…" : ""}
                   </p>
-                  <div className="mt-auto flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                  <div className="mt-auto flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                     <span>{fmtTime(w.created_at)}</span>
                     <span className="rounded bg-muted px-1.5 py-0.5">
                       {w.source === "roundtable" ? "圆桌" : w.source}
@@ -890,13 +925,13 @@ function MusicTab() {
                     </button>
                     <button
                       onClick={() => void deleteMusicWork(w.id)}
-                      className="ml-auto text-danger hover:underline"
+                      className="ml-auto text-danger transition-colors hover:underline"
                     >
                       删除
                     </button>
                   </div>
                   {publishFor === w.id && (
-                    <div className="mt-1 flex flex-wrap gap-1.5 border-t border-border pt-1.5">
+                    <div className="mt-1 flex flex-wrap gap-1.5 border-t border-line pt-1.5">
                       {rooms.length === 0 ? (
                         <span className="text-[11px] text-muted-foreground">
                           还没有群，先去 AI 导演工作室建群
@@ -906,9 +941,9 @@ function MusicTab() {
                           <button
                             key={r.id}
                             onClick={() => void publishToChat(w.id, r.id)}
-                            className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] hover:border-primary"
+                            className="rounded-full border border-line bg-muted/40 px-2 py-0.5 text-[11px] transition-colors hover:border-primary"
                           >
-                            📢 {r.title}
+                            {r.title}
                           </button>
                         ))
                       )}
@@ -923,12 +958,12 @@ function MusicTab() {
                 {compareWorks.map((w, i) => (
                   <div
                     key={w.id}
-                    className="rounded-lg border border-primary/30 bg-muted/20 p-3"
+                    className="rounded-xl border border-primary/30 bg-muted/20 p-3"
                   >
                     <p className="mb-1.5 text-sm font-semibold">
                       第 {i + 1} 首 ·《{w.title}》
                       {w.style && (
-                        <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 text-[10px]">
+                        <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 text-[11px]">
                           {w.style}
                         </span>
                       )}
@@ -938,7 +973,7 @@ function MusicTab() {
                     </pre>
                     {w.arrangement && (
                       <p className="mt-1.5 text-[11px] text-muted-foreground">
-                        🎧 {w.arrangement.slice(0, 100)}…
+                        编曲：{w.arrangement.slice(0, 100)}…
                       </p>
                     )}
                   </div>
@@ -961,7 +996,7 @@ function MusicTab() {
       </section>
 
       {/* 群演作品 */}
-      <section className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <BookOpen className="h-4 w-4 text-primary-text" aria-hidden />
           群演作品（{playWorks.length}）
@@ -985,7 +1020,7 @@ function MusicTab() {
               <li key={w.id}>
                 <button
                   onClick={() => navigate(`/story/${w.id}`)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left transition-colors hover:border-primary"
+                  className="flex w-full items-center gap-2 rounded-xl border border-line px-3 py-2 text-left transition-colors hover:border-primary"
                 >
                   <span className="truncate font-medium">{w.title}</span>
                   <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
@@ -1007,7 +1042,7 @@ function MusicTab() {
       </section>
 
       {/* 创作群 */}
-      <section className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <MessageCircle className="h-4 w-4 text-primary-text" aria-hidden />
           我的创作群（{rooms.length}）
@@ -1024,10 +1059,10 @@ function MusicTab() {
               <li key={r.id}>
                 <button
                   onClick={() => navigate(`/roleplay?chat=${r.id}`)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left transition-colors hover:border-primary"
+                  className="flex w-full items-center gap-2 rounded-xl border border-line px-3 py-2 text-left transition-colors hover:border-primary"
                 >
                   <span className="truncate font-medium">{r.title}</span>
-                  <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                     {r.message_count} 条演出
                   </span>
                 </button>
@@ -1044,7 +1079,7 @@ function MusicTab() {
       </section>
 
       {/* 角色演员池 */}
-      <section className="rounded-[var(--radius-card)] border border-border bg-surface p-4 lg:col-span-2">
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen lg:col-span-2">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <Users className="h-4 w-4 text-primary-text" aria-hidden />
           角色演员池（{chars.length}）——选角时自动检索复用，越用越厚
@@ -1061,7 +1096,7 @@ function MusicTab() {
               <button
                 key={c.asset_id}
                 onClick={() => navigate("/roleplay")}
-                className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs transition-colors hover:border-primary"
+                className="rounded-full border border-line bg-muted/40 px-3 py-1 text-xs transition-colors hover:border-primary"
                 title="点击前往角色扮演"
               >
                 {c.name || c.filename}
@@ -1122,38 +1157,38 @@ function MusicTab() {
               <p className="text-xs text-muted-foreground">主题：{detailWork.theme}</p>
             )}
             <div>
-              <p className="mb-1 text-xs font-semibold text-foreground">🎤 歌词</p>
-              <pre className="whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-xs leading-relaxed">
+              <p className="mb-1 text-xs font-semibold text-foreground">歌词</p>
+              <pre className="whitespace-pre-wrap rounded-xl bg-muted/40 p-3 text-xs leading-relaxed">
                 {detailWork.lyrics}
               </pre>
             </div>
             {detailWork.chords && (
               <div>
-                <p className="mb-1 text-xs font-semibold text-foreground">🎸 和弦谱</p>
-                <pre className="whitespace-pre-wrap rounded-lg bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+                <p className="mb-1 text-xs font-semibold text-foreground">和弦谱</p>
+                <pre className="whitespace-pre-wrap rounded-xl bg-muted/40 p-3 font-mono text-xs leading-relaxed">
                   {detailWork.chords}
                 </pre>
               </div>
             )}
             {detailWork.arrangement && (
               <div>
-                <p className="mb-1 text-xs font-semibold text-foreground">🎧 编曲思路</p>
-                <p className="rounded-lg bg-muted/40 p-3 text-xs leading-relaxed">
+                <p className="mb-1 text-xs font-semibold text-foreground">编曲思路</p>
+                <p className="rounded-xl bg-muted/40 p-3 text-xs leading-relaxed">
                   {detailWork.arrangement}
                 </p>
               </div>
             )}
             {detailWork.style_en && (
               <p className="text-xs text-muted-foreground">
-                🎼 Suno 风格：{detailWork.style_en}
+                Suno 风格：{detailWork.style_en}
               </p>
             )}
-            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+            <div className="flex flex-wrap gap-2 border-t border-line pt-3">
               <button
                 onClick={() => void copyShareUrl("music", detailWork.id)}
-                className="rounded-full border border-border px-3 py-1 text-xs hover:border-primary"
+                className="flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary-text"
               >
-                🔗 复制分享链接
+                <Share2 className="h-3.5 w-3.5" aria-hidden /> 复制分享链接
               </button>
               {rooms.length > 0 && (
                 <select
@@ -1163,7 +1198,7 @@ function MusicTab() {
                       void publishToChat(detailWork.id, e.target.value);
                     }
                   }}
-                  className="rounded-full border border-border px-3 py-1 text-xs"
+                  className="rounded-xl border border-line bg-surface px-3 py-2 text-xs"
                 >
                   <option value="">发布到创作群…</option>
                   {rooms.map((r) => (
@@ -1180,9 +1215,9 @@ function MusicTab() {
                     setDetailWork(null);
                   }
                 }}
-                className="rounded-full border border-border px-3 py-1 text-xs text-danger hover:border-danger"
+                className="flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-xs text-danger transition-colors hover:border-danger"
               >
-                🗑 删除
+                <Trash2 className="h-3.5 w-3.5" aria-hidden /> 删除
               </button>
             </div>
           </div>

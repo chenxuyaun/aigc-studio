@@ -203,7 +203,7 @@ export function InspirationGalleryPage() {
       {/* ═══ 风格配方（高频共现组合）═══ */}
       {!isLoading && stats.recipes.length > 0 && (
         <section className="mb-6 rounded-card border border-border bg-surface p-4">
-          <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-primary-text">
+          <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-primary-text">
             <Sparkles className="h-3.5 w-3.5" aria-hidden /> 高频风格配方 · 案例库中共现最多的风格组合
           </p>
           <div className="flex flex-wrap gap-2">
@@ -217,7 +217,7 @@ export function InspirationGalleryPage() {
                 <span className="text-foreground">{r.a}</span>
                 <span className="text-primary-text">+</span>
                 <span className="text-foreground">{r.b}</span>
-                <span className="font-mono text-[10px] opacity-60">{r.n} 例</span>
+                <span className="font-mono text-[11px] tabular-nums opacity-60">{r.n} 例</span>
                 <Wand2 className="h-3 w-3 opacity-0 text-primary-text transition-opacity group-hover:opacity-100" aria-hidden />
               </button>
             ))}
@@ -272,7 +272,7 @@ export function InspirationGalleryPage() {
 
         {/* 高频风格 chips */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">热门风格</span>
+          <span className="mr-1 text-[11px] font-medium text-muted-foreground">热门风格</span>
           {stats.hotStyles.map(([s, n]) => (
             <button
               key={s}
@@ -317,24 +317,24 @@ export function InspirationGalleryPage() {
               <button
                 key={c.id}
                 onClick={() => setDetail(c)}
-                className="group overflow-hidden rounded-xl border border-border bg-surface text-left shadow-[var(--shadow-soft)] transition-[box-shadow,border-color] hover:border-primary hover:shadow-[var(--shadow-lift)]"
+                className="group overflow-hidden rounded-2xl border border-line bg-surface text-left shadow-zen transition-colors hover:border-primary/40"
               >
                 <div className="relative aspect-square overflow-hidden bg-muted">
                   <img
                     src={`${GALLERY_BASE}/img/${c.img.replace(/^data\/images\//, "")}`}
                     alt={c.t}
                     loading="lazy"
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                    className="h-full w-full object-cover"
                   />
                   {c.f && (
-                    <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold text-primary-text backdrop-blur">
-                      ★ 精选
+                    <span className="absolute left-2 top-2 rounded-full bg-ink/55 px-2 py-0.5 text-[11px] font-medium text-background">
+                      精选
                     </span>
                   )}
                 </div>
                 <div className="p-2.5">
                   <p className="truncate text-xs font-semibold">{c.t}</p>
-                  <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                  <p className="mt-1 truncate text-[11px] text-muted-foreground">
                     {c.c} · {(c.st ?? []).slice(0, 2).join(" / ")}
                   </p>
                 </div>
@@ -393,7 +393,7 @@ export function InspirationGalleryPage() {
             {/* 相似推荐 */}
             {similar.length > 0 && (
               <div>
-                <p className="mb-2 flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-primary-text">
+                <p className="mb-2 flex items-center gap-1 text-xs font-medium text-primary-text">
                   <Layers className="h-3.5 w-3.5" aria-hidden /> Prompt 相似推荐
                 </p>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">

@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { refreshAssetUrl } from "@/lib/assetUrl";
 import { apiClient } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
 
@@ -123,14 +124,14 @@ export default function CommunityPage() {
       </header>
 
       {/* 发布表单 */}
-      <section className="ai-glass rounded-2xl p-4">
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
         <h2 className="text-sm font-medium text-foreground">分享我的作品</h2>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="标题（必填）"
           maxLength={120}
-          className="ai-glass-input mt-2 w-full rounded-lg px-3 py-2 text-sm text-foreground outline-none"
+          className="mt-2 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus-visible:border-primary/60"
         />
         <textarea
           value={content}
@@ -138,14 +139,14 @@ export default function CommunityPage() {
           rows={3}
           placeholder="介绍一下这个作品…"
           maxLength={4000}
-          className="ai-glass-input mt-2 w-full resize-y rounded-lg px-3 py-2 text-sm text-foreground outline-none"
+          className="mt-2 w-full resize-y rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus-visible:border-primary/60"
         />
         <input
           value={imageUrl}
           onChange={(e) => setImageUrl(e.target.value)}
           placeholder="图片链接（可选，填了就以图片帖展示）"
           maxLength={500}
-          className="ai-glass-input mt-2 w-full rounded-lg px-3 py-2 text-xs text-foreground outline-none"
+          className="mt-2 w-full rounded-xl border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none focus-visible:border-primary/60"
         />
         <div className="mt-2 flex items-center gap-3">
           <button
@@ -171,7 +172,7 @@ export default function CommunityPage() {
         {posts.map((p) => (
           <article
             key={p.id}
-            className="ai-glass flex flex-col overflow-hidden rounded-2xl transition-transform hover:-translate-y-0.5"
+            className="flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-zen transition-colors hover:border-primary/40"
           >
             {p.kind === "image" && p.image_url && (
               <img
@@ -179,8 +180,16 @@ export default function CommunityPage() {
                 alt={p.title}
                 className="h-40 w-full object-cover"
                 loading="lazy"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
+                onError={async (e) => {
+                  const el = e.currentTarget;
+                  if (el.dataset.refreshed) {
+                    el.style.display = "none";
+                    return;
+                  }
+                  el.dataset.refreshed = "1";
+                  const fresh = await refreshAssetUrl(el.src);
+                  if (fresh) el.src = fresh;
+                  else el.style.display = "none";
                 }}
               />
             )}
@@ -191,9 +200,9 @@ export default function CommunityPage() {
                   {p.content}
                 </p>
               )}
-              <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2.5">
+              <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
                 <div className="text-[11px] text-muted-foreground">
-                  👤 {p.author_name} · {fmtDate(p.created_at)}
+                  {p.author_name} · {fmtDate(p.created_at)}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -229,7 +238,7 @@ export default function CommunityPage() {
           type="button"
           onClick={() => void load(page + 1)}
           disabled={loading}
-          className="ai-glass-input mx-auto rounded-lg px-4 py-1.5 text-xs text-foreground/80 hover:text-foreground disabled:opacity-50"
+          className="mx-auto rounded-xl border border-border bg-surface px-4 py-1.5 text-xs text-foreground/80 transition-colors hover:text-foreground disabled:opacity-50"
         >
           {loading ? "加载中…" : "加载更多"}
         </button>

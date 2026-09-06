@@ -30,6 +30,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { AppError, apiClient } from "@/lib/apiClient";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
+import { refreshAssetUrl } from "@/lib/assetUrl";
 import { applyTemplateValues, parseTemplateVariables } from "@/lib/promptTemplate";
 
 const PAGE_SIZE = 24;
@@ -52,6 +53,23 @@ const PROMPT_TYPE_OPTS = [
   { v: "other", label: "其他" },
 ];
 
+/** 签名 URL 10 分钟过期：封面加载失败时自动刷新一次 src（每元素仅一次） */
+async function refreshCoverOnError(
+  e: React.SyntheticEvent<HTMLImageElement>,
+  onGiveUp?: () => void,
+) {
+  const el = e.currentTarget;
+  if (!el.dataset.refreshed) {
+    el.dataset.refreshed = "1";
+    const fresh = await refreshAssetUrl(el.src);
+    if (fresh) {
+      el.src = fresh;
+      return;
+    }
+  }
+  onGiveUp?.();
+}
+
 function HeartButton({
   favorited,
   onToggle,
@@ -69,12 +87,13 @@ function HeartButton({
       }}
       aria-pressed={favorited}
       aria-label={favorited ? "取消收藏" : "收藏"}
+      title={favorited ? "取消收藏" : "收藏"}
       className={cn(
-        "inline-flex items-center justify-center rounded-lg border border-white/15 bg-black/55 p-1.5 text-white backdrop-blur transition-colors",
+        "inline-flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
         className,
       )}
     >
-      <Heart className={cn("h-4 w-4", favorited && "fill-danger text-danger")} aria-hidden />
+      <Heart className={cn("h-4 w-4", favorited && "fill-primary text-primary")} aria-hidden />
     </button>
   );
 }
@@ -105,56 +124,59 @@ function PromptCard({
   }
 
   return (
-    <figure className="group mb-3 break-inside-avoid overflow-hidden rounded-xl border border-border bg-surface-raised transition-colors hover:border-border-strong">
-      <div className="relative">
-        <button
-          onClick={() => onOpen(prompt)}
-          className="block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={`查看提示词：${prompt.title}`}
-        >
-          {prompt.cover_url && imgOk ? (
-            <img
-              src={prompt.cover_url}
-              alt={prompt.title}
-              loading="lazy"
-              onError={() => setImgOk(false)}
-              className="w-full bg-muted object-cover"
-            />
-          ) : (
-            <div className="flex aspect-square items-center justify-center bg-muted text-xs text-muted-foreground">
-              无预览图
-            </div>
+    <figure className="mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-line bg-surface shadow-zen">
+      <button
+        onClick={() => onOpen(prompt)}
+        className="block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`查看提示词：${prompt.title}`}
+      >
+        {prompt.cover_url && imgOk ? (
+          <img
+            src={prompt.cover_url}
+            alt={prompt.title}
+            loading="lazy"
+            onError={(e) => refreshCoverOnError(e, () => setImgOk(false))}
+            className="w-full bg-muted object-cover"
+          />
+        ) : (
+          <div className="flex aspect-square items-center justify-center bg-muted text-xs text-muted-foreground">
+            暂无预览图
+          </div>
+        )}
+      </button>
+      <button onClick={() => onOpen(prompt)} className="block w-full space-y-1 p-3 text-left">
+        <p className="line-clamp-1 text-sm font-medium text-foreground">
+          {prompt.title}
+          {vars.length > 0 && (
+            <span className="ml-1.5 inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 align-middle text-[11px] font-medium text-primary-text">
+              变量 {vars.length}
+            </span>
           )}
-        </button>
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-        <HeartButton
-          favorited={favorited}
-          onToggle={() => onToggleFav(prompt.id)}
-          className={cn(
-            "absolute left-2 top-2 transition-opacity",
-            favorited ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
-          )}
-        />
+        </p>
+        {prompt.source_author && (
+          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <UserIcon className="h-3 w-3" aria-hidden />
+            <span className="truncate">{prompt.source_author}</span>
+          </p>
+        )}
+      </button>
+      {/* 操作条 */}
+      <div className="flex items-center gap-0.5 border-t border-line px-2 py-1.5">
+        <HeartButton favorited={favorited} onToggle={() => onToggleFav(prompt.id)} />
         {canManage && (
           <button
             onClick={(e) => {
               e.stopPropagation();
               onEdit(prompt);
             }}
-            className="absolute left-2 bottom-2 inline-flex items-center justify-center rounded-lg border border-white/15 bg-black/55 p-1.5 text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+            className="inline-flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="编辑"
+            title="编辑"
           >
-            <Pencil className="h-3.5 w-3.5" aria-hidden />
+            <Pencil className="h-4 w-4" aria-hidden />
           </button>
         )}
-        <button
-          onClick={() => void copy()}
-          className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-lg border border-white/15 bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-          aria-label="复制提示词"
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? "已复制" : "复制"}
-        </button>
+        <span className="flex-1" aria-hidden />
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -162,30 +184,22 @@ function PromptCard({
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
           }}
-          className="absolute right-[86px] top-2 inline-flex items-center gap-1 rounded-lg border border-white/15 bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+          className="inline-flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label="复制分享链接"
           title="复制公开分享链接（需提示词为公开）"
         >
-          <Share2 className="h-3.5 w-3.5" aria-hidden />
-          分享
+          <Share2 className="h-4 w-4" aria-hidden />
+        </button>
+        <button
+          onClick={() => void copy()}
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label="复制提示词"
+          title="复制提示词"
+        >
+          {copied ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+          {copied ? "已复制" : "复制"}
         </button>
       </div>
-      <button onClick={() => onOpen(prompt)} className="block w-full space-y-1 p-3 text-left">
-        <p className="line-clamp-1 text-sm font-medium text-foreground">
-          {prompt.title}
-          {vars.length > 0 && (
-            <span className="ml-1.5 inline-flex translate-y-[-1px] items-center rounded-md bg-primary/10 px-1.5 py-0.5 align-middle text-[10px] font-medium text-primary-text">
-              变量 {vars.length}
-            </span>
-          )}
-        </p>
-        {prompt.source_author && (
-          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <UserIcon className="h-3 w-3" aria-hidden />
-            <span className="truncate">{prompt.source_author}</span>
-          </p>
-        )}
-      </button>
     </figure>
   );
 }
@@ -239,7 +253,8 @@ function PromptDetail({
           <img
             src={prompt.cover_url}
             alt={prompt.title}
-            className="max-h-[46dvh] w-full rounded-xl border border-border object-contain"
+            onError={(e) => refreshCoverOnError(e)}
+            className="max-h-[46dvh] w-full rounded-xl border border-line object-contain"
           />
         )}
         {vars.length > 0 && (
@@ -279,20 +294,20 @@ function PromptDetail({
               href={prompt.source_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 hover:text-foreground"
+              className="flex items-center gap-1 transition-colors hover:text-foreground"
             >
               <ExternalLink className="h-3 w-3" aria-hidden />
               来源
             </a>
           )}
         </div>
-        <div className="rounded-xl border border-border bg-surface p-3">
+        <div className="rounded-xl border border-line bg-surface p-3">
           <p className="whitespace-pre-wrap break-words font-mono-ui text-[13px] leading-relaxed text-foreground">
             {prompt.content}
           </p>
         </div>
       </div>
-      <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-border bg-surface-raised p-4">
+      <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-line bg-surface-raised p-4">
         <Button
           variant="outline"
           size="icon"
@@ -300,7 +315,7 @@ function PromptDetail({
           aria-pressed={favorited}
           aria-label={favorited ? "取消收藏" : "收藏"}
         >
-          <Heart className={cn("h-4 w-4", favorited && "fill-danger text-danger")} aria-hidden />
+          <Heart className={cn("h-4 w-4", favorited && "fill-primary text-primary")} aria-hidden />
         </Button>
         <Button variant="outline" onClick={() => void copy()} className="flex-1">
           {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -678,7 +693,7 @@ export function PromptsPage() {
           </form>
         )}
         <div className="flex flex-nowrap gap-2 overflow-x-auto">
-          <Chip active={favMode} accent onClick={() => setFavMode((v) => !v)}>
+          <Chip active={favMode} onClick={() => setFavMode((v) => !v)}>
             <Heart className={cn("mr-1 inline h-3.5 w-3.5", favMode && "fill-current")} aria-hidden />
             收藏
           </Chip>
@@ -706,7 +721,7 @@ export function PromptsPage() {
               }}
             >
               #{t.name}
-              <span className="ml-1 text-[10px] opacity-70">{t.count}</span>
+              <span className="ml-1 text-[11px] opacity-70">{t.count}</span>
             </Chip>
           ))}
         </div>
@@ -719,7 +734,7 @@ export function PromptsPage() {
         ) : items.length === 0 ? (
           <EmptyState
             title={favMode ? "还没有收藏" : "没有匹配的提示词"}
-            description={favMode ? "在画廊里点 ♥ 收藏喜欢的提示词，这里就能找到。" : "换个分类或搜索关键词试试。"}
+            description={favMode ? "在画廊里点「收藏」，喜欢的提示词都会聚在这里。" : "换个分类或搜索关键词试试。"}
             action={
               !favMode && (
                 <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
@@ -731,7 +746,7 @@ export function PromptsPage() {
           />
         ) : (
           <>
-            <div className="columns-2 gap-3 sm:columns-3 lg:columns-4 xl:columns-5">
+            <div className="columns-2 gap-4 sm:columns-3 lg:columns-4 xl:columns-5">
               {items.map((p) => (
                 <PromptCard
                   key={p.id}
@@ -802,12 +817,10 @@ export function PromptsPage() {
 
 function Chip({
   active,
-  accent = false,
   onClick,
   children,
 }: {
   active: boolean;
-  accent?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -817,10 +830,8 @@ function Chip({
       className={cn(
         "inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors",
         active
-          ? accent
-            ? "border-danger bg-danger/10 text-danger"
-            : "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-surface text-muted-foreground hover:text-foreground",
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-line bg-surface text-muted-foreground transition-colors hover:text-foreground",
       )}
     >
       {children}

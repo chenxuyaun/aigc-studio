@@ -1,6 +1,25 @@
 import { useEffect, useState } from "react";
 
-import { BookOpen, Bot, Check, Copy, ExternalLink, Plus, Search, Send, SlidersHorizontal, Wand2 } from "lucide-react";
+import {
+  BookOpen,
+  Bot,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  GitBranch,
+  PenLine,
+  Plus,
+  RefreshCw,
+  Search,
+  Send,
+  Settings2,
+  SlidersHorizontal,
+  Trash2,
+  Users,
+  Wand2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -120,14 +139,14 @@ export function RoleplayPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <PageHeader
         title="角色扮演"
         description="角色卡 / 世界书 / 会话 / 宏 / 情绪 / 好感度 · 兼容 SillyTavern"
         actions={
           <Button variant="outline" onClick={() => setStOpen((v) => !v)}>
-            <ExternalLink className="mr-1.5 h-4 w-4" />
-            🔌 SillyTavern 接入
+            <ExternalLink className="h-4 w-4" aria-hidden />
+            SillyTavern 接入
           </Button>
         }
       />
@@ -135,68 +154,70 @@ export function RoleplayPage() {
       {/* v2：SillyTavern 独立页并入此引导卡（环境自适应地址 + 网关 token） */}
       {stOpen && <StGuideCard />}
 
-      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_300px]">
+      <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)_300px]">
         {/* 左栏：角色卡 + 会话 */}
-        <div className="space-y-4">
-          <div className="rounded-[var(--radius-card)] border border-border bg-surface p-3">
-            <div className="mb-2 flex items-center justify-between">
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
+            <div className="mb-3 flex items-center justify-between">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
-                <Bot className="h-4 w-4" aria-hidden />
+                <Bot className="h-4 w-4 text-primary-text" aria-hidden />
                 角色卡
               </h3>
               <a
                 href="/create/character-card"
-                className="flex items-center gap-1 text-xs text-primary-text hover:underline"
+                className="inline-flex min-h-[32px] items-center gap-1 rounded-lg px-1.5 text-xs text-primary-text transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Plus className="h-3 w-3" aria-hidden />
+                <Plus className="h-3.5 w-3.5" aria-hidden />
                 生成新卡
               </a>
             </div>
-            <label className="flex items-center gap-2 px-1 py-1 text-xs text-muted-foreground">
+            <label className="flex min-h-[32px] cursor-pointer items-center gap-2 px-1 text-xs text-muted-foreground">
               <input
                 type="checkbox"
+                className="h-4 w-4 accent-primary"
                 checked={groupMode}
                 onChange={(e) => setGroupMode(e.target.checked)}
               />
               群聊模式（多选角色同场）
             </label>
-            <label className="flex items-center gap-2 px-1 py-1 text-xs text-muted-foreground">
+            <label className="flex min-h-[32px] cursor-pointer items-center gap-2 px-1 text-xs text-muted-foreground">
               <input
                 type="checkbox"
+                className="h-4 w-4 accent-primary"
                 checked={isRoom}
                 onChange={(e) => setIsRoom(e.target.checked)}
               />
               多人房间（全员可见可加入）
             </label>
             {isRoom && (
-              <div className="mb-1 flex flex-col gap-1">
+              <div className="mb-2 flex flex-col gap-2">
                 <input
                   value={authorName}
                   onChange={(e) => setAuthorName(e.target.value)}
                   placeholder="你的身份名（如：陈满堂）"
-                  className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
+                  className="h-10 w-full rounded-xl border border-input bg-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 <input
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
                   placeholder="群名（如：双城之夜剧组）"
-                  className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
+                  className="h-10 w-full rounded-xl border border-input bg-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 <input
                   value={groupDesc}
                   onChange={(e) => setGroupDesc(e.target.value)}
                   placeholder="群简介（可选）"
-                  className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
+                  className="h-10 w-full rounded-xl border border-input bg-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
             )}
             {groupMode && (
-              <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground">
+              <div className="mb-2 flex flex-wrap items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
                 轮流
                 <select
                   value={groupStrategy}
                   onChange={(e) => setGroupStrategy(e.target.value as typeof groupStrategy)}
-                  className="h-6 flex-1 rounded border border-border bg-background px-1"
+                  className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-surface px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="natural">自然（模型自选）</option>
                   <option value="list">按序轮流</option>
@@ -206,7 +227,7 @@ export function RoleplayPage() {
                 <select
                   value={groupModeType}
                   onChange={(e) => setGroupModeType(e.target.value as typeof groupModeType)}
-                  className="h-6 flex-1 rounded border border-border bg-background px-1"
+                  className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-surface px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="append">全员卡片</option>
                   <option value="swap">仅说话者</option>
@@ -214,9 +235,10 @@ export function RoleplayPage() {
               </div>
             )}
             {groupMode && (
-              <label className="flex items-center gap-1.5 px-1 py-1 text-[10px] text-muted-foreground">
+              <label className="flex min-h-[32px] cursor-pointer flex-wrap items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
                 <input
                   type="checkbox"
+                  className="h-4 w-4 accent-primary"
                   checked={autoMode}
                   onChange={(e) => setAutoMode(e.target.checked)}
                 />
@@ -228,7 +250,7 @@ export function RoleplayPage() {
                     max={60}
                     value={autoInterval}
                     onChange={(e) => setAutoInterval(Math.max(3, Number(e.target.value) || 8))}
-                    className="h-5 w-12 rounded border border-border bg-background px-1"
+                    className="h-8 w-14 rounded-lg border border-input bg-surface px-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 )}
                 {autoMode && <span>秒/轮</span>}
@@ -238,9 +260,9 @@ export function RoleplayPage() {
               value={charSearch}
               onChange={(e) => setCharSearch(e.target.value)}
               placeholder="搜索角色…"
-              className="mb-1.5 h-7 text-xs"
+              className="mb-2"
             />
-            <div className="max-h-64 space-y-1 overflow-y-auto">
+            <div className="max-h-72 space-y-1.5 overflow-y-auto">
               {characters
                 .filter((c) => {
                   const q = charSearch.trim().toLowerCase();
@@ -252,12 +274,13 @@ export function RoleplayPage() {
                   key={c.asset_id}
                   className={`flex items-center gap-2 rounded-xl border p-2 transition-colors ${
                     selected?.asset_id === c.asset_id
-                      ? "border-primary bg-primary/10"
-                      : "border-border hover:border-border-strong"
+                      ? "border-primary/30 bg-primary/10"
+                      : "border-line hover:border-border-strong"
                   }`}
                 >
                   <input
                     type="checkbox"
+                    className="h-4 w-4 accent-primary"
                     checked={groupIds.includes(c.asset_id)}
                     onChange={() => toggleGroupMember(c.asset_id)}
                   />
@@ -271,10 +294,10 @@ export function RoleplayPage() {
                       className="h-9 w-9 rounded-lg border border-border object-cover"
                     />
                     <span className="min-w-0">
-                      <span className="block truncate text-xs font-medium">
+                      <span className="block truncate text-sm font-medium">
                         {c.name || c.filename}
                         {c.is_shared && (
-                          <span className="ml-1 rounded bg-primary/12 px-1 py-0.5 text-[9px] font-semibold text-primary-text">
+                          <span className="ml-1.5 inline-block rounded-full bg-primary/10 px-1.5 align-middle text-[11px] text-primary-text">
                             共享
                           </span>
                         )}
@@ -283,13 +306,13 @@ export function RoleplayPage() {
                         <button
                           type="button"
                           onClick={() => void toggleShare(c)}
-                          className="shrink-0 rounded-md border border-border px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-primary hover:text-primary-text"
+                          className="mt-0.5 inline-block rounded-lg border border-line px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           title={c.is_shared ? "取消共享（仅自己可见）" : "共享给所有用户"}
                         >
                           {c.is_shared ? "取消共享" : "共享"}
                         </button>
                       )}
-                      <span className="block truncate text-[10px] text-muted-foreground">
+                      <span className="block truncate text-[11px] text-muted-foreground">
                         {c.filename}
                       </span>
                     </span>
@@ -297,21 +320,36 @@ export function RoleplayPage() {
                 </div>
               ))}
               {characters.length === 0 && (
-                <p className="py-4 text-center text-xs text-muted-foreground">
-                  暂无角色卡 —— 去「生成新卡」创建或导入
-                </p>
+                <div className="px-3 py-6 text-center">
+                  <p className="text-sm text-muted-foreground">还没有角色卡</p>
+                  <a
+                    href="/create/character-card"
+                    className="mt-2 inline-flex h-10 items-center rounded-xl border border-primary/30 px-4 text-sm text-primary-text transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    去生成第一张角色卡
+                  </a>
+                </div>
               )}
               {characters.length > 0 &&
                 characters.filter((c) => {
                   const q = charSearch.trim().toLowerCase();
                   return !q || `${c.name ?? ""} ${c.filename}`.toLowerCase().includes(q);
                 }).length === 0 && (
-                  <p className="py-4 text-center text-xs text-muted-foreground">无匹配角色</p>
+                  <div className="px-3 py-6 text-center">
+                    <p className="text-sm text-muted-foreground">没有匹配「{charSearch.trim()}」的角色</p>
+                    <button
+                      type="button"
+                      onClick={() => setCharSearch("")}
+                      className="mt-2 inline-flex h-10 items-center rounded-xl px-4 text-sm text-primary-text transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      清除搜索
+                    </button>
+                  </div>
                 )}
             </div>
           </div>
 
-          <div className="h-72 rounded-[var(--radius-card)] border border-border bg-surface">
+          <div className="h-72 overflow-hidden rounded-2xl border border-line bg-surface shadow-zen">
             <SessionSidebar
               activeId={sessionId}
               refreshKey={refreshTick}
@@ -322,32 +360,46 @@ export function RoleplayPage() {
           </div>
         </div>
 
-        {/* 中栏：聊天 */}
-        <div className="flex min-h-[560px] flex-col rounded-[var(--radius-card)] border border-border bg-surface">
-          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <span className="text-sm font-semibold">
-              {selected ? `与 ${charDisplayName || selected.filename} 聊天` : "请选择角色"}
-              <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary-text">
+        {/* 中栏：对话场 —— 气泡纸卡 */}
+        <div className="flex min-h-[560px] flex-col rounded-2xl border border-line bg-surface shadow-zen">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+            <span className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">
+              <span className="truncate">
+                {selected ? `与 ${charDisplayName || selected.filename} 聊天` : "请选择角色"}
+              </span>
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary-text">
                 好感度 {affinity}
               </span>
               {sessionId && (
                 <button
                   type="button"
-                  className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary-text hover:bg-primary/20"
+                  className="inline-flex min-h-[32px] items-center gap-1 rounded-full bg-primary/10 px-2.5 text-xs text-primary-text transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => void openGroupInfo(sessionId)}
                 >
-                  📋 群信息
+                  <Users className="h-3.5 w-3.5" aria-hidden />
+                  群信息
                 </button>
               )}
             </span>
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-3 text-xs">
               {messages.length > 0 && (
-                <button className="text-muted-foreground hover:text-danger" onClick={() => void clearChat()}>
+                <button
+                  className="inline-flex min-h-[32px] items-center rounded-lg px-2 text-muted-foreground transition-colors hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => void clearChat()}
+                >
                   清空对话
                 </button>
               )}
-              {busy && <span className="animate-pulse text-muted-foreground">生成中…</span>}
-              <span className="text-[10px] text-muted-foreground">
+              {busy && (
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <span
+                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+                    aria-hidden
+                  />
+                  生成中…
+                </span>
+              )}
+              <span className="text-[11px] text-muted-foreground">
                 {promptTokens != null
                   ? `最近上下文 ${promptTokens} tok`
                   : `上下文 ≈ ${estimateTokens(messages.map((m) => m.content).join("\n"))} tok`}
@@ -356,17 +408,17 @@ export function RoleplayPage() {
           </div>
 
           {messages.length > 5 && (
-            <div className="flex items-center gap-1.5 border-b border-border px-3 py-1.5">
-              <Search className="h-3 w-3 text-muted-foreground" aria-hidden />
+            <div className="flex items-center gap-2 border-b border-line px-4 py-2">
+              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <input
                 value={msgSearch}
                 onChange={(e) => setMsgSearch(e.target.value)}
                 placeholder="搜索对话…"
-                className="h-6 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
               {msgSearch && (
                 <button
-                  className="text-[10px] text-muted-foreground hover:text-foreground"
+                  className="inline-flex min-h-[32px] items-center rounded-lg px-2 text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => setMsgSearch("")}
                 >
                   清除
@@ -374,11 +426,14 @@ export function RoleplayPage() {
               )}
             </div>
           )}
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          <div className="bg-muted/30 flex-1 space-y-4 overflow-y-auto p-4">
             {messages.length === 0 && !streamingText && (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                发送第一条消息开始角色扮演（自动创建会话）
-              </p>
+              <div className="py-14 text-center">
+                <p className="text-sm text-muted-foreground">还没有对话</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  在下方说第一句话，会话会自动创建
+                </p>
+              </div>
             )}
             {messages
               .map((m, i) => ({ m, i }))
@@ -389,16 +444,16 @@ export function RoleplayPage() {
               })
               .map(({ m, i }) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className="group max-w-[75%]">
+                <div className="group min-w-0 max-w-[75%]">
                   <div
-                    className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm ${
+                    className={`break-words rounded-2xl px-4 py-3 text-sm ${
                       m.role === "user"
-                        ? "bg-primary/15 text-foreground"
-                        : "border border-border bg-background"
+                        ? "border border-primary/30 bg-primary/10"
+                        : "border border-line bg-surface shadow-zen"
                     }`}
                   >
                     {m.role === "assistant" && m.mood && (
-                      <span className="mb-1.5 mr-1.5 inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">
+                      <span className="mb-2 mr-1.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
                         {m.mood}
                       </span>
                     )}
@@ -410,73 +465,77 @@ export function RoleplayPage() {
                   </div>
                   {/* 回复操作：swipe 切换 / 换一个 / 继续写 */}
                   {m.role === "assistant" && !busy && (
-                    <div className="mt-1 flex items-center gap-2 px-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="mt-1 flex flex-wrap items-center gap-1 px-1 opacity-100 md:opacity-0 md:group-hover:opacity-100">
                       {m.swipes && m.swipes.length > 1 && (
-                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <span className="flex items-center text-[11px] text-muted-foreground">
                           <button
-                            className="hover:text-primary-text"
+                            className="inline-flex h-8 items-center rounded-lg px-1.5 hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             title="上一个"
                             onClick={() => switchSwipe(i, -1)}
                           >
-                            ‹
+                            <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
                           </button>
                           {(m.swipeIndex ?? m.swipes.length - 1) + 1}/{m.swipes.length}
                           <button
-                            className="hover:text-primary-text"
+                            className="inline-flex h-8 items-center rounded-lg px-1.5 hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             title="下一个"
                             onClick={() => switchSwipe(i, 1)}
                           >
-                            ›
+                            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
                           </button>
                         </span>
                       )}
                       <button
-                        className="text-[10px] text-muted-foreground hover:text-primary-text"
+                        className="inline-flex h-8 items-center gap-1 rounded-lg px-1.5 text-[11px] text-muted-foreground hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         title="生成另一个回复"
                         onClick={() => void swipeReply(i)}
                       >
-                        ↻ 换一个
+                        <RefreshCw className="h-3 w-3" aria-hidden />
+                        换一个
                       </button>
                       <button
-                        className="text-[10px] text-muted-foreground hover:text-primary-text"
+                        className="inline-flex h-8 items-center gap-1 rounded-lg px-1.5 text-[11px] text-muted-foreground hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         title="继续写下去"
                         onClick={() => void continueReply(i)}
                       >
-                        ✎ 继续写
+                        <PenLine className="h-3 w-3" aria-hidden />
+                        继续写
                       </button>
                     </div>
                   )}
                   {m.role === "assistant" && !busy && (
                     <button
-                      className="mt-1 px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                      className="inline-flex h-8 items-center gap-1 rounded-lg px-1.5 text-[11px] text-muted-foreground opacity-100 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover:opacity-100"
                       title="删除这条消息"
                       onClick={() => void removeMessage(i)}
                     >
-                      ✕ 删除
+                      <Trash2 className="h-3 w-3" aria-hidden />
+                      删除
                     </button>
                   )}
                   <button
-                    className="mt-1 px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-primary-text group-hover:opacity-100"
+                    className="inline-flex h-8 items-center rounded-lg px-1.5 text-[11px] text-muted-foreground opacity-100 hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover:opacity-100"
                     title="复制消息"
                     onClick={() => void copyText(m.content)}
                   >
                     复制
                   </button>
                   <button
-                    className="mt-1 px-1 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:text-primary-text group-hover:opacity-100"
+                    className="inline-flex h-8 items-center gap-1 rounded-lg px-1.5 text-[11px] text-muted-foreground opacity-100 hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover:opacity-100"
                     title="从这里分叉新会话"
                     onClick={() => void branchChat(i)}
                   >
-                    ⑂ 分支
+                    <GitBranch className="h-3 w-3" aria-hidden />
+                    分支
                   </button>
                 </div>
               </div>
               ))}
             {streamingText && (
               <div className="flex justify-start">
-                <div className="max-w-[75%] rounded-2xl border border-border bg-background px-3.5 py-2.5 text-sm">
+                <div className="max-w-[75%] rounded-2xl border border-line bg-surface px-4 py-3 text-sm shadow-zen">
                   <MarkdownContent content={streamingText} />
-                  <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-foreground align-middle" />
+                  <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-foreground align-middle" aria-hidden />
                 </div>
               </div>
             )}
@@ -485,13 +544,13 @@ export function RoleplayPage() {
 
           {/* 快捷回复行 */}
           {quickReplies.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 border-t border-border px-3 py-2">
+            <div className="flex flex-wrap gap-2 border-t border-line px-4 py-3">
               {quickReplies.map((q) => (
                 <button
                   key={q.id}
                   disabled={busy || !selected}
                   onClick={() => setInput(expandQuickMacros(q.message, charDisplayName, personas.find((p) => p.id === personaId)?.name ?? "用户"))}
-                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary-text disabled:opacity-40"
+                  className="inline-flex min-h-[32px] items-center rounded-full border border-line px-3 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                 >
                   {q.label}
                 </button>
@@ -499,8 +558,8 @@ export function RoleplayPage() {
             </div>
           )}
 
-          <div className="border-t border-border p-3">
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="border-t border-line p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <label htmlFor="rp-model" className="shrink-0">
                 模型
               </label>
@@ -508,7 +567,7 @@ export function RoleplayPage() {
                 id="rp-model"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="h-7 flex-1 rounded-lg border border-border bg-background px-2 text-xs outline-none focus:border-primary"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {modelCatalog.length > 0 ? (
                   modelCatalog.map((m) => (
@@ -530,7 +589,7 @@ export function RoleplayPage() {
                 id="rp-persona"
                 value={personaId}
                 onChange={(e) => setPersonaId(e.target.value)}
-                className="h-7 rounded-lg border border-border bg-background px-2 text-xs"
+                className="h-10 rounded-xl border border-input bg-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="">默认（用户）</option>
                 {personas.map((p) => (
@@ -540,12 +599,12 @@ export function RoleplayPage() {
                 ))}
               </select>
               <details className="relative">
-                <summary className="flex cursor-pointer items-center gap-1 text-muted-foreground hover:text-foreground">
+                <summary className="inline-flex min-h-[32px] cursor-pointer list-none items-center gap-1 rounded-lg px-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                   <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
                   参数
                 </summary>
-                <div className="absolute right-0 top-6 z-10 w-56 space-y-2 rounded-xl border border-border bg-surface p-3 shadow-lg">
-                  <label className="block text-xs">
+                <div className="absolute right-0 top-9 z-10 w-60 space-y-3 rounded-2xl border border-line bg-surface p-4 shadow-zen">
+                  <label className="block text-sm">
                     温度 {temperature.toFixed(1)}
                     <input
                       type="range"
@@ -554,10 +613,10 @@ export function RoleplayPage() {
                       step={0.1}
                       value={temperature}
                       onChange={(e) => setTemperature(Number(e.target.value))}
-                      className="w-full"
+                      className="mt-1 w-full accent-primary"
                     />
                   </label>
-                  <label className="block text-xs">
+                  <label className="block text-sm">
                     最大回复 token
                     <input
                       type="number"
@@ -566,7 +625,7 @@ export function RoleplayPage() {
                       step={64}
                       value={maxTokens}
                       onChange={(e) => setMaxTokens(Number(e.target.value) || 1024)}
-                      className="mt-1 h-7 w-full rounded-lg border border-border bg-background px-2"
+                      className="mt-1 h-10 w-full rounded-xl border border-input bg-surface px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   </label>
                 </div>
@@ -585,16 +644,16 @@ export function RoleplayPage() {
                 placeholder={isRoom ? "@AI 写歌：主题 [风格]，群里一起写歌…" : "对角色说点什么…（{{char}}/{{user}} 宏可用）"}
                 disabled={busy || !selected}
               />
-              <Button onClick={() => void send()} disabled={busy || !selected}>
+              <Button onClick={() => void send()} disabled={busy || !selected} aria-label="发送">
                 <Send className="h-4 w-4" aria-hidden />
               </Button>
             </div>
           </div>
         </div>
 
-        {/* 右栏：常用三页（角色卡/状态账本/卡库）；高级项收「⚙️ 高级」抽屉 */}
-        <div className="rounded-[var(--radius-card)] border border-border bg-surface p-4">
-          <div className="mb-3 flex items-center gap-1 border-b border-border pb-2 text-xs">
+        {/* 右栏：常用三页（角色卡/状态账本/卡库）；高级项收「高级」抽屉 */}
+        <div className="rounded-2xl border border-line bg-surface p-4 shadow-zen">
+          <div className="mb-3 flex flex-wrap items-center gap-1 text-xs">
             {(
               [
                 ["character", "角色卡"],
@@ -605,7 +664,7 @@ export function RoleplayPage() {
               <button
                 key={key}
                 onClick={() => setRightTab(key)}
-                className={`rounded-lg px-2.5 py-1 transition-colors ${
+                className={`min-h-[40px] rounded-full px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   rightTab === key ? "bg-primary/10 text-primary-text" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -614,14 +673,15 @@ export function RoleplayPage() {
             ))}
             <button
               onClick={() => setAdvancedOpen(true)}
-              className={`ml-auto flex items-center gap-1 rounded-lg px-2.5 py-1 transition-colors ${
+              className={`ml-auto inline-flex min-h-[40px] items-center gap-1 rounded-full px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 advancedOpen
                   ? "bg-primary/10 text-primary-text"
-                  : "border border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                  : "border border-line text-muted-foreground hover:border-primary/60 hover:text-foreground"
               }`}
               title="世界书 / 正则 / 记忆 / 设置"
             >
-              ⚙️ 高级
+              <Settings2 className="h-3.5 w-3.5" aria-hidden />
+              高级
             </button>
           </div>
 
@@ -638,19 +698,24 @@ export function RoleplayPage() {
                   }}
                 />
               ) : (
-                <p className="py-4 text-center text-xs text-muted-foreground">请先选择角色卡</p>
+                <div className="py-8 text-center">
+                  <p className="text-sm text-muted-foreground">还没有选择角色</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    在左侧角色卡列表里挑一张，这里就能编辑
+                  </p>
+                </div>
               ))}
             {rightTab === "book" && <StatusBookPanel chatId={sessionId} />}
             {rightTab === "market" && <CardMarketPanel />}
           </div>
 
-          <div className="mt-3 border-t border-border pt-2">
-            <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <BookOpen className="h-3 w-3" aria-hidden />
+          <div className="mt-4 border-t border-line pt-3">
+            <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              <BookOpen className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               宏：{"{{char}}"} {"{{user}}"} {"{{random::A::B}}"} {"{{roll::1d20}}"} {"{{time}}"}
             </p>
-            <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Wand2 className="h-3 w-3" aria-hidden />
+            <p className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              <Wand2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               会话可导出为 SillyTavern JSONL，也可导入回放 · 世界书/正则/记忆在「高级」抽屉
             </p>
           </div>
@@ -659,19 +724,19 @@ export function RoleplayPage() {
 
       {/* v2 高级抽屉：世界书 / 正则 / 记忆 / 设置（从右栏七 tab 收敛） */}
       <Dialog open={advancedOpen} onClose={() => setAdvancedOpen(false)} title="高级设置" className="max-w-2xl">
-        <div className="mb-3 flex gap-1 border-b border-border pb-2 text-xs">
+        <div className="mb-3 flex flex-wrap gap-1 text-xs">
           {(
             [
-              ["lore", "📖 世界书"],
-              ["regex", "🔧 正则"],
-              ["memory", "🧠 记忆"],
-              ["settings", "⚙️ 设置"],
+              ["lore", "世界书"],
+              ["regex", "正则"],
+              ["memory", "记忆"],
+              ["settings", "设置"],
             ] as const
           ).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setAdvancedTab(key)}
-              className={`rounded-lg px-2.5 py-1 transition-colors ${
+              className={`min-h-[40px] rounded-full px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 advancedTab === key
                   ? "bg-primary/10 text-primary-text"
                   : "text-muted-foreground hover:text-foreground"
@@ -688,7 +753,12 @@ export function RoleplayPage() {
             (selected ? (
               <MemoryPanel assetId={selected.asset_id} />
             ) : (
-              <p className="py-4 text-center text-xs text-muted-foreground">请先选择角色卡</p>
+              <div className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">还没有选择角色</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  在左侧角色卡列表里挑一张，再回来管理记忆
+                </p>
+              </div>
             ))}
           {advancedTab === "settings" && (
             <SettingsPanel
@@ -704,36 +774,36 @@ export function RoleplayPage() {
       </Dialog>
       <Dialog open={groupInfoOpen} onClose={() => setGroupInfoOpen(false)} title={groupInfo?.name ?? "群信息"}>
         {groupInfo && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {groupInfo.description && (
-              <p className="text-xs text-muted-foreground">{groupInfo.description}</p>
+              <p className="text-sm text-muted-foreground">{groupInfo.description}</p>
             )}
-            <div className="flex items-center gap-2 rounded-lg bg-muted/40 p-2">
-              <span className="text-xs text-muted-foreground">邀请码：</span>
+            <div className="flex items-center gap-2 rounded-xl bg-muted/40 p-3">
+              <span className="text-xs text-muted-foreground">邀请码</span>
               <code className="font-mono text-sm font-semibold">{groupInfo.invite_code}</code>
               <button
                 type="button"
-                className="ml-auto text-xs text-primary-text hover:underline"
+                className="ml-auto inline-flex min-h-[32px] items-center rounded-lg px-2 text-xs text-primary-text transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => void copyText(groupInfo.invite_code)}
               >
                 复制
               </button>
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-semibold text-foreground">
+              <p className="mb-2 text-sm font-semibold text-foreground">
                 成员（{groupInfo.members.length}）
               </p>
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {groupInfo.members.map((m: GroupMember) => (
-                  <li key={m.user_id} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm">
-                    <span className="truncate">{m.username}</span>
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <li key={m.user_id} className="flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm">
+                    <span className="min-w-0 truncate">{m.username}</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
                       {m.role === "owner" ? "群主" : "成员"}
                     </span>
                     {m.role !== "owner" && authUser?.id === groupInfo.owner_id && (
                       <button
                         type="button"
-                        className="ml-auto text-xs text-danger hover:underline"
+                        className="ml-auto inline-flex min-h-[32px] items-center rounded-lg px-2 text-xs text-danger transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => void kickMember(m.user_id)}
                       >
                         移出
@@ -743,7 +813,7 @@ export function RoleplayPage() {
                 ))}
               </ul>
             </div>
-            <div className="border-t border-border pt-3">
+            <div className="border-t border-line pt-4">
               <Button
                 className="w-full"
                 loading={publishing}
@@ -788,31 +858,31 @@ function StGuideCard() {
   }
 
   return (
-    <div className="grid gap-3 rounded-[var(--radius-card)] border border-border bg-surface p-4 text-sm md:grid-cols-3">
+    <div className="grid gap-5 rounded-2xl border border-line bg-surface p-4 text-sm shadow-zen md:grid-cols-3 md:p-5">
       <div>
-        <p className="text-xs font-semibold">① 打开 SillyTavern</p>
+        <p className="text-sm font-semibold">① 打开 SillyTavern</p>
         <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
           独立应用新窗口打开，首次访问按引导设置管理员密码。
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <a href={stUrl} target="_blank" rel="noreferrer">
             <Button size="sm">
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
               打开
             </Button>
           </a>
-          <code className="truncate rounded-lg border border-border bg-background px-2 py-1 font-mono text-[10px] text-muted-foreground">
+          <code className="min-w-0 truncate rounded-lg border border-line bg-muted/40 px-2 py-1 font-mono text-[11px] text-muted-foreground">
             {stUrl}
           </code>
         </div>
       </div>
       <div>
-        <p className="text-xs font-semibold">② 复制网关 API Key</p>
+        <p className="text-sm font-semibold">② 复制网关 API Key</p>
         <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
           即工作台登录凭证。粘贴到 ST 的 API Key 栏。
         </p>
-        <div className="mt-2 flex items-center gap-2">
-          <code className="flex-1 truncate rounded-lg border border-border bg-background px-2 py-1 font-mono text-[10px] text-muted-foreground select-none">
+        <div className="mt-3 flex items-center gap-2">
+          <code className="min-w-0 flex-1 truncate rounded-lg border border-line bg-muted/40 px-2 py-1 font-mono text-[11px] text-muted-foreground select-none">
             {accessToken ? "••••••••（点击复制）" : "（未登录）"}
           </code>
           <Button variant="outline" size="sm" onClick={() => void copyToken()} disabled={!accessToken}>
@@ -822,13 +892,15 @@ function StGuideCard() {
         </div>
       </div>
       <div>
-        <p className="text-xs font-semibold">③ ST 内配置连接</p>
-        <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-[11px] leading-relaxed text-muted-foreground">
+        <p className="text-sm font-semibold">③ ST 内配置连接</p>
+        <ol className="mt-1 list-decimal space-y-1 pl-4 text-[11px] leading-relaxed text-muted-foreground">
           <li>设置 → API 连接 → Custom (OpenAI)</li>
           <li>
-            源填 <code className="font-mono text-[10px]">{gatewayUrl}</code>
+            源填 <code className="font-mono text-[11px]">{gatewayUrl}</code>
           </li>
-          <li>Key 粘贴第②步 · 模型 gpt-oss-120b-medium</li>
+          <li>
+            Key 粘贴第②步 · 模型 <code className="font-mono text-[11px]">gpt-oss-120b-medium</code>
+          </li>
         </ol>
       </div>
     </div>

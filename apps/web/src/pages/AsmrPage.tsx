@@ -1,7 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { Clock, Eye, FileText, Folder, Heart, Search as SearchIcon, Star } from "lucide-react";
+import {
+  ChevronDown,
+  Clock,
+  ExternalLink,
+  Eye,
+  FileText,
+  Folder,
+  HardDrive,
+  Headphones,
+  Heart,
+  PenLine,
+  Search as SearchIcon,
+  Star,
+  X,
+} from "lucide-react";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -338,7 +352,7 @@ export function AsmrPage() {
             <button
               onClick={lockAdult}
               title="隐藏成人内容"
-              className="flex h-9 items-center gap-1.5 rounded-full border border-border-strong px-3 text-xs text-muted-foreground hover:border-primary hover:text-foreground"
+              className="flex h-9 items-center gap-1.5 rounded-xl border border-border-strong px-3 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
             >
               <Eye className="h-3.5 w-3.5" aria-hidden />
               隐藏成人内容
@@ -363,12 +377,12 @@ export function AsmrPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={view === "disk" ? "搜索网盘资源（声优 / 作品名）…" : "搜索标题 / 社团 / 声优…"}
-              className="h-10 w-full rounded-full border border-border-strong bg-surface py-0 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
+              className="h-10 w-full rounded-xl border border-border-strong bg-surface py-0 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
           <button
             type="submit"
-            className="h-10 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
+            className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
           >
             搜索
           </button>
@@ -377,13 +391,13 @@ export function AsmrPage() {
 
       <div className="space-y-3 p-4 md:p-6">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1">
+          <div className="flex items-center gap-1 rounded-full border border-line bg-surface p-1">
             {(["works", "disk"] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "rounded-full px-3 py-1 text-xs",
+                  "rounded-full px-3 py-1 text-xs transition-colors",
                   view === v
                     ? "bg-primary font-medium text-primary-foreground"
                     : "text-muted-foreground",
@@ -395,13 +409,13 @@ export function AsmrPage() {
           </div>
           {view === "works" && (
             <>
-              <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1">
+              <div className="flex items-center gap-1 rounded-full border border-line bg-surface p-1">
                 {NSFW_FILTERS.filter((f) => adultUnlocked || f.v !== "adult").map((f) => (
                   <button
                     key={f.v}
                     onClick={() => setNsfw(f.v)}
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs",
+                      "rounded-full px-3 py-1 text-xs transition-colors",
                       effectiveNsfw === f.v
                         ? "bg-primary font-medium text-primary-foreground"
                         : "text-muted-foreground",
@@ -411,13 +425,13 @@ export function AsmrPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1">
+              <div className="flex items-center gap-1 rounded-full border border-line bg-surface p-1">
                 {LANG_FILTERS.map((f) => (
                   <button
                     key={f.v}
                     onClick={() => setLang(f.v)}
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs",
+                      "rounded-full px-3 py-1 text-xs transition-colors",
                       lang === f.v
                         ? "bg-primary font-medium text-primary-foreground"
                         : "text-muted-foreground",
@@ -430,20 +444,21 @@ export function AsmrPage() {
               <button
                 onClick={() => setFavoritesOnly((v) => !v)}
                 className={cn(
-                  "rounded-full border px-3 py-1 text-xs",
+                  "flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors",
                   favoritesOnly
                     ? "border-primary/40 bg-primary/10 font-medium text-primary-text"
-                    : "border-border bg-surface text-muted-foreground",
+                    : "border-line bg-surface text-muted-foreground hover:border-primary",
                 )}
               >
-                ♥ 仅收藏{favoritesOnly ? `（${total}）` : ""}
+                <Heart className={cn("h-3 w-3", favoritesOnly && "fill-current")} aria-hidden />
+                仅收藏{favoritesOnly ? `（${total}）` : ""}
               </button>
             </>
           )}
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="h-8 rounded-full border border-border bg-surface px-3 text-xs text-foreground"
+            className="h-8 rounded-xl border border-line bg-surface px-3 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {SORTS.map((s) => (
               <option key={s.v} value={s.v}>{s.label}</option>
@@ -452,12 +467,13 @@ export function AsmrPage() {
           {tag && (
             <button
               onClick={() => setTag("")}
-              className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary-text"
+              className="flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary-text transition-colors hover:bg-primary/20"
             >
-              {tag} ✕
+              {tag}
+              <X className="h-3 w-3" aria-hidden />
             </button>
           )}
-          <span className="ml-auto text-xs text-muted-foreground">
+          <span className="ml-auto text-xs tabular-nums text-muted-foreground">
             {total.toLocaleString()} 部
           </span>
         </div>
@@ -469,10 +485,10 @@ export function AsmrPage() {
                 key={name}
                 onClick={() => setTag(tag === name ? "" : name)}
                 className={cn(
-                  "rounded-full border px-2.5 py-0.5 text-xs",
+                  "rounded-full border px-2.5 py-0.5 text-xs tabular-nums transition-colors",
                   tag === name
                     ? "border-primary/40 bg-primary/10 font-medium text-primary-text"
-                    : "border-border bg-surface text-muted-foreground",
+                    : "border-line bg-surface text-muted-foreground hover:border-primary",
                 )}
               >
                 {name} {count}
@@ -485,18 +501,21 @@ export function AsmrPage() {
           <>
             {diskBusy && <p className="text-sm text-muted-foreground">搜索中…</p>}
             {!diskBusy && diskItems.length === 0 && (
-              <p className="pt-10 text-center text-sm text-muted-foreground">
-                输入声优 / 作品名搜索网盘资源（asmrgay 目录索引）
-              </p>
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <HardDrive className="h-8 w-8 text-muted-foreground/50" aria-hidden />
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  还没有搜索结果——输入声优或作品名，检索网盘资源（asmrgay 目录索引）
+                </p>
+              </div>
             )}
             {diskItems.length > 0 && (
               <>
-                <p className="text-xs text-muted-foreground">共 {diskTotal} 个资源条目</p>
+                <p className="text-xs tabular-nums text-muted-foreground">共 {diskTotal} 个资源条目</p>
                 <div className="space-y-1.5">
                   {diskItems.map((d) => (
                     <div
                       key={d.id}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2"
+                      className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2"
                     >
                       <span className="shrink-0 text-muted-foreground">
                         {d.is_dir ? <Folder className="h-4 w-4" aria-hidden /> : <FileText className="h-4 w-4" aria-hidden />}
@@ -506,7 +525,7 @@ export function AsmrPage() {
                         <p className="truncate text-[11px] text-muted-foreground">{d.path}</p>
                       </div>
                       {!d.is_dir && d.size_bytes > 0 && (
-                        <span className="shrink-0 text-xs text-muted-foreground">
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                           {(d.size_bytes / 1024 / 1024).toFixed(0)}MB
                         </span>
                       )}
@@ -520,9 +539,12 @@ export function AsmrPage() {
           <>
             {busy && items.length === 0 && <p className="text-sm text-muted-foreground">加载中…</p>}
             {!busy && items.length === 0 && (
-              <p className="pt-10 text-center text-sm text-muted-foreground">
-                暂无作品。管理员可在模型配置页旁的「ASMR 同步」触发首次全量采集。
-              </p>
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <Headphones className="h-8 w-8 text-muted-foreground/50" aria-hidden />
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  还没有 ASMR 作品——管理员在模型配置页旁触发「ASMR 同步」，采集完成后会汇聚到这里
+                </p>
+              </div>
             )}
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -530,7 +552,7 @@ export function AsmrPage() {
             <button
               key={w.id}
               onClick={() => void openDetail(w.id)}
-              className="group relative overflow-hidden rounded-2xl border border-border bg-surface text-left transition-colors hover:border-border-strong"
+              className="group relative overflow-hidden rounded-2xl border border-line bg-surface text-left shadow-zen transition-colors hover:border-border-strong"
             >
               <div className="relative aspect-square w-full overflow-hidden bg-secondary/40">
                 {w.thumbnail_url ? (
@@ -549,13 +571,13 @@ export function AsmrPage() {
                   </div>
                 )}
                 {w.nsfw && (
-                  <span className="absolute right-1.5 top-1.5 rounded bg-danger/85 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  <span className="absolute right-1.5 top-1.5 rounded bg-foreground/85 px-1.5 py-0.5 text-[11px] font-semibold text-background">
                     R18
                   </span>
                 )}
                 {w.has_chinese && (
                   <span
-                    className="absolute left-1.5 top-1.5 rounded bg-primary/90 px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground"
+                    className="absolute left-1.5 top-1.5 rounded bg-primary/90 px-1.5 py-0.5 text-[11px] font-semibold text-primary-foreground"
                     title="含中文版"
                   >
                     中
@@ -577,10 +599,10 @@ export function AsmrPage() {
                     }
                   }}
                   aria-label={favorites.has(w.id) ? "取消收藏" : "收藏"}
-                  className={`absolute bottom-1.5 right-1.5 grid h-7 w-7 cursor-pointer place-items-center rounded-full shadow ${
+                  className={`absolute bottom-1.5 right-1.5 grid h-7 w-7 cursor-pointer place-items-center rounded-full shadow transition-colors ${
                     favorites.has(w.id)
-                      ? "bg-danger/90 text-white"
-                      : "bg-black/45 text-white/90 hover:bg-black/65"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-ink/55 text-background hover:bg-ink/75"
                   }`}
                 >
                   <Heart className={`h-3.5 w-3.5 ${favorites.has(w.id) ? "fill-current" : ""}`} aria-hidden />
@@ -590,7 +612,7 @@ export function AsmrPage() {
                 <p className="line-clamp-2 text-xs font-medium leading-snug text-foreground">
                   {w.title}
                 </p>
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
                   {(w.langs ?? []).length > 0 && (
                     <span className="flex flex-wrap gap-0.5">
                       {(w.langs ?? [])
@@ -599,7 +621,7 @@ export function AsmrPage() {
                         .map((l, i) => (
                           <span
                             key={`${l}-${i}`}
-                            className="rounded bg-secondary px-1 py-px text-[10px]"
+                            className="rounded bg-secondary px-1 py-px text-[11px]"
                           >
                             {l}
                           </span>
@@ -625,8 +647,13 @@ export function AsmrPage() {
 
         {page < pages && (
           <div ref={sentinelRef} className="flex justify-center pt-2">
-            <span className="text-xs text-muted-foreground">
-              {busy ? "加载中…" : "滚动加载更多 ↓"}
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              {busy ? "加载中…" : (
+                <>
+                  滚动加载更多
+                  <ChevronDown className="h-3 w-3" aria-hidden />
+                </>
+              )}
             </span>
           </div>
         )}
@@ -657,12 +684,12 @@ export function AsmrPage() {
                   <p className="text-xs text-muted-foreground">社团：{detail.circle_name}</p>
                 )}
                 {detail.rate_average > 0 && (
-                  <p className="flex items-center gap-1 text-xs text-primary-text">
+                  <p className="flex items-center gap-1 text-xs tabular-nums text-primary-text">
                     <Star className="h-3.5 w-3.5" aria-hidden />
                     {detail.rate_average.toFixed(2)} · {detail.dl_count.toLocaleString()} 下载
                   </p>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs tabular-nums text-muted-foreground">
                   {formatDuration(detail.duration_seconds)} · {formatPrice(detail.price)}
                   {detail.release_date ? ` · ${detail.release_date.slice(0, 10)}` : ""}
                 </p>
@@ -703,26 +730,29 @@ export function AsmrPage() {
                 href={detail.source_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-primary-text underline"
+                className="inline-flex items-center gap-1 text-xs text-primary-text underline transition-colors hover:text-primary-hover"
               >
-                查看源站作品页 ↗
+                查看源站作品页
+                <ExternalLink className="h-3 w-3" aria-hidden />
               </a>
             )}
             <button
               onClick={() => void toggleFavorite(detail.id)}
-              className={`mt-1 self-start rounded-full px-4 py-1.5 text-xs font-medium ${
+              className={`mt-1 flex items-center gap-1.5 self-start rounded-xl px-4 py-1.5 text-xs font-medium transition-colors ${
                 favorites.has(detail.id)
-                  ? "bg-danger/10 text-danger"
+                  ? "bg-primary/10 text-primary-text"
                   : "border border-border-strong text-foreground hover:border-primary"
               }`}
             >
-              {favorites.has(detail.id) ? "♥ 已收藏（点击取消）" : "♡ 收藏"}
+              <Heart className={cn("h-3.5 w-3.5", favorites.has(detail.id) && "fill-current")} aria-hidden />
+              {favorites.has(detail.id) ? "已收藏，点击取消" : "收藏"}
             </button>
             <button
               onClick={() => openEdit(detail)}
-              className="self-start rounded-full border border-border-strong px-4 py-1.5 text-xs text-muted-foreground hover:border-primary hover:text-foreground"
+              className="flex items-center gap-1.5 self-start rounded-xl border border-border-strong px-4 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
             >
-              ✏️ 编辑元数据
+              <PenLine className="h-3.5 w-3.5" aria-hidden />
+              编辑元数据
             </button>
             {similar.length > 0 && (
               <div>
@@ -732,7 +762,7 @@ export function AsmrPage() {
                     <button
                       key={s.id}
                       onClick={() => void openDetail(s.id)}
-                      className="overflow-hidden rounded-xl border border-border bg-surface text-left hover:border-border-strong"
+                      className="overflow-hidden rounded-xl border border-line bg-surface text-left transition-colors hover:border-border-strong"
                     >
                       <div className="aspect-square w-full bg-secondary/40">
                         {s.thumbnail_url ? (
@@ -747,7 +777,7 @@ export function AsmrPage() {
                           />
                         ) : null}
                       </div>
-                      <p className="line-clamp-2 p-1.5 text-[10px] leading-snug text-foreground">
+                      <p className="line-clamp-2 p-1.5 text-[11px] leading-snug text-foreground">
                         {s.title}
                       </p>
                     </button>
@@ -760,7 +790,7 @@ export function AsmrPage() {
       </Dialog>
 
       {/* 手动编辑元数据（刮削错误修正） */}
-      <Dialog open={editing !== null} onClose={() => setEditing(null)} title="✏️ 编辑元数据">
+      <Dialog open={editing !== null} onClose={() => setEditing(null)} title="编辑元数据">
         <div className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground">修正刮削错误（标题/社团/分级）。改完立即生效并刷新列表。</p>
           <label className="flex flex-col gap-1 text-xs">
@@ -768,7 +798,7 @@ export function AsmrPage() {
             <input
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
-              className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+              className="h-9 rounded-xl border border-border bg-surface px-3 text-sm outline-none transition-colors focus:border-primary"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
@@ -776,7 +806,7 @@ export function AsmrPage() {
             <input
               value={editCircle}
               onChange={(e) => setEditCircle(e.target.value)}
-              className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+              className="h-9 rounded-xl border border-border bg-surface px-3 text-sm outline-none transition-colors focus:border-primary"
             />
           </label>
           <label className="flex items-center gap-2 text-xs">
@@ -784,21 +814,21 @@ export function AsmrPage() {
               type="checkbox"
               checked={editNsfw}
               onChange={(e) => setEditNsfw(e.target.checked)}
-              className="h-3.5 w-3.5 accent-[var(--primary)]"
+              className="h-3.5 w-3.5 accent-primary"
             />
             成人内容（NSFW）
           </label>
           <div className="flex justify-end gap-2">
             <button
               onClick={() => setEditing(null)}
-              className="rounded-full border border-border px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              className="rounded-xl border border-line px-4 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               取消
             </button>
             <button
               onClick={() => void saveEdit()}
               disabled={editBusy || !editTitle.trim()}
-              className="rounded-full bg-primary px-4 py-1.5 text-xs text-primary-text disabled:opacity-50"
+              className="rounded-xl bg-primary px-4 py-1.5 text-xs text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-50"
             >
               {editBusy ? "保存中…" : "保存"}
             </button>

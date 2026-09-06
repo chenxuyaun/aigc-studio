@@ -1,14 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Download, FileAudio, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileAudio, FileText, Film, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import type { Asset, MediaAccess, Paginated } from "@aigc/shared-types";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Dialog } from "@/components/ui/Dialog";
 import { GridSkeleton } from "@/components/ui/Skeleton";
@@ -16,6 +15,7 @@ import { EmptyState, ErrorState } from "@/components/ui/States";
 import { useToast } from "@/components/ui/Toast";
 import { usePrivateMediaUrl } from "@/hooks/usePrivateMediaUrl";
 import { AppError, apiClient } from "@/lib/apiClient";
+import { refreshAssetUrl } from "@/lib/assetUrl";
 import { cn } from "@/lib/cn";
 import { toClientApiPath } from "@/lib/paths";
 
@@ -28,6 +28,17 @@ const FILTERS = [
   { v: "video/", label: "视频" },
 ];
 
+/** 签名 URL 10 分钟过期：媒体加载失败时自动刷新一次 src（每元素仅一次） */
+async function refreshMediaOnError(
+  e: React.SyntheticEvent<HTMLImageElement | HTMLAudioElement | HTMLVideoElement>,
+) {
+  const el = e.currentTarget;
+  if (el.dataset.refreshed) return;
+  el.dataset.refreshed = "1";
+  const fresh = await refreshAssetUrl(el.src);
+  if (fresh) el.src = fresh;
+}
+
 function AssetThumb({ asset }: { asset: Asset }) {
   const isImage = asset.mime_type.startsWith("image/");
   const endpoint = asset.access_url_endpoint ?? `/assets/${asset.id}/access-url`;
@@ -35,13 +46,14 @@ function AssetThumb({ asset }: { asset: Asset }) {
 
   if (isImage) {
     return (
-      <div className="flex aspect-square items-center justify-center overflow-hidden bg-surface">
+      <div className="flex aspect-square items-center justify-center overflow-hidden bg-secondary/40">
         {url ? (
           <img
             src={url}
             alt={asset.filename}
             className="h-full w-full object-cover"
             referrerPolicy="no-referrer"
+            onError={refreshMediaOnError}
           />
         ) : (
           <div className={`h-full w-full bg-muted ${loading ? "animate-pulse" : ""}`} />
@@ -49,9 +61,14 @@ function AssetThumb({ asset }: { asset: Asset }) {
       </div>
     );
   }
+  const Icon = asset.mime_type.startsWith("video/")
+    ? Film
+    : asset.mime_type.startsWith("audio/")
+      ? FileAudio
+      : FileText;
   return (
-    <div className="flex aspect-square items-center justify-center bg-surface text-muted-foreground">
-      <FileAudio className="h-8 w-8" aria-hidden />
+    <div className="flex aspect-square items-center justify-center bg-secondary/40 text-muted-foreground">
+      <Icon className="h-8 w-8" aria-hidden />
     </div>
   );
 }
@@ -219,15 +236,15 @@ export function AssetsPage() {
             className={cn(
               "rounded-full border px-3 py-1 text-sm transition-colors",
               mimePrefix === f.v
-                ? "border-primary bg-primary/12 font-semibold text-primary-text"
-                : "border-border text-muted-foreground hover:border-primary",
+                ? "border-primary bg-primary/10 font-semibold text-primary-text"
+                : "border-line text-muted-foreground hover:border-primary",
             )}
           >
             {f.label}
           </button>
         ))}
       </PageHeader>
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b border-border px-4 md:px-6">
         {(
           [
             ["assets", "素材"],
@@ -236,8 +253,8 @@ export function AssetsPage() {
         ).map(([k, label]) => (
           <button
             key={k}
-            className={`border-b-2 px-4 py-2 text-sm ${
-              section === k ? "border-primary font-medium" : "border-transparent text-muted-foreground"
+            className={`-mb-px border-b-2 px-4 py-2 text-sm transition-colors ${
+              section === k ? "border-primary font-semibold text-primary-text" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
             onClick={() => setSection(k)}
           >
@@ -246,11 +263,13 @@ export function AssetsPage() {
         ))}
       </div>
       {section === "photography" && (
-        <div className="flex flex-col items-center gap-3 p-10 text-center">
-          <p className="text-sm text-muted-foreground">
-            写真摄影已升级为独立页面（参考图集管理 / 风格参考出图）
-          </p>
-          <Button onClick={() => navigate("/photography")}>打开写真摄影页 →</Button>
+        <div className="p-4 md:p-6">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-line bg-surface px-6 py-12 text-center shadow-zen">
+            <p className="max-w-sm text-sm text-muted-foreground">
+              写真摄影已升级为独立页面：参考图集管理、风格参考出图
+            </p>
+            <Button onClick={() => navigate("/photography")}>打开写真摄影页</Button>
+          </div>
         </div>
       )}
       <div className={section === "assets" ? "space-y-4 p-4 md:p-6" : "hidden"}>
@@ -261,10 +280,10 @@ export function AssetsPage() {
           onDrop={handleDrop}
           onClick={() => fileRef.current?.click()}
           className={cn(
-            "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors",
+            "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-6 text-center transition-colors",
             dragOver
               ? "border-primary bg-primary/5 text-primary-text"
-              : "border-border text-muted-foreground hover:border-primary hover:text-primary-text",
+              : "border-border-strong text-muted-foreground hover:border-primary hover:text-primary-text",
           )}
         >
           <Upload className="h-6 w-6" aria-hidden />
@@ -295,13 +314,13 @@ export function AssetsPage() {
         </div>
 
         {uploadError && (
-          <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+          <p className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
             {uploadError}
           </p>
         )}
 
         {uploadFailures.length > 0 && (
-          <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+          <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
             <p className="font-medium">部分文件上传失败：</p>
             <ul className="mt-1 list-inside list-disc space-y-0.5">
               {uploadFailures.map((f) => (
@@ -330,12 +349,12 @@ export function AssetsPage() {
           />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {items.map((asset) => (
-                <Card
+                <div
                   key={asset.id}
                   className={cn(
-                    "group relative overflow-hidden",
+                    "group relative overflow-hidden rounded-2xl border border-line bg-surface shadow-zen",
                     highlight === asset.id && "ring-2 ring-primary",
                   )}
                 >
@@ -345,11 +364,11 @@ export function AssetsPage() {
                     onClick={() => setPreview(asset)}
                   >
                     <AssetThumb asset={asset} />
-                    <p className="truncate px-2 py-2 text-xs text-muted-foreground">
+                    <p className="truncate px-2.5 py-2 text-xs text-muted-foreground">
                       {asset.filename}
                     </p>
                     {asset.task_id && (
-                      <p className="truncate px-2 pb-2 font-mono text-[10px] text-muted-foreground">
+                      <p className="truncate px-2.5 pb-2 font-mono text-[11px] text-muted-foreground">
                         task {asset.task_id.slice(0, 8)}
                       </p>
                     )}
@@ -359,7 +378,7 @@ export function AssetsPage() {
                       type="button"
                       onClick={() => void downloadAsset(asset)}
                       aria-label="下载"
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-white/15 bg-black/55 text-white backdrop-blur hover:bg-black/70"
+                      className="grid h-8 w-8 place-items-center rounded-xl bg-ink/55 text-background transition-colors hover:bg-ink/75"
                     >
                       <Download className="h-4 w-4" aria-hidden />
                     </button>
@@ -367,12 +386,12 @@ export function AssetsPage() {
                       type="button"
                       onClick={() => setToDelete(asset)}
                       aria-label="删除"
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-white/15 bg-black/55 text-white backdrop-blur hover:bg-danger"
+                      className="grid h-8 w-8 place-items-center rounded-xl bg-ink/55 text-background transition-colors hover:bg-danger"
                     >
                       <Trash2 className="h-4 w-4" aria-hidden />
                     </button>
                   </div>
-                </Card>
+                </div>
               ))}
             </div>
 
@@ -387,7 +406,7 @@ export function AssetsPage() {
                   <ChevronLeft className="h-4 w-4" aria-hidden />
                   上一页
                 </Button>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm tabular-nums text-muted-foreground">
                   {page} / {pages}
                 </span>
                 <Button
@@ -415,28 +434,39 @@ export function AssetsPage() {
                   alt={preview.filename}
                   className="max-h-[70dvh] w-full rounded-xl object-contain"
                   referrerPolicy="no-referrer"
+                  onError={refreshMediaOnError}
                 />
               ) : (
                 <div className="h-48 animate-pulse rounded-xl bg-muted" />
               )
             ) : preview.mime_type.startsWith("audio/") ? (
               previewMedia.url ? (
-                <audio controls src={previewMedia.url} className="w-full" />
+                <audio controls src={previewMedia.url} className="w-full" onError={refreshMediaOnError} />
               ) : (
                 <div className="h-24 animate-pulse rounded-xl bg-muted" />
               )
             ) : preview.mime_type.startsWith("video/") ? (
               previewMedia.url ? (
-                <video controls src={previewMedia.url} className="max-h-[70dvh] w-full rounded-xl" />
+                <video
+                  controls
+                  src={previewMedia.url}
+                  className="max-h-[70dvh] w-full rounded-xl"
+                  onError={refreshMediaOnError}
+                />
               ) : (
                 <div className="h-48 animate-pulse rounded-xl bg-muted" />
               )
             ) : (
               <p className="text-sm text-muted-foreground">{preview.mime_type}</p>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs tabular-nums text-muted-foreground">
               {(preview.size_bytes / 1024).toFixed(1)} KB
-              {preview.task_id ? ` · 任务 ${preview.task_id}` : ""}
+              {preview.task_id ? (
+                <>
+                  {" · 任务 "}
+                  <span className="font-mono">{preview.task_id}</span>
+                </>
+              ) : null}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => void downloadAsset(preview)}>
@@ -462,7 +492,7 @@ export function AssetsPage() {
               {preview.task_id && (
                 <Link
                   to="/tasks"
-                  className="inline-flex h-10 items-center rounded-xl border border-border px-4 text-sm hover:border-primary"
+                  className="inline-flex h-10 items-center rounded-xl border border-line px-4 text-sm transition-colors hover:border-primary"
                 >
                   查看任务
                 </Link>
