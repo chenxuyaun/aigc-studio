@@ -791,14 +791,8 @@ export function AssistantHomePage() {
   // v11 双态：当前展示哪个心流视域（auto 时无消息=初态命题，有消息=作品回显）
   const showProposition = hubMode === "empty" || (hubMode === "auto" && empty);
 
-  const capAccent = (a: string) =>
-    a === "purple"
-      ? "text-purple-600 border-purple-500/35"
-      : a === "emerald"
-        ? "text-success border-success/35"
-        : a === "amber"
-          ? "text-warning border-warning/35"
-          : "text-primary-text border-primary/35";
+  // v11 禅意收敛：能力卡统一青瓷点缀（差异化靠图标，不再四色拼盘）
+  const capAccent = (_a: string) => "text-primary-text border-primary/30";
 
   return (
     <div className="ai-page absolute inset-0 flex min-h-0 overflow-hidden">
@@ -1118,14 +1112,14 @@ export function AssistantHomePage() {
             <button
               type="button"
               onClick={() => setArchivedOpen((v) => !v)}
-              className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:text-amber-300"
+              className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               {archivedOpen ? (
                 <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
               ) : (
                 <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
               )}
-              <Archive className="h-3.5 w-3.5 shrink-0 text-amber-400/70" aria-hidden />
+              <Archive className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
               <span className="flex-1 truncate">归档（{archivedSessions.length}）</span>
             </button>
             {archivedOpen && (
@@ -1136,7 +1130,7 @@ export function AssistantHomePage() {
                     className={cn(
                       "group flex cursor-pointer items-center gap-2 rounded-xl border p-2 transition-all",
                       s.id === currentId
-                        ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                        ? "border-primary/30 bg-primary/10 text-primary-text"
                         : "border-transparent text-muted-foreground hover:border-border hover:bg-foreground/5 hover:text-foreground/80",
                     )}
                     onClick={() => {
@@ -1147,7 +1141,7 @@ export function AssistantHomePage() {
                       switchSession(s.id);
                     }}
                   >
-                    <Inbox className="h-3.5 w-3.5 shrink-0 text-amber-400/60" aria-hidden />
+                    <Inbox className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
                     <span className="flex-1 truncate font-medium">{s.name || "新对话"}</span>
                     <button
                       type="button"
@@ -1716,7 +1710,7 @@ export function AssistantHomePage() {
               <button
                 type="button"
                 onClick={() => navigate("/studio")}
-                className="flex items-center gap-1 rounded-full border border-info/30 bg-info/10 px-2.5 py-1 text-[11px] text-info transition-all hover:-translate-y-0.5 hover:bg-indigo-500/20"
+                className="flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] text-primary-text transition-all hover:-translate-y-0.5 hover:bg-primary/20"
               >
                 ⚙️ 引擎直控
               </button>
@@ -1951,7 +1945,7 @@ function ThinkBlock({ text }: { text: string }) {
         <span className="shrink-0 text-info">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap border-t border-indigo-500/20 px-3 py-2 text-xs leading-relaxed text-foreground/80">
+        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap border-t border-border px-3 py-2 text-xs leading-relaxed text-foreground/80">
           {text}
         </div>
       )}
@@ -2152,7 +2146,7 @@ function SessionMenu(props: {
           <button
             type="button"
             onClick={props.onArchive}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-amber-300 transition-colors hover:bg-amber-500/10"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
           >
             <Archive className="h-3.5 w-3.5" aria-hidden /> 归档会话
           </button>
