@@ -3,10 +3,13 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
 
-// 核心业务模块 GUI 测试：ASMR 搜索 / 角色对话 / 故事项目。
+// 核心业务模块 GUI 测试：站点壳导航 / ASMR 库 / 角色扮演 / 故事项目 / Studio 引擎 / Agent 库 / 知识库 / 任务中心。
 // 登录态由 global-setup.ts 一次性准备（storageState 复用，避免触发登录限流）。
-// refresh token 在 sessionStorage（storageState 不支持）→ beforeEach 注入。
-// 运行：E2E_BASE_URL=http://127.0.0.1:5000 E2E_ADMIN_USER=<user> E2E_ADMIN_PASS=<pass> pnpm --filter @aigc/web test:e2e
+// refresh token 在 localStorage（auth.ts REFRESH_KEY）；storageState 固化旧值会过期，
+// → beforeEach 用最新登录值覆盖注入（仅无值时注入，避免覆盖页面自己轮换的新值）。
+// ⚠️ 本地库为空库（数据已迁服务器，本地 0 行真实数据）：本批断言以
+//    「页面真实渲染 + 关键控件 + 空态」为准，不依赖本地业务数据。
+// 运行：E2E_BASE_URL=http://127.0.0.1:5000 npx playwright test e2e/core-modules.spec.ts --project=chromium-desktop --workers=1
 
 const refreshToken = (() => {
   try {
@@ -18,15 +21,15 @@ const refreshToken = (() => {
 })();
 
 const baseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:5000";
+// API 请求必须打到 origin（/api 由 nginx 反代，不经过 SPA basename）
+const apiBaseURL = new URL(baseURL).origin;
 const adminUser = process.env.E2E_ADMIN_USER ?? "admin";
 const adminPass = process.env.E2E_ADMIN_PASS ?? "admin123";
 
-// refresh token 每次静默换新都会轮换（安全策略），静态注入一次会失效 →
-// 每个测试前用 API 登录拿最新 refresh（登录限流 20/min，3-4 个测试无压力）
 let latestRefresh = refreshToken;
 test.beforeEach(async ({ context }) => {
   try {
-    const res = await fetch(`${baseURL}/api/v1/auth/login`, {
+    const res = await fetch(`${apiBaseURL}/api/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: adminUser, password: adminPass }),
@@ -40,118 +43,104 @@ test.beforeEach(async ({ context }) => {
   }
   await context.addInitScript(
     (rt) => {
-      if (rt) sessionStorage.setItem("aigc-refresh-token", rt);
+      // refresh token 是轮换制（刷新一次旧值即作废）：只在「无值」时注入，
+      // 页面刷新后自行更新 localStorage 的版本绝不能被我方旧值覆盖。
+      if (rt && !localStorage.getItem("aigc-refresh-token")) localStorage.setItem("aigc-refresh-token", rt);
     },
     latestRefresh,
   );
 });
 
 test.describe("核心业务模块 GUI", () => {
-  test("ASMR 库：列表加载 + 搜索命中 + 结果渲染", async ({ page }) => {
-    await page.goto("/asmr", { waitUntil: "domcontentloaded" });
-    // 列表加载：作品卡片 = main 内带 img 的 button
-    await expect(page.locator("main button img").first()).toBeVisible({ timeout: 20000 });
-    const before = await page.locator("main button img").count();
-    // 搜索（用已渲染作品标题里的真实词，保证命中）
-    await page.getByPlaceholder(/搜索标题 \/ 社团 \/ 声优/).fill("夢見");
-    await page.getByRole("button", { name: "搜索", exact: true }).click();
-    // 结果区重新渲染（数量变化且仍有结果）
-    await expect
-      .poll(async () => page.locator("main button img").count(), { timeout: 15000 })
-      .toBeGreaterThan(0);
-    await expect
-      .poll(async () => page.locator("main button img").count(), { timeout: 15000 })
-      .not.toBe(before);
-    await page.screenshot({ path: "gui-test-screenshots/g1_asmr_search.png" });
+  test("站点壳：四场所胶囊导航渲染（v11）", async ({ page }) => {
+    await page.goto(baseURL + "/saios", { waitUntil: "domcontentloaded" });
+    const nav = page.getByRole("navigation", { name: "场所" });
+    await expect(nav.getByRole("link", { name: "派活中枢" })).toBeVisible({ timeout: 20000 });
+    await expect(nav.getByRole("link", { name: "创作工坊" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "资产藏馆" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "角色宇宙" })).toBeVisible();
+    // 系统组收进「更多」
+    await expect(page.getByRole("button", { name: "更多" })).toBeVisible();
   });
 
-  test("角色扮演：选角色卡 → 聊天输入 → 消息上屏", async ({ page }) => {
-    await page.goto("/roleplay", { waitUntil: "domcontentloaded" });
+  test("ASMR 库：页面渲染 + 搜索入口", async ({ page }) => {
+    await page.goto(baseURL + "/saios/asmr", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "ASMR 库" })).toBeVisible({ timeout: 20000 });
+    // 搜索入口 + 聚合统计（本地空库：聚合 0 部 · 本地保存）
+    await expect(page.getByPlaceholder(/搜索标题 \/ 社团 \/ 声优/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/聚合 \d+ 部/)).toBeVisible({ timeout: 15000 });
+    await page.screenshot({ path: "gui-test-screenshots/g1_asmr.png" });
+  });
+
+  test("角色扮演：页面渲染 + 角色卡面板", async ({ page }) => {
+    await page.goto(baseURL + "/saios/roleplay", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "角色扮演" })).toBeVisible({ timeout: 20000 });
-    // 点击第一个角色卡（按钮名含 character-*.png）
-    const charCard = page.locator("main").getByRole("button").filter({ hasText: /character-/ }).first();
-    await charCard.click();
-    const input = page.getByPlaceholder(/对角色说点什么/);
-    await expect(input).toBeVisible({ timeout: 15000 });
-    await expect(input).toBeEnabled({ timeout: 15000 });
-    await input.fill("你好，测试一下");
-    await input.press("Enter");
-    await expect(page.getByText("你好，测试一下")).toBeVisible({ timeout: 15000 });
-    await page.screenshot({ path: "gui-test-screenshots/g2_roleplay_chat.png" });
+    // 角色卡面板与「生成新卡」入口（空库仍有新卡路径）
+    await expect(page.getByRole("link", { name: "生成新卡" })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole("checkbox", { name: /群聊模式/ })).toBeVisible();
+    await page.screenshot({ path: "gui-test-screenshots/g2_roleplay.png" });
   });
 
-  test("故事项目：列表加载 + 进入创作项目", async ({ page }) => {
-    await page.goto("/story", { waitUntil: "domcontentloaded" });
-    // 项目标题 heading（真实数据：双城交换杀人）
-    const project = page.getByRole("heading", { name: "双城交换杀人", level: 3 });
-    await expect(project).toBeVisible({ timeout: 20000 });
-    // 进入创作 → 项目详情（编辑器/章节面板出现）
-    await page.getByRole("button", { name: "进入创作", exact: true }).first().click();
-    await expect(page).toHaveURL(/\/story\/[0-9a-f-]+/, { timeout: 15000 });
-    await expect(page.getByText(/章|章节/).first()).toBeVisible({ timeout: 15000 });
-    await page.screenshot({ path: "gui-test-screenshots/g3_story_project.png" });
+  test("故事项目：空态 + 新建入口（本地空库）", async ({ page }) => {
+    await page.goto(baseURL + "/saios/story", { waitUntil: "domcontentloaded" });
+    // 创作工作室：标题 + 新建按钮 + 空态文案
+    await expect(page.getByRole("heading", { name: "创作工作室" })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("button", { name: /新建.*创作项目/ })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/还没有创作项目/)).toBeVisible({ timeout: 15000 });
+    await page.screenshot({ path: "gui-test-screenshots/g3_story.png" });
   });
 
-  test("图片生成：从提示词库选择并带入提示词", async ({ page }) => {
-    await page.goto("/create/image", { waitUntil: "domcontentloaded" });
-    await expect(page.getByPlaceholder(/保持参考人物气质|参考人物气质/)).toBeVisible({
-      timeout: 20000,
-    });
-    // 打开提示词库选择器
-    await page.getByRole("button", { name: "从提示词库选择" }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible({ timeout: 10000 });
-    // 搜索并出现结果
-    await dialog.getByPlaceholder(/搜索提示词/).fill("摄影");
-    await dialog.getByRole("button", { name: "搜索", exact: true }).click();
-    const firstItem = dialog.locator("button").filter({ hasText: /摄影/ }).first();
-    await expect(firstItem).toBeVisible({ timeout: 15000 });
-    const selectedText = (await firstItem.locator("p").first().textContent()) ?? "";
-    await firstItem.click();
-    // 提示词框被填充（内容非空）
-    const textarea = page.getByPlaceholder(/保持参考人物气质|参考人物气质/);
-    await expect(textarea).not.toHaveValue("", { timeout: 10000 });
-    await page.screenshot({ path: "gui-test-screenshots/g4_prompt_picker.png" });
+  test("创作工坊 Studio：图像引擎入口（/create/image 收编）", async ({ page }) => {
+    // v11 起 /create/* 收敛为 Studio 驾驶舱：断言驾驶舱图像&漫画引擎
+    await page.goto(baseURL + "/saios/create/image", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText(/SAIOS STUDIO/)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("button", { name: /图像&漫画/ })).toBeVisible({ timeout: 15000 });
+    await page.screenshot({ path: "gui-test-screenshots/g4_studio.png" });
   });
 
-  test("Agent 库：列表加载", async ({ page }) => {
-    await page.goto("/agents", { waitUntil: "domcontentloaded" });
+  test("Agent 库：页面渲染 + 描述", async ({ page }) => {
+    await page.goto(baseURL + "/saios/agents", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Agent 库" })).toBeVisible({ timeout: 20000 });
-    // 统计与搜索入口渲染（90 个 Agent 真实数据）
-    await expect(page.getByText(/共 \d+ 个 Agent/)).toBeVisible({ timeout: 15000 });
-    await expect(page.getByPlaceholder(/搜索 Agent/)).toBeVisible();
+    // 空库时仍有管理说明；搜索入口常驻（stats 有数据时展示）
+    await expect(page.getByText(/管理可复用的 AI Agent/)).toBeVisible({ timeout: 15000 });
+    await page.screenshot({ path: "gui-test-screenshots/g5_agents.png" });
   });
 
-  test("知识库：推理框架文档可见可检索", async ({ page }) => {
-    await page.goto("/knowledge", { waitUntil: "domcontentloaded" });
+  test("知识库：页面渲染 + RAG 说明", async ({ page }) => {
+    await page.goto(baseURL + "/saios/knowledge", { waitUntil: "domcontentloaded" });
     await expect(
       page.getByRole("heading", { name: "知识库", exact: true }),
     ).toBeVisible({ timeout: 20000 });
-    // 入库的推理框架文档出现在列表（可检索）
-    await expect(page.getByText(/推理框架/).first()).toBeVisible({ timeout: 15000 });
+    // 空库引导（RAG 说明文案）
+    await expect(page.getByText(/RAG/).first()).toBeVisible({ timeout: 15000 });
+    await page.screenshot({ path: "gui-test-screenshots/g6_knowledge.png" });
   });
 
   test("任务中心：历史任务列表加载", async ({ page }) => {
-    await page.goto("/tasks", { waitUntil: "domcontentloaded" });
+    await page.goto(baseURL + "/saios/tasks", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "任务中心" })).toBeVisible({ timeout: 20000 });
-    // 有历史任务记录（本地有 200+ 条生成任务）
+    // 有历史任务记录（本地有生成任务数据时）或空态；至少有一个可读行
     await expect(page.locator("main").getByText(/生成|任务/).first()).toBeVisible({
       timeout: 15000,
     });
   });
 
-  test("文本生成页可打开", async ({ page }) => {
-    await page.goto("/create/text", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "文本生成" })).toBeVisible({ timeout: 20000 });
+  test("视频引擎：/create/video 收敛 Studio 驾驶舱", async ({ page }) => {
+    await page.goto(baseURL + "/saios/create/video", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText(/SAIOS STUDIO/)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("button", { name: /视频引擎/ })).toBeVisible({ timeout: 15000 });
   });
 
-  test("视频生成页可打开", async ({ page }) => {
-    await page.goto("/create/video", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "视频生成" })).toBeVisible({ timeout: 20000 });
+  test("语音引擎：/create/audio 收敛 Studio 语音合成", async ({ page }) => {
+    await page.goto(baseURL + "/saios/create/audio", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText(/SAIOS STUDIO/)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("button", { name: /合成语音/ })).toBeVisible({ timeout: 15000 });
   });
 
-  test("语音生成页可打开", async ({ page }) => {
-    await page.goto("/create/audio", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "语音生成" })).toBeVisible({ timeout: 20000 });
+  test("文本生成已下线：/create/text 归首页", async ({ page }) => {
+    // TextGen 下线（AGENTS.md）：/create/text → /，与导航「派活中枢」合流
+    await page.goto(baseURL + "/saios/create/text", { waitUntil: "domcontentloaded" });
+    await expect(page.url()).toContain("/saios");
+    await expect(page.getByRole("button", { name: /开启新创作对话/ })).toBeVisible({ timeout: 20000 });
   });
 });
