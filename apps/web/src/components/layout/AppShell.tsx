@@ -225,7 +225,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         {!compact && (
           <header className="relative z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/80 px-3 backdrop-blur md:px-5">
             {/* v11 品牌标 */}
-            <div
+            <button
+              type="button"
+              aria-label="返回派活中枢"
               className="flex shrink-0 cursor-pointer select-none items-center gap-2"
               onClick={() => navigate("/")}
             >
@@ -234,11 +236,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               </span>
               <span className="hidden items-baseline gap-1.5 md:flex">
                 <span className="font-serif text-sm font-medium tracking-wide">saiOS</span>
-                <span className="rounded border border-primary/25 bg-primary/10 px-1 py-px font-mono text-[9px] text-primary-text">
+                <span className="rounded border border-primary/25 bg-primary/10 px-1 py-px font-mono text-[10px] text-primary-text">
                   v11.0
                 </span>
               </span>
-            </div>
+            </button>
 
             {/* 顶栏胶囊四键（设计稿中心分段导航，md+ 显示） */}
             <nav
@@ -252,7 +254,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   end={item.to === "/"}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all",
+                      "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
                       isActive
                         ? "bg-surface text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground",

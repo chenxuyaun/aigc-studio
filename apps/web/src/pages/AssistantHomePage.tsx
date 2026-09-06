@@ -954,6 +954,7 @@ export function AssistantHomePage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="搜索历史对话…"
+              aria-label="搜索历史对话"
               className="ai-glass-input w-full rounded-lg py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none"
             />
           </div>
@@ -971,7 +972,7 @@ export function AssistantHomePage() {
                   <div
                     key={s.id}
                     className={cn(
-                      "group relative flex cursor-pointer items-center gap-2 rounded-xl border p-2.5 transition-all",
+                      "group relative flex cursor-pointer items-center gap-2 rounded-xl border p-2.5 transition-colors",
                       s.id === currentId
                         ? "border-primary/35 bg-primary/10 text-primary-text"
                         : "border-transparent text-muted-foreground hover:border-border hover:bg-foreground/5 hover:text-foreground",
@@ -997,9 +998,10 @@ export function AssistantHomePage() {
                     <button
                       type="button"
                       aria-label="删除会话"
-                      className="opacity-0 transition-opacity hover:text-rose-400 group-hover:opacity-100"
+                      className="opacity-0 transition-opacity hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (!window.confirm(`删除会话「${s.name || "新对话"}」？不可恢复。`)) return;
                         if (s.id === currentId) abortRef.current?.abort();
                         deleteSession(s.id);
                       }}
@@ -1035,7 +1037,7 @@ export function AssistantHomePage() {
                       <ChevronDown className="h-3 w-3 shrink-0" aria-hidden />
                     )}
                     <span className="truncate">{g.group}</span>
-                    <span className="ml-auto shrink-0 rounded bg-primary/15 px-1 py-px font-mono text-[9px] text-primary-text">
+                    <span className="ml-auto shrink-0 rounded bg-primary/15 px-1 py-px font-mono text-[10px] text-primary-text">
                       {g.items.length}
                     </span>
                   </button>
@@ -1059,7 +1061,7 @@ export function AssistantHomePage() {
                     <div
                       key={s.id}
                       className={cn(
-                        "group relative flex cursor-pointer items-center gap-2 rounded-xl border p-2.5 transition-all",
+                        "group relative flex cursor-pointer items-center gap-2 rounded-xl border p-2.5 transition-colors",
                         s.id === currentId
                           ? "border-primary/35 bg-primary/10 text-primary-text"
                           : "border-transparent text-muted-foreground hover:border-border hover:bg-foreground/5 hover:text-foreground",
@@ -1085,7 +1087,7 @@ export function AssistantHomePage() {
                       <button
                         type="button"
                         aria-label="删除会话"
-                        className="opacity-0 transition-opacity hover:text-rose-400 group-hover:opacity-100"
+                        className="opacity-0 transition-opacity hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (s.id === currentId) abortRef.current?.abort();
@@ -1123,7 +1125,7 @@ export function AssistantHomePage() {
                   <div
                     key={s.id}
                     className={cn(
-                      "group flex cursor-pointer items-center gap-2 rounded-xl border p-2 transition-all",
+                      "group flex cursor-pointer items-center gap-2 rounded-xl border p-2 transition-colors",
                       s.id === currentId
                         ? "border-primary/30 bg-primary/10 text-primary-text"
                         : "border-transparent text-muted-foreground hover:border-border hover:bg-foreground/5 hover:text-foreground/80",
@@ -1191,7 +1193,7 @@ export function AssistantHomePage() {
                 aria-selected={showProposition}
                 onClick={() => setHubMode(showProposition ? "auto" : "empty")}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full px-3 py-1 font-serif font-medium transition-all",
+                  "flex items-center gap-1.5 rounded-full px-3 py-1 font-serif font-medium transition-colors",
                   showProposition
                     ? "bg-surface text-ink shadow-xs"
                     : "text-inkSub hover:text-ink",
@@ -1206,7 +1208,7 @@ export function AssistantHomePage() {
                 aria-selected={!showProposition}
                 onClick={() => setHubMode(showProposition ? "works" : "auto")}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full px-3 py-1 font-serif font-medium transition-all",
+                  "flex items-center gap-1.5 rounded-full px-3 py-1 font-serif font-medium transition-colors",
                   !showProposition
                     ? "bg-surface text-foreground shadow-xs"
                     : "text-inkSub hover:text-ink",
@@ -1221,6 +1223,7 @@ export function AssistantHomePage() {
               <Wrench className="h-3.5 w-3.5 text-primary-text" aria-hidden />
               <span className="hidden font-medium sm:inline">模型:</span>
               <select
+                aria-label="对话模型"
                 value={chatModel}
                 onChange={(e) => {
                   setChatModel(e.target.value);
@@ -1287,7 +1290,7 @@ export function AssistantHomePage() {
             <a
               href={`${window.location.pathname.startsWith("/saios") ? "/saios" : ""}/login`}
               title="返回首页"
-              className="flex items-center gap-1.5 rounded-xl border border-border bg-foreground/5 px-3 py-1.5 text-foreground/80 transition-all hover:border-primary/45 hover:text-primary-text"
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-foreground/5 px-3 py-1.5 text-foreground/80 transition-colors hover:border-primary/45 hover:text-primary-text"
             >
               <Home className="h-3.5 w-3.5" aria-hidden /> <span className="hidden lg:inline">返回首页</span>
             </a>
@@ -1305,7 +1308,7 @@ export function AssistantHomePage() {
                     <Sparkles className="h-6 w-6 text-celadon" aria-hidden />
                   </div>
                   <div className="space-y-1.5">
-                    <h1 className="font-serif text-3xl font-medium tracking-wide text-foreground sm:text-[2rem]">
+                    <h1 className="font-serif text-3xl font-medium tracking-wide text-foreground text-balance sm:text-[2rem]">
                       派活给 saiOS
                     </h1>
                     <p className="mx-auto max-w-md text-xs leading-relaxed text-inkSub">
@@ -1316,9 +1319,10 @@ export function AssistantHomePage() {
                 </div>
 
                 {/* 初态命题输入卡 */}
-                <div className="rounded-2xl border border-line bg-surface p-4 text-left shadow-zen transition-all focus-within:border-celadon/60">
+                <div className="rounded-2xl border border-line bg-surface p-4 text-left shadow-zen transition-[border-color] focus-within:border-celadon/60">
                   <textarea
                     rows={3}
+                    aria-label="创作指令"
                     value={input}
                     onChange={(e) => handleInputChange(e.target.value)}
                     onKeyDown={(e) => {
@@ -1354,7 +1358,7 @@ export function AssistantHomePage() {
                       type="button"
                       disabled={!input.trim() || streaming}
                       onClick={() => void send()}
-                      className="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-xs font-medium text-white shadow-xs transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
+                      className="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-xs font-medium text-white shadow-xs transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       <span>生成出卷</span>
                       <Send className="h-3.5 w-3.5" aria-hidden />
@@ -1391,12 +1395,6 @@ export function AssistantHomePage() {
                     {recentWorks.slice(0, 8).map((w) => {
                       const thumb = w.task_type === "comic" ? w.cover_url : w.asset_url;
                       const label = w.task_type === "comic" ? "漫画" : w.task_type === "audio" || w.task_type === "music" ? "音频" : "生图";
-                      const grad = [
-                        "linear-gradient(135deg,#0e7490,#1e3a8a)",
-                        "linear-gradient(135deg,#7c3aed,#0e7490)",
-                        "linear-gradient(135deg,#059669,#1e3a8a)",
-                        "linear-gradient(135deg,#b45309,#7c3aed)",
-                      ][w.task_type.length % 4];
                       return (
                         <Link
                           key={w.id}
@@ -1404,7 +1402,7 @@ export function AssistantHomePage() {
                           title={w.title || w.prompt || "AI 作品"}
                           className="group relative h-20 cursor-pointer overflow-hidden rounded-xl border border-line bg-surface-raised"
                         >
-                          <div className="absolute inset-0" style={{ background: grad }} />
+                          <div className="absolute inset-0 bg-muted" />
                           {thumb && (
                             <img
                               src={thumb}
@@ -1416,7 +1414,7 @@ export function AssistantHomePage() {
                               }}
                             />
                           )}
-                          <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 font-mono text-[9px] text-primary-text backdrop-blur">
+                          <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 font-mono text-[10px] text-primary-text backdrop-blur">
                             {label}
                           </span>
                         </Link>
@@ -1438,7 +1436,7 @@ export function AssistantHomePage() {
                   )}
                 >
                   {m.role === "assistant" && (
-                    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/45 bg-surface-raised text-primary-text shadow-[0_0_25px_rgba(0,242,254,0.25)]">
+                    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/45 bg-surface-raised text-primary-text">
                       <Bot className="h-4 w-4" aria-hidden />
                     </div>
                   )}
@@ -1615,7 +1613,7 @@ export function AssistantHomePage() {
                     <div
                       key={t.name + t.status}
                       className="ai-glass w-full max-w-2xl overflow-hidden rounded-xl border border-primary/35 text-xs"
-                      style={{ borderLeft: "2px solid rgba(0,242,254,.6)" }}
+                      style={{ borderLeft: "2px solid color-mix(in srgb, var(--color-primary) 60%, transparent)" }}
                     >
                       <div className="flex items-center justify-between bg-background/80 px-3.5 py-2.5 font-mono text-primary-text">
                         <div className="flex items-center gap-2">
@@ -1624,7 +1622,7 @@ export function AssistantHomePage() {
                           ) : (
                             <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
                           )}
-                          <span className="font-semibold">🛠️ 已调用工具: {t.name}</span>
+                          <span className="font-semibold">已调用工具: {t.name}</span>
                         </div>
                         <span
                           className={
@@ -1633,7 +1631,7 @@ export function AssistantHomePage() {
                               : "rounded bg-primary/20 px-2 py-0.5 text-[10px] text-primary-text"
                           }
                         >
-                          {t.status === "done" ? "✓ 完成" : "⏳ 执行中…"}
+                          {t.status === "done" ? "✓ 完成" : "执行中…"}
                         </span>
                       </div>
                     </div>
@@ -1679,11 +1677,11 @@ export function AssistantHomePage() {
 
             {error && (
               <p className="mb-2 flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/15 px-3 py-2 text-sm text-rose-300" role="alert">
-                <span>⚠️</span> {error}
+                {error}
               </p>
             )}
 
-            {/* v3 技能芯片行：能力=芯片（点击注入意图模板，回车由 agent 路由到工具） */}
+            {/* v3 技能芯片行（v11 素版合并：原底部提示行并入此行右侧） */}
             <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2">
               <span className="pr-1 text-[10px] uppercase tracking-wider text-muted-foreground">技能</span>
               {SKILL_CHIPS.map((c) => (
@@ -1699,10 +1697,21 @@ export function AssistantHomePage() {
               <button
                 type="button"
                 onClick={() => navigate("/studio")}
-                className="flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] text-primary-text transition-all hover:-translate-y-0.5 hover:bg-primary/20"
+                className="flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] text-primary-text transition-colors hover:bg-primary/20"
               >
-                ⚙️ 引擎直控
+                引擎直控
               </button>
+              <span className="ml-auto hidden items-center gap-3 sm:flex">
+                <span className="font-mono text-[10px] text-muted-foreground/70">Enter 发送 · Shift+Enter 换行</span>
+                {messages.length > 0 && (
+                  <button
+                    onClick={newChat}
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    <Eraser className="h-3.5 w-3.5" aria-hidden /> 新对话
+                  </button>
+                )}
+              </span>
             </div>
 
             <div className="flex items-end gap-2 px-1 pb-1">
@@ -1792,7 +1801,6 @@ export function AssistantHomePage() {
                   </div>
                 )}
 
-                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">💬</span>
                 <Textarea
                   value={input}
                   onChange={(e) => handleInputChange(e.target.value)}
@@ -1800,7 +1808,7 @@ export function AssistantHomePage() {
                   autoFocus={empty}
                   placeholder={
                     empty
-                      ? "输入 / 选择能力 · @ 引用资源"
+                      ? "输入创作需求，如「画一只猫」…"
                       : "继续对话，或换一个想法…（/ 选择能力 · @ 引用资源）"
                   }
                   disabled={streaming}
@@ -1819,14 +1827,14 @@ export function AssistantHomePage() {
                       void send();
                     }
                   }}
-                  className="max-h-40 min-h-[48px] w-full flex-1 resize-none border-none bg-transparent px-2 py-3 pl-9 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                  className="max-h-40 min-h-[48px] w-full flex-1 resize-none border-none bg-transparent px-3 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </div>
               {streaming ? (
                 <button
                   onClick={stop}
                   aria-label="停止"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-foreground/5 text-foreground/80 transition-all hover:bg-rose-500/20 hover:text-rose-300"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-foreground/5 text-foreground/80 transition-colors hover:bg-rose-500/20 hover:text-rose-300"
                 >
                   <Square className="h-4 w-4" aria-hidden />
                 </button>
@@ -1838,7 +1846,7 @@ export function AssistantHomePage() {
                     disabled={!input.trim() || polishing}
                     aria-label="AI 润色"
                     title="AI 润色：把当前输入改写得更清晰具体"
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-300 transition-all hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-35"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary-text transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <Wand2 className={cn("h-4 w-4", polishing && "animate-spin")} aria-hidden />
                   </button>
@@ -1846,34 +1854,15 @@ export function AssistantHomePage() {
                     onClick={() => void send()}
                     disabled={!input.trim()}
                     aria-label="发送"
-                    className="ai-send-btn flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-950 transition-all hover:-translate-y-0.5 hover:shadow-[0_0_25px_rgba(0,242,254,0.5)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    className="ai-send-btn flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     <Send className="h-4 w-4" aria-hidden />
                   </button>
                 </>
               )}
             </div>
-
-            <div className="flex items-center justify-between px-2 pb-1 pt-1.5">
-              <span className="text-[11px] text-muted-foreground">
-                可以让我：生图 🎨 写文 ✍️ 写歌 🎵 语音 🔊 故事 📖
-              </span>
-              <div className="flex items-center gap-3">
-                <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
-                  Enter 发送 · Shift+Enter 换行
-                </span>
-                {messages.length > 0 && (
-                  <button
-                    onClick={newChat}
-                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-                  >
-                    <Eraser className="mr-1 inline h-3.5 w-3.5" aria-hidden /> 新对话
-                  </button>
-                )}
-              </div>
-            </div>
           </div>
-          </div>
+        </div>
         </div>
       </section>
 
@@ -1888,7 +1877,7 @@ export function AssistantHomePage() {
         .ai-glass-input:focus-within{border-color:var(--color-ring)!important;box-shadow:0 0 18px color-mix(in srgb, var(--color-ring) 25%, transparent)}
         .ai-bubble-user{background:color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));border:1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);backdrop-filter:blur(16px);color:var(--color-foreground)}
         .ai-bubble-ai{background:var(--color-surface-raised);border:1px solid var(--color-border);backdrop-filter:blur(16px);color:var(--color-foreground)}
-        .ai-send-btn{background:linear-gradient(135deg,var(--color-primary) 0%,var(--color-primary-hover) 100%);transition:all .3s ease}
+        .ai-send-btn{background:var(--color-primary);transition:opacity .2s ease}
         .ai-input-shell{position:relative;border-radius:18px;background:var(--color-surface);border:1px solid var(--color-border);box-shadow:var(--shadow-soft);transition:border-color .2s ease}
         .ai-input-shell:focus-within{border-color:var(--color-ring)}
         .ai-input-shell > .ai-input-inner{background:transparent;border-radius:17px;padding:2px}

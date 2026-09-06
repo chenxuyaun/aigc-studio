@@ -59,15 +59,17 @@ export function LibraryPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <h1 className="sr-only">资产藏馆</h1>
       {/* 类型 tab 条 */}
       <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border px-4 py-2.5 md:px-6">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
+            aria-current={t.key === active.key ? "page" : undefined}
             onClick={() => navigate(`/library/${t.key}`)}
             className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm transition-colors",
+              "flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm transition-colors",
               t.key === active.key
                 ? "bg-primary/12 font-semibold text-primary-text"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
