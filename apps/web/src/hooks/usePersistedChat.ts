@@ -16,6 +16,10 @@ export interface PersistedChatMessage {
   thinking?: string;
   /** v2 批7：本轮工具调用留痕——回答结束后不再被清空，刷新可回看 */
   toolCalls?: { name: string; status: "running" | "done" }[];
+  /** v3 P1：产物任务 id（MCP 工具 result_data.id），供「去 Studio 精修」rehydrate 深链 */
+  taskId?: string;
+  /** v3 P1：产物任务类型（image/video/audio/music/comic），供深链 engine 映射 */
+  taskType?: string;
 }
 
 /**

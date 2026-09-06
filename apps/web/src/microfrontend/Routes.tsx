@@ -1,6 +1,6 @@
 import { Suspense, lazy } from "react";
 
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-router-dom";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { LoadingState } from "@/components/ui/States";
@@ -14,55 +14,16 @@ const AssistantHomePage = lazy(() =>
 );
 const StudioPage = lazy(() => import("@/pages/StudioPage").then((m) => ({ default: m.StudioPage })));
 const PersonaPage = lazy(() => import("@/pages/PersonaPage").then((m) => ({ default: m.PersonaPage })));
-const InspirationGalleryPage = lazy(() =>
-  import("@/pages/InspirationGalleryPage").then((m) => ({ default: m.InspirationGalleryPage })),
-);
 const DashboardPage = lazy(() =>
   import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })),
 );
 const GrowthPage = lazy(() => import("@/pages/GrowthPage"));
 const TeamPage = lazy(() => import("@/pages/TeamPage"));
-const CommunityPage = lazy(() => import("@/pages/CommunityPage"));
-const ImageGenPage = lazy(() =>
-  import("@/pages/ImageGenPage").then((m) => ({ default: m.ImageGenPage })),
-);
 const RoleplayPage = lazy(() =>
   import("@/pages/RoleplayPage").then((m) => ({ default: m.RoleplayPage })),
 );
-const CharacterCardPage = lazy(() =>
-  import("@/pages/CharacterCardPage").then((m) => ({ default: m.CharacterCardPage })),
-);
-const ComicGenPage = lazy(() =>
-  import("@/pages/ComicGenPage").then((m) => ({ default: m.ComicGenPage })),
-);
-const VideoGenPage = lazy(() =>
-  import("@/pages/VideoGenPage").then((m) => ({ default: m.VideoGenPage })),
-);
-const AudioGenPage = lazy(() =>
-  import("@/pages/AudioGenPage").then((m) => ({ default: m.AudioGenPage })),
-);
-const MusicGenPage = lazy(() =>
-  import("@/pages/MusicGenPage").then((m) => ({ default: m.MusicGenPage })),
-);
-const CreationPage = lazy(() =>
-  import("@/pages/CreationPage").then((m) => ({ default: m.CreationPage })),
-);
-const WorksPage = lazy(() =>
-  import("@/pages/WorksPage").then((m) => ({ default: m.WorksPage })),
-);
-const SharedMusicPage = lazy(() =>
-  import("@/pages/SharedMusicPage").then((m) => ({ default: m.SharedMusicPage })),
-);
-const PromptStudioPage = lazy(() =>
-  import("@/pages/PromptStudioPage").then((m) => ({ default: m.PromptStudioPage })),
-);
-const PromptsPage = lazy(() => import("@/pages/PromptsPage").then((m) => ({ default: m.PromptsPage })));
-const AgentsPage = lazy(() => import("@/pages/AgentsPage").then((m) => ({ default: m.AgentsPage })));
 const AgentChatPage = lazy(() =>
   import("@/pages/AgentChatPage").then((m) => ({ default: m.AgentChatPage })),
-);
-const KnowledgePage = lazy(() =>
-  import("@/pages/KnowledgePage").then((m) => ({ default: m.KnowledgePage })),
 );
 const WorkflowsPage = lazy(() =>
   import("@/pages/WorkflowsPage").then((m) => ({ default: m.WorkflowsPage })),
@@ -70,14 +31,6 @@ const WorkflowsPage = lazy(() =>
 const WorkflowCanvasEditor = lazy(() =>
   import("@/pages/WorkflowCanvasEditor").then((mod) => ({ default: mod.WorkflowCanvasEditor })),
 );
-const PhotographyPage = lazy(() =>
-  import("@/pages/PhotographyPage").then((m) => ({ default: m.PhotographyPage })),
-);
-const PhotographyAlbumPage = lazy(() =>
-  import("@/pages/PhotographyPage").then((m) => ({ default: m.PhotographyAlbumPage })),
-);
-const TasksPage = lazy(() => import("@/pages/TasksPage").then((m) => ({ default: m.TasksPage })));
-const AssetsPage = lazy(() => import("@/pages/AssetsPage").then((m) => ({ default: m.AssetsPage })));
 const ProvidersPage = lazy(() =>
   import("@/pages/ProvidersPage").then((m) => ({ default: m.ProvidersPage })),
 );
@@ -86,24 +39,48 @@ const UsersPage = lazy(() => import("@/pages/UsersPage").then((m) => ({ default:
 const SharedPromptPage = lazy(() =>
   import("@/pages/SharedPromptPage").then((m) => ({ default: m.SharedPromptPage })),
 );
+const SharedMusicPage = lazy(() =>
+  import("@/pages/SharedMusicPage").then((m) => ({ default: m.SharedMusicPage })),
+);
 const StoryStudioPage = lazy(() =>
   import("@/pages/StoryStudioPage").then((m) => ({ default: m.StoryStudioPage })),
 );
 const StoryProjectPage = lazy(() =>
   import("@/pages/StoryProjectPage").then((m) => ({ default: m.StoryProjectPage })),
 );
-const AgentDirectoryPage = lazy(() =>
-  import("@/pages/AgentDirectoryPage").then((m) => ({ default: m.AgentDirectoryPage })),
+const StoryboardPage = lazy(() =>
+  import("@/pages/StoryboardPage").then((m) => ({ default: m.StoryboardPage })),
 );
 const SearchPage = lazy(() =>
   import("@/pages/SearchPage").then((m) => ({ default: m.SearchPage })),
 );
-const AsmrPage = lazy(() =>
-  import("@/pages/AsmrPage").then((m) => ({ default: m.AsmrPage })),
+// v3 融合：资产唯一页（旧 8 个资产页并入为类型 tab）
+const LibraryPage = lazy(() => import("@/pages/LibraryPage").then((m) => ({ default: m.LibraryPage })));
+const PhotographyAlbumPage = lazy(() =>
+  import("@/pages/PhotographyPage").then((m) => ({ default: m.PhotographyAlbumPage })),
 );
 
 function Page({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingState />}>{children}</Suspense>;
+}
+
+/** /photography/:albumId → /library/albums/:albumId（保留动态段参数） */
+function AlbumRedirect() {
+  const { albumId } = useParams<{ albumId: string }>();
+  return <Navigate to={`/library/albums/${albumId}`} replace />;
+}
+
+/** /create/* → /studio?engine=x：透传 location.state（提示词库「用于创作」的 prompt handoff） */
+function StudioRedirect({ engine }: { engine: string }) {
+  const location = useLocation();
+  const state = (location.state ?? {}) as { prompt?: string };
+  return (
+    <Navigate
+      to={`/studio?engine=${engine}`}
+      replace
+      state={state.prompt ? { prompt: state.prompt } : undefined}
+    />
+  );
 }
 
 /** 受保护布局：未登录跳转登录页；已登录渲染 AppShell + 子路由。
@@ -128,55 +105,71 @@ export function AppRoutes() {
       <Route element={<ProtectedLayout />}>
       <Route path="/" element={<Page><AssistantHomePage /></Page>} />
       <Route path="/studio" element={<Page><StudioPage /></Page>} />
-      <Route path="/persona" element={<Page><PersonaPage /></Page>} />
-      <Route path="/inspiration" element={<Page><InspirationGalleryPage /></Page>} />
-      {/* 原工作台（数据统计/功能速览）移至 /dashboard 保留 */}
-      <Route path="/dashboard" element={<Page><DashboardPage /></Page>} />
-        <Route path="/growth" element={<Page><GrowthPage /></Page>} />
-        <Route path="/team" element={<Page><TeamPage /></Page>} />
-        <Route path="/community" element={<Page><CommunityPage /></Page>} />
-      {/* AI 创作已与工作台合一（目标框 + 引擎直控）；/create 直达重定向 */}
+
+      {/* ── v3 五场所 ──
+          1. 对话 /            （AI 助手，能力=芯片）
+          2. 工作台 /studio     （唯一引擎直控页，?engine= 深链）
+          3. 资产 /library/:tab （唯一资产页，旧 8 资产页 = 类型 tab）
+          4. 角色 /roleplay     （唯一沉浸模式）
+          5. 系统 /dashboard    （admin）
+          其余全部 301 归并，页面组件保留复用。 */}
+      <Route path="/library" element={<Navigate to="/library/works" replace />} />
+      <Route path="/library/:tab" element={<Page><LibraryPage /></Page>} />
+      <Route path="/library/albums/:albumId" element={<Page><PhotographyAlbumPage /></Page>} />
+
+      {/* 资产类 → /library */}
+      <Route path="/works" element={<Navigate to="/library/works" replace />} />
+      <Route path="/tasks" element={<Navigate to="/library/tasks" replace />} />
+      <Route path="/assets" element={<Navigate to="/library/assets" replace />} />
+      <Route path="/prompts" element={<Navigate to="/library/prompts" replace />} />
+      <Route path="/knowledge" element={<Navigate to="/library/knowledge" replace />} />
+      <Route path="/asmr" element={<Navigate to="/library/asmr" replace />} />
+      <Route path="/photography" element={<Navigate to="/library/albums" replace />} />
+      <Route path="/photography/:albumId" element={<AlbumRedirect />} />
+      <Route path="/inspiration" element={<Navigate to="/library/inspiration" replace />} />
+      <Route path="/community" element={<Navigate to="/library/community" replace />} />
+      <Route path="/agents" element={<Navigate to="/library/agents" replace />} />
+      <Route path="/agent-directory" element={<Navigate to="/library/agents" replace />} />
+
+      {/* 能力类 → /studio 深链（引擎 tab 直达） */}
       <Route path="/create" element={<Navigate to="/" replace />} />
-      {/* v2：SillyTavern 独立页并入角色扮演页引导卡，旧链接 301 兼容 */}
-        <Route path="/sillytavern" element={<Navigate to="/roleplay" replace />} />
-        <Route path="/roleplay" element={<Page><RoleplayPage /></Page>} />
-        <Route path="/story" element={<Page><StoryStudioPage /></Page>} />
-        <Route path="/agent-directory" element={<Page><AgentDirectoryPage /></Page>} />
-        <Route path="/story/:projectId" element={<Page><StoryProjectPage /></Page>} />
-        <Route path="/search" element={<Page><SearchPage /></Page>} />
-        <Route path="/asmr" element={<Page><AsmrPage /></Page>} />
-        <Route path="/create/image" element={<Page><ImageGenPage /></Page>} />
-        {/* v2：长文写作并入 AI 助手，TextGen 独立页下线 */}
-        <Route path="/create/text" element={<Navigate to="/" replace />} />
-        <Route path="/create/comic" element={<Page><ComicGenPage /></Page>} />
-        <Route path="/create/character-card" element={<Page><CharacterCardPage /></Page>} />
-        {/* v2：上游状态并入数据看板，旧路由 301 兼容 */}
-        <Route path="/settings/upstream" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/create/video" element={<Page><VideoGenPage /></Page>} />
-        <Route path="/create/audio" element={<Page><AudioGenPage /></Page>} />
-        <Route path="/create/music" element={<Page><MusicGenPage /></Page>} />
-        <Route path="/create/studio" element={<Page><CreationPage /></Page>} />
-        <Route path="/works" element={<Page><WorksPage /></Page>} />
-        {/* v2：生成器+优化器合并双 tab 工坊；旧优化器路由 301 兼容 */}
-        <Route path="/create/prompt" element={<Page><PromptStudioPage /></Page>} />
-        <Route path="/create/prompt-optimize" element={<Navigate to="/create/prompt?tab=optimize" replace />} />
-        <Route path="/prompts" element={<Page><PromptsPage /></Page>} />
-        <Route path="/agents" element={<Page><AgentsPage /></Page>} />
-        <Route path="/agents/:id/chat" element={<Page><AgentChatPage /></Page>} />
-        {/* v2：技能库砍独立页（模板并入 Agent 表单），旧路由兼容跳转 */}
-        <Route path="/skills" element={<Navigate to="/agents" replace />} />
-        <Route path="/skills/:id/chat" element={<Navigate to="/agents" replace />} />
-        <Route path="/workflows" element={<Page><WorkflowsPage /></Page>} />
-        <Route path="/knowledge" element={<Page><KnowledgePage /></Page>} />
-        <Route path="/workflows/new" element={<Page><WorkflowCanvasEditor /></Page>} />
-        <Route path="/workflows/:id/edit" element={<Page><WorkflowCanvasEditor /></Page>} />
-        <Route path="/photography" element={<Page><PhotographyPage /></Page>} />
-        <Route path="/photography/:albumId" element={<Page><PhotographyAlbumPage /></Page>} />
-        <Route path="/tasks" element={<Page><TasksPage /></Page>} />
-        <Route path="/assets" element={<Page><AssetsPage /></Page>} />
-        <Route path="/settings/providers" element={<Page><ProvidersPage /></Page>} />
-        <Route path="/settings/users" element={<Page><UsersPage /></Page>} />
-        <Route path="/settings/logs" element={<Page><LogsPage /></Page>} />
+      <Route path="/create/image" element={<StudioRedirect engine="image" />} />
+      <Route path="/create/comic" element={<StudioRedirect engine="image" />} />
+      <Route path="/create/text" element={<Navigate to="/" replace />} />
+      <Route path="/create/audio" element={<StudioRedirect engine="music" />} />
+      <Route path="/create/music" element={<StudioRedirect engine="music" />} />
+      <Route path="/create/video" element={<StudioRedirect engine="video" />} />
+      <Route path="/create/character-card" element={<StudioRedirect engine="story" />} />
+      <Route path="/create/studio" element={<StudioRedirect engine="story" />} />
+      <Route path="/create/prompt" element={<Navigate to="/library/prompts" replace />} />
+      <Route path="/create/prompt-optimize" element={<Navigate to="/library/prompts" replace />} />
+
+      {/* 角色故事 → /roleplay；story/workflow/team 路由保留（从对话产物进入，不再占导航） */}
+      <Route path="/sillytavern" element={<Navigate to="/roleplay" replace />} />
+      <Route path="/persona" element={<Page><PersonaPage /></Page>} />
+      <Route path="/roleplay" element={<Page><RoleplayPage /></Page>} />
+      <Route path="/story" element={<Page><StoryStudioPage /></Page>} />
+      <Route path="/story/:projectId" element={<Page><StoryProjectPage /></Page>} />
+      <Route path="/storyboard/:projectId" element={<Page><StoryboardPage /></Page>} />
+      <Route path="/workflows" element={<Page><WorkflowsPage /></Page>} />
+      <Route path="/workflows/new" element={<Page><WorkflowCanvasEditor /></Page>} />
+      <Route path="/workflows/:id/edit" element={<Page><WorkflowCanvasEditor /></Page>} />
+      <Route path="/team" element={<Page><TeamPage /></Page>} />
+
+      {/* 系统（admin) */}
+      <Route path="/dashboard" element={<Page><DashboardPage /></Page>} />
+      {/* 休眠路由（不占导航，深链可达）：全域搜索落地页 / AI 成长足迹 */}
+      <Route path="/search" element={<Page><SearchPage /></Page>} />
+      <Route path="/growth" element={<Page><GrowthPage /></Page>} />
+      <Route path="/settings/upstream" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/settings/providers" element={<Page><ProvidersPage /></Page>} />
+      <Route path="/settings/users" element={<Page><UsersPage /></Page>} />
+      <Route path="/settings/logs" element={<Page><LogsPage /></Page>} />
+
+      {/* 旧技能库路由兼容 */}
+      <Route path="/skills" element={<Navigate to="/library/agents" replace />} />
+      <Route path="/skills/:id/chat" element={<Navigate to="/library/agents" replace />} />
+      <Route path="/agents/:id/chat" element={<Page><AgentChatPage /></Page>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

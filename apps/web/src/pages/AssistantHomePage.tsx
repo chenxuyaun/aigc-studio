@@ -156,6 +156,8 @@ const AT_SCOPE_LABEL: Record<string, string> = {
 
 export function AssistantHomePage() {
   const navigate = useNavigate();
+  // v11 心流双态：empty=初态命题（专业桌面）/ works=作品回显（展卷）；auto=随会话状态自动
+  const [hubMode, setHubMode] = useState<"auto" | "empty" | "works">("auto");
   const [input, setInput] = useState("");
   const {
     sessions,
@@ -786,6 +788,8 @@ export function AssistantHomePage() {
 
   const empty = messages.length === 0;
   const qCount = messages.filter((x) => x.role === "user").length;
+  // v11 双态：当前展示哪个心流视域（auto 时无消息=初态命题，有消息=作品回显）
+  const showProposition = hubMode === "empty" || (hubMode === "auto" && empty);
 
   const capAccent = (a: string) =>
     a === "purple"
@@ -1186,6 +1190,43 @@ export function AssistantHomePage() {
         {/* 顶部系统栏 */}
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface/70 px-4 text-xs backdrop-blur">
           <div className="flex items-center gap-3">
+            {/* v11 心流双态切换：初态命题 ⇄ 作品回显 */}
+            <div
+              className="hidden items-center rounded-full border border-line bg-background/50 p-0.5 text-[11px] sm:flex"
+              role="tablist"
+              aria-label="心流模式"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={showProposition}
+                onClick={() => setHubMode(showProposition ? "auto" : "empty")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-3 py-1 font-serif font-medium transition-all",
+                  showProposition
+                    ? "bg-surface text-ink shadow-xs"
+                    : "text-inkSub hover:text-ink",
+                )}
+              >
+                <span className={cn("h-1.5 w-1.5 rounded-full", showProposition ? "bg-celadon" : "bg-inkSub/40")} />
+                初态命题
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!showProposition}
+                onClick={() => setHubMode(showProposition ? "works" : "auto")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-3 py-1 font-serif font-medium transition-all",
+                  !showProposition
+                    ? "bg-surface text-foreground shadow-xs"
+                    : "text-inkSub hover:text-ink",
+                )}
+              >
+                <span className={cn("h-1.5 w-1.5 rounded-full", !showProposition ? "bg-celadon animate-pulse" : "bg-inkSub/40")} />
+                作品回显
+              </button>
+            </div>
             {/* v2 P1：模型选择器（catalog 直连，全局生效） */}
             <div className="flex items-center gap-1.5 rounded-xl border border-primary/35 bg-surface-raised px-2.5 py-1 text-primary-text">
               <Wrench className="h-3.5 w-3.5 text-primary-text" aria-hidden />
@@ -1266,40 +1307,71 @@ export function AssistantHomePage() {
 
         {/* 消息滚动区 */}
         <div className="ai-scroll flex-1 space-y-6 overflow-y-auto px-4 pb-40 pt-4 lg:px-6">
-          {empty ? (
+          {showProposition ? (
             <div className="mx-auto max-w-3xl space-y-8 py-4">
-              {/* 欢迎态 */}
-              {/* v3 系统启动横幅 */}
-              <div className="ai-glass flex items-start gap-3 rounded-2xl border border-primary/20 p-4 text-xs text-foreground/80 shadow-lg">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary-text">
-                  <Sparkles className="h-4 w-4" aria-hidden />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-bold text-foreground">AI 调度大厅已就绪</span>
-                    <span className="rounded bg-primary/20 px-2 py-0.5 font-mono text-[10px] text-primary-text">
-                      工具调用 · 已启用
-                    </span>
+{/* 欢迎态（v11 初态命题桌面：东方仲禅·青瓷质感） */}
+              <div className="mx-auto max-w-2xl space-y-5 text-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-line bg-surface shadow-zen">
+                    <Sparkles className="h-6 w-6 text-celadon" aria-hidden />
                   </div>
-                  <p className="leading-relaxed text-muted-foreground">
-                    直接输入想法派活；用 / 调命令、@ 引用资料。我可以帮你生图、写文、配音与创作故事。
-                  </p>
+                  <div className="space-y-1.5">
+                    <h1 className="font-serif text-3xl font-medium tracking-wide text-foreground sm:text-[2rem]">
+                      派活给 saiOS
+                    </h1>
+                    <p className="mx-auto max-w-md text-xs leading-relaxed text-inkSub">
+                      输入一段画面诗境、音乐氛围或剧情走向，由多模态 AI 一键出卷。
+                      可唤 <span className="font-mono text-celadon">/</span> 选能力、<span className="font-mono text-celadon">@</span> 引资源。
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-3 text-center">
-                <div className="inline-flex items-center gap-2 rounded-full border border-primary/35 bg-primary/10 px-3.5 py-1.5 text-xs font-medium text-primary-text">
-                  <Sparkles className="h-4 w-4 animate-pulse" aria-hidden />
-                  {sessions.length > 0
-                    ? <>欢迎回来，上次在聊「{sessions[0] && !sessions[0].name?.startsWith("新") ? sessions[0].name : "新想法"}」</>
-                    : "你好，我是你的 AI 助手"}
+                {/* 初态命题输入卡 */}
+                <div className="rounded-2xl border border-line bg-surface p-4 text-left shadow-zen transition-all focus-within:border-celadon/60">
+                  <textarea
+                    rows={3}
+                    value={input}
+                    onChange={(e) => handleInputChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        setShowAt(false);
+                        setShowCmds(false);
+                        setAtQuery("");
+                        void send();
+                      }
+                    }}
+                    placeholder="用一句话创作：如『宋瓷天青釉色中的江南初春雨景，孤舟蓑笠，远山如黛』…"
+                    className="w-full resize-none bg-transparent text-sm leading-relaxed text-ink placeholder:text-inkSub/50 focus:outline-none"
+                  />
+                  <div className="mt-2 flex items-center justify-between border-t border-line pt-3">
+                    <div className="flex items-center gap-2 text-xs text-inkSub">
+                      <button
+                        type="button"
+                        onClick={() => useSuggestion("帮我画一张：宋瓷天青釉色中的江南初春雨景，孤舟蓑笠，远山如黛")}
+                        className="flex items-center gap-1 transition-colors hover:text-ink"
+                      >
+                        <span className="text-celadon">🖼</span> 画面
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => useSuggestion("帮我写一首歌：初夏的江南细雨，古筝与轻笛")}
+                        className="flex items-center gap-1 transition-colors hover:text-ink"
+                      >
+                        <span className="text-celadon">🎵</span> 音乐
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!input.trim() || streaming}
+                      onClick={() => void send()}
+                      className="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-xs font-medium text-white shadow-xs transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <span>生成出卷</span>
+                      <Send className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </div>
                 </div>
-                <h1 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
-                  今天你想<span className="ai-grad-text">创造什么</span>？
-                </h1>
-                <p className="mx-auto max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                  输入自然语言，驱动生图、写文、写歌、连续漫画与角色演练。
-                </p>
               </div>
 
               {/* 能力卡网格 */}
@@ -1324,12 +1396,12 @@ export function AssistantHomePage() {
                 ))}
               </div>
 
-              {/* 最近作品 */}
+              {/* 最近生成 / 系统状态 */}
               {recentWorks.length > 0 && (
-                <div className="ai-glass space-y-3 rounded-2xl border border-border p-4">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 font-bold text-foreground">
-                      <Sparkles className="h-3.5 w-3.5 text-primary-text" aria-hidden /> 最近生成
+                    <span className="flex items-center gap-1.5 font-serif font-medium text-foreground">
+                      <span className="h-1.5 w-1.5 rounded-full bg-celadon" /> 最近生成
                     </span>
                   </div>
                   <div className="grid grid-cols-4 gap-2.5">
@@ -1347,7 +1419,7 @@ export function AssistantHomePage() {
                           key={w.id}
                           to="/library/works"
                           title={w.title || w.prompt || "AI 作品"}
-                          className="group relative h-20 cursor-pointer overflow-hidden rounded-xl border border-border bg-surface-raised"
+                          className="group relative h-20 cursor-pointer overflow-hidden rounded-xl border border-line bg-surface-raised"
                         >
                           <div className="absolute inset-0" style={{ background: grad }} />
                           {thumb && (
@@ -1474,17 +1546,17 @@ export function AssistantHomePage() {
                           <img
                             src={m.image}
                             alt={m.media === "comic" ? "AI 漫画" : "AI 生成"}
-                            className="max-h-96 w-full rounded-xl border border-border object-cover"
+                            className="max-h-96 w-full rounded-xl border border-line border-b-4 border-b-celadon/30 object-cover"
                           />
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-foreground/80">
-                              {m.media === "comic" ? "🎴 AI 漫画" : "🖼️ AI 生成"}
+                            <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] font-serif text-ink">
+                              {m.media === "comic" ? "🎴 AI 漫画" : "🖼 AI 生成 · 题跋钤印"}
                             </span>
                             <a
                               href={m.image}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary-text hover:bg-primary/20"
+                              className="rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] text-inkSub transition-colors hover:bg-foreground/10 hover:text-ink"
                             >
                               ⬇ 下载 / 查看
                             </a>
@@ -1504,9 +1576,9 @@ export function AssistantHomePage() {
                                 onClick={() =>
                                   navigate(`/studio?rehydrate=${m.taskId}`)
                                 }
-                                className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-[11px] text-info hover:bg-indigo-500/25"
+                                className="rounded-full bg-celadon/10 px-2 py-0.5 text-[11px] text-celadon hover:bg-celadon/20"
                               >
-                                🎛️ 去 Studio 精修
+                                ⛩ 入工坊深加工
                               </button>
                             )}
                             {m.media === "image" && m.image && (
@@ -1514,7 +1586,7 @@ export function AssistantHomePage() {
                                 onClick={() =>
                                   navigate("/library/works")
                                 }
-                                className="rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                                className="rounded-full bg-foreground/5 px-2 py-0.5 text-[11px] text-inkSub hover:bg-foreground/10 hover:text-ink"
                               >
                                 📁 作品库
                               </button>

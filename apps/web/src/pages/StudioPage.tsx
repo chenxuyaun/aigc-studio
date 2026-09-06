@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Activity,
   ArrowRight,
@@ -47,19 +47,19 @@ const DOMAINS: { key: Domain; label: string; icon: typeof ImageIcon; hint: strin
   { key: "workflow", label: "节点拓扑", icon: Workflow, hint: "工作流编排", legacy: "/workflows" },
 ];
 
-/** 角色&Story / Workflow 域的子能力导航（迁移期：直达完整版专页）。 */
+/** 角色&Story / Workflow 域的子能力导航（v3：直达最终目标，免 301 中转）。 */
 const DOMAIN_LINKS: Partial<Record<Domain, { label: string; desc: string; to: string }[]>> = {
   story: [
-    { label: "角色捏卡", desc: "世界书 · 头像 · SillyTavern 导出", to: "/create/character-card" },
+    { label: "角色捏卡", desc: "世界书 · 头像 · SillyTavern 导出", to: "/studio?engine=story" },
     { label: "角色扮演", desc: "长期记忆陪伴对话", to: "/roleplay" },
     { label: "故事工作室", desc: "AI 剧本工坊连载创作", to: "/story" },
-    { label: "SillyTavern", desc: "专业前端直连管理", to: "/sillytavern" },
+    { label: "SillyTavern", desc: "专业前端直连管理", to: "/roleplay" },
   ],
   workflow: [
     { label: "节点编排", desc: "xyflow 可视化工作流画布", to: "/workflows" },
-    { label: "Agent 库", desc: "智能体配置与技能绑定", to: "/agents" },
-    { label: "MCP 技能", desc: "工具能力清单与调试", to: "/skills" },
-    { label: "AI 导演", desc: "选角建组群聊共创", to: "/create/studio" },
+    { label: "Agent 库", desc: "智能体配置与技能绑定", to: "/library/agents" },
+    { label: "MCP 技能", desc: "工具能力清单与调试", to: "/library/agents" },
+    { label: "AI 导演", desc: "选角建组群聊共创", to: "/studio?engine=story" },
   ],
 };
 
@@ -219,17 +219,37 @@ export function StudioPage() {
 
   // ── 反向克隆 Re-hydrate：/studio?rehydrate=<taskId> 带参回填再创作 ──
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   useEffect(() => {
-    // 灵感画廊「在 Studio 打开」：?prompt=<文本> 直接回填图像域
-    const direct = searchParams.get("prompt");
-    if (direct) {
-      setDomain("image");
-      setPrompt(direct);
-      setRehydrated("已从灵感画廊带入 prompt，可编辑后渲染");
+    const engine = searchParams.get("engine");
+    // 提示词库「用于创作」handoff：/create/* 归并时经 location.state 透传（避免超长 query）。
+    // 必须放在 engine 清参分支之前：engine 分支在无 ?prompt 时会清空 query 提前 return，吞掉 handoff。
+    const handed = (location.state ?? {}) as { prompt?: string };
+    if (handed.prompt) {
+      setDomain(engine === "music" || engine === "video" || engine === "story" ? (engine as Domain) : "image");
+      setPrompt(handed.prompt);
+      setRehydrated("已带入提示词库模板，可编辑后渲染");
       setSearchParams({}, { replace: true });
       return;
     }
-    const rid = searchParams.get("rehydrate");
+    // v3 深链：/studio?engine=<domain> 直达引擎 tab（旧生成页 301 落点）
+    if (engine && DOMAINS.some((d) => d.key === engine)) {
+      setDomain(engine as Domain);
+      if (!searchParams.get("prompt") && !searchParams.get("rehydrate")) {
+        setSearchParams({}, { replace: true });
+        return;
+      }
+    }
+    // 灵感画廊「在 Studio 打开」：?prompt=<文本> 回填（有 engine 深链时尊重 engine 域）
+    const direct = searchParams.get("prompt");
+    if (direct) {
+      setDomain(engine === "music" || engine === "video" || engine === "story" ? (engine as Domain) : "image");
+      setPrompt(direct);
+      setRehydrated("已带入 prompt，可编辑后渲染");
+      setSearchParams({}, { replace: true });
+      return;
+    }
+   const rid = searchParams.get("rehydrate");
     if (!rid) return;
     void (async () => {
       try {
@@ -356,7 +376,7 @@ export function StudioPage() {
   const accentVar = { color: "var(--st-accent)" };
 
   return (
-    <div className="st-root min-h-screen bg-[#050811] text-slate-200" data-theme={theme}>
+    <div className="st-root min-h-screen bg-background text-foreground" data-theme={theme}>
       {/* ═══ 顶栏 ═══ */}
       <header className="st-panel relative z-30 mx-3 mt-3 flex items-center justify-between px-4 py-2.5">
         <div className="flex items-center gap-3">
@@ -371,15 +391,15 @@ export function StudioPage() {
             ◈
           </span>
           <div>
-            <p className="font-mono text-sm font-bold tracking-widest text-white">SAIOS STUDIO</p>
-            <p className="text-[10px] text-slate-500">统一创作驾驶舱 · 五域引擎</p>
+            <p className="font-mono text-sm font-bold tracking-widest text-foreground">SAIOS STUDIO</p>
+            <p className="text-[10px] text-muted-foreground">统一创作驾驶舱 · 五域引擎</p>
           </div>
         </div>
         <div className="flex items-center gap-4 font-mono text-[11px]">
-          <span className="hidden items-center gap-1.5 text-slate-500 md:flex">
+          <span className="hidden items-center gap-1.5 text-muted-foreground md:flex">
             <Activity className="h-3.5 w-3.5" style={accentVar} aria-hidden />
             引擎:
-            <strong className="max-w-[180px] truncate text-slate-200">
+            <strong className="max-w-[180px] truncate text-foreground">
               {shownKey === "tts"
                 ? voice
                 : shownKey === "song"
@@ -389,7 +409,7 @@ export function StudioPage() {
                     : model || "—"}
             </strong>
           </span>
-          <span className="hidden items-center gap-1.5 text-slate-500 lg:flex">
+          <span className="hidden items-center gap-1.5 text-muted-foreground lg:flex">
             <Radio className="h-3.5 w-3.5" style={accentVar} aria-hidden />
             {task.busy ? (
               <span style={accentVar}>渲染中 {task.progress}%</span>
@@ -403,12 +423,12 @@ export function StudioPage() {
           <div className="relative">
             <button
               onClick={() => setThemeOpen((v) => !v)}
-              className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors hover:bg-white/5"
+              className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors hover:bg-foreground/5"
               style={{ borderColor: "var(--st-border)" }}
             >
               <Palette className="h-3.5 w-3.5" style={accentVar} aria-hidden />
               {THEMES.find((t) => t.key === theme)?.label}
-              <ChevronDown className="h-3 w-3 text-slate-500" aria-hidden />
+              <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden />
             </button>
             {themeOpen && (
               <div className="st-panel absolute right-0 top-full z-30 mt-1.5 w-44 overflow-hidden p-1">
@@ -417,11 +437,11 @@ export function StudioPage() {
                     key={t.key}
                     onClick={() => pickTheme(t.key)}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-300 hover:bg-white/5",
+                      "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-foreground/80 hover:bg-foreground/5",
                       theme === t.key && "st-chip-active border",
                     )}
                   >
-                    <span className="h-3 w-3 rounded-full border border-white/20" style={{ background: t.dot }} />
+                    <span className="h-3 w-3 rounded-full border border-border-strong" style={{ background: t.dot }} />
                     {t.label}
                     {theme === t.key && <Check className="ml-auto h-3.5 w-3.5" aria-hidden />}
                   </button>
@@ -440,7 +460,7 @@ export function StudioPage() {
             style={{ borderColor: "var(--st-border)", background: "rgba(var(--st-accent-rgb), .12)", color: "var(--st-accent)" }}
           >
             {rehydrated}
-            <button onClick={() => setRehydrated("")} className="ml-3 text-slate-500 hover:text-slate-300" aria-label="关闭">
+            <button onClick={() => setRehydrated("")} className="ml-3 text-muted-foreground hover:text-foreground/80" aria-label="关闭">
               ✕
             </button>
           </div>
@@ -456,12 +476,12 @@ export function StudioPage() {
                 onClick={() => setDomain(d.key)}
                 className={cn(
                   "flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-all",
-                  domain === d.key ? "st-chip-active border" : "border-transparent text-slate-400 hover:bg-white/5",
+                  domain === d.key ? "st-chip-active border" : "border-transparent text-muted-foreground hover:bg-foreground/5",
                 )}
               >
                 <d.icon className="h-4 w-4" aria-hidden />
                 {d.label}
-                <span className="ml-auto text-[9px] font-normal text-slate-600">{d.hint}</span>
+                <span className="ml-auto text-[9px] font-normal text-muted-foreground/70">{d.hint}</span>
               </button>
             ))}
           </nav>
@@ -470,7 +490,7 @@ export function StudioPage() {
             <div className="space-y-4">
               {/* 模型选择 */}
               <div>
-                <p className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                <p className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   <Layers className="h-3 w-3" aria-hidden /> 引擎模型
                 </p>
                 <select
@@ -479,7 +499,7 @@ export function StudioPage() {
                     setModel(e.target.value);
                     localStorage.setItem("saios-studio-image-model", e.target.value);
                   }}
-                  className="w-full rounded-xl border bg-slate-950/70 px-3 py-2 font-mono text-xs text-white outline-none [&>option]:bg-slate-900"
+                  className="w-full rounded-xl border bg-surface/70 px-3 py-2 font-mono text-xs text-foreground outline-none [&>option]:bg-surface-raised"
                   style={{ borderColor: "var(--st-border)" }}
                 >
                   {modelList.length === 0 && <option value={model}>{model || "加载中…"}</option>}
@@ -493,9 +513,9 @@ export function StudioPage() {
 
               {/* GPT-Image2 风格预设 */}
               <div>
-                <p className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                <p className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   <Sparkles className="h-3 w-3" aria-hidden /> 风格预设
-                  <span className="normal-case font-normal text-slate-600">GPT-Image2 风格库</span>
+                  <span className="normal-case font-normal text-muted-foreground/70">GPT-Image2 风格库</span>
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {STYLE_PRESETS.map((s) => (
@@ -504,7 +524,7 @@ export function StudioPage() {
                       onClick={() => toggleStyle(s.tag)}
                       title={s.suffix}
                       className={cn(
-                        "rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] text-slate-400 transition-all hover:border-white/25",
+                        "rounded-full border border-border bg-foreground/5 px-2.5 py-1 text-[10px] text-muted-foreground transition-all hover:border-border-strong",
                         activeStyles.includes(s.tag) && "st-chip-active border",
                       )}
                     >
@@ -516,28 +536,28 @@ export function StudioPage() {
 
               {/* Prompt */}
               <div>
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Prompt</p>
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prompt</p>
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   rows={5}
                   placeholder="描述你想生成的画面…可组合右侧风格预设"
-                  className="w-full resize-none rounded-xl border bg-slate-950/70 px-3 py-2.5 text-xs leading-relaxed text-slate-100 outline-none placeholder:text-slate-600 focus:border-[rgba(var(--st-accent-rgb),.6)]"
+                  className="w-full resize-none rounded-xl border bg-surface/70 px-3 py-2.5 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-[rgba(var(--st-accent-rgb),.6)]"
                   style={{ borderColor: "var(--st-border)" }}
                 />
-                <p className="mt-1 text-right font-mono text-[10px] text-slate-600">{prompt.length} chars</p>
+                <p className="mt-1 text-right font-mono text-[10px] text-muted-foreground/70">{prompt.length} chars</p>
               </div>
 
               {/* 尺寸 */}
               <div>
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">画幅</p>
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">画幅</p>
                 <div className="grid grid-cols-4 gap-1.5">
                   {RATIOS.map((r) => (
                     <button
                       key={r.label}
                       onClick={() => setRatio(r)}
                       className={cn(
-                        "rounded-lg border border-white/10 py-1.5 font-mono text-[10px] text-slate-400 transition-all",
+                        "rounded-lg border border-border py-1.5 font-mono text-[10px] text-muted-foreground transition-all",
                         ratio.label === r.label && "st-chip-active border",
                       )}
                     >
@@ -561,7 +581,7 @@ export function StudioPage() {
                 <button
                   onClick={renderComic}
                   disabled={!prompt.trim() || comicTask.busy}
-                  className="rounded-xl border py-2.5 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/5 disabled:opacity-40"
+                  className="rounded-xl border py-2.5 text-xs font-semibold text-foreground/80 transition-colors hover:bg-foreground/5 disabled:opacity-40"
                   style={{ borderColor: "var(--st-border)" }}
                 >
                   {comicTask.busy ? "分镜中…" : "生成漫画"}
@@ -578,7 +598,7 @@ export function StudioPage() {
                     key={m}
                     onClick={() => setAudioMode(m)}
                     className={cn(
-                      "rounded-lg border border-white/10 py-2 text-[11px] font-semibold text-slate-400 transition-all",
+                      "rounded-lg border border-border py-2 text-[11px] font-semibold text-muted-foreground transition-all",
                       audioMode === m && "st-chip-active border",
                     )}
                   >
@@ -590,13 +610,13 @@ export function StudioPage() {
               {audioMode === "tts" ? (
                 <>
                   <div>
-                    <p className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    <p className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                       <Mic className="h-3 w-3" aria-hidden /> 发音人（Edge-TTS）
                     </p>
                     <select
                       value={voice}
                       onChange={(e) => setVoice(e.target.value)}
-                      className="w-full rounded-xl border bg-slate-950/70 px-3 py-2 text-xs text-white outline-none [&>option]:bg-slate-900"
+                      className="w-full rounded-xl border bg-surface/70 px-3 py-2 text-xs text-foreground outline-none [&>option]:bg-surface-raised"
                       style={{ borderColor: "var(--st-border)" }}
                     >
                       {VOICES.map((v) => (
@@ -607,22 +627,22 @@ export function StudioPage() {
                     </select>
                   </div>
                   <div>
-                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                      朗读文本 <span className="font-mono normal-case text-slate-600">{ttsText.length}/2000</span>
+                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      朗读文本 <span className="font-mono normal-case text-muted-foreground/70">{ttsText.length}/2000</span>
                     </p>
                     <textarea
                       value={ttsText}
                       onChange={(e) => setTtsText(e.target.value.slice(0, 2000))}
                       rows={6}
                       placeholder="输入要合成为语音的文字…"
-                      className="w-full resize-none rounded-xl border bg-slate-950/70 px-3 py-2.5 text-xs leading-relaxed text-slate-100 outline-none placeholder:text-slate-600"
+                      className="w-full resize-none rounded-xl border bg-surface/70 px-3 py-2.5 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
                       style={{ borderColor: "var(--st-border)" }}
                     />
                   </div>
                   <div>
-                    <p className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    <p className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                       <span>语速</span>
-                      <span className="font-mono text-slate-300">{speed.toFixed(1)}×</span>
+                      <span className="font-mono text-foreground/80">{speed.toFixed(1)}×</span>
                     </p>
                     <input
                       type="range"
@@ -648,20 +668,20 @@ export function StudioPage() {
               ) : (
                 <>
                   <div>
-                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">音乐描述</p>
+                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">音乐描述</p>
                     <textarea
                       value={songDesc}
                       onChange={(e) => setSongDesc(e.target.value.slice(0, 1000))}
                       rows={5}
                       placeholder="描述风格/情绪/乐器…例：轻快的夏日民谣，木吉他为主，海边日落氛围"
-                      className="w-full resize-none rounded-xl border bg-slate-950/70 px-3 py-2.5 text-xs leading-relaxed text-slate-100 outline-none placeholder:text-slate-600"
+                      className="w-full resize-none rounded-xl border bg-surface/70 px-3 py-2.5 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
                       style={{ borderColor: "var(--st-border)" }}
                     />
                   </div>
                   <div>
-                    <p className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    <p className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                       <span>时长</span>
-                      <span className="font-mono text-slate-300">{duration}s</span>
+                      <span className="font-mono text-foreground/80">{duration}s</span>
                     </p>
                     <input
                       type="range"
@@ -690,20 +710,20 @@ export function StudioPage() {
             /* ═══ 视频域参数舱 ═══ */
             <div className="space-y-4">
               <div>
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">画面描述</p>
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">画面描述</p>
                 <textarea
                   value={videoDesc}
                   onChange={(e) => setVideoDesc(e.target.value.slice(0, 2000))}
                   rows={6}
                   placeholder="描述视频画面与镜头运动…例：无人机掠过霓虹雨夜的都市天际线，缓慢推进"
-                  className="w-full resize-none rounded-xl border bg-slate-950/70 px-3 py-2.5 text-xs leading-relaxed text-slate-100 outline-none placeholder:text-slate-600"
+                  className="w-full resize-none rounded-xl border bg-surface/70 px-3 py-2.5 text-xs leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
                   style={{ borderColor: "var(--st-border)" }}
                 />
               </div>
               <div>
-                <p className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                <p className="mb-1 flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   <span>时长</span>
-                  <span className="font-mono text-slate-300">{videoDuration}s</span>
+                  <span className="font-mono text-foreground/80">{videoDuration}s</span>
                 </p>
                 <input
                   type="range"
@@ -715,7 +735,7 @@ export function StudioPage() {
                   className="w-full"
                   style={{ accentColor: "var(--st-accent)" }}
                 />
-                <p className="mt-2 rounded-lg border border-dashed border-white/10 px-3 py-2 text-[10px] leading-relaxed text-slate-500">
+                <p className="mt-2 rounded-lg border border-dashed border-border px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
                   提示：视频引擎需在模型中心配置 video 槽位；未配置时提交会明确报错，不会假装成功。
                 </p>
               </div>
@@ -736,7 +756,7 @@ export function StudioPage() {
                 <Link
                   key={l.to}
                   to={l.to}
-                  className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 transition-all hover:border-[rgba(var(--st-accent-rgb),.5)] hover:bg-white/[0.06]"
+                  className="group flex items-center gap-3 rounded-xl border border-border bg-foreground/5 p-3 transition-all hover:border-[rgba(var(--st-accent-rgb),.5)] hover:bg-foreground/10"
                 >
                   <span
                     className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border"
@@ -745,29 +765,29 @@ export function StudioPage() {
                     {domain === "story" ? <UserRound className="h-4 w-4" aria-hidden /> : <Workflow className="h-4 w-4" aria-hidden />}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-semibold text-slate-200">{l.label}</span>
-                    <span className="block truncate text-[10px] text-slate-500">{l.desc}</span>
+                    <span className="block text-xs font-semibold text-foreground">{l.label}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">{l.desc}</span>
                   </span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-slate-600 transition-transform group-hover:translate-x-0.5" style={{ color: "var(--st-accent)" }} aria-hidden />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" style={{ color: "var(--st-accent)" }} aria-hidden />
                 </Link>
               ))}
             </div>
           ) : (
             /* 兜底占位（不应到达） */
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/10 p-6 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border p-6 text-center">
               {(() => {
                 const d = DOMAINS.find((x) => x.key === domain)!;
                 return (
                   <>
                     <d.icon className="h-8 w-8 opacity-40" style={accentVar} aria-hidden />
-                    <p className="text-xs font-semibold text-slate-300">{d.label}引擎</p>
-                    <p className="text-[11px] leading-relaxed text-slate-500">
+                    <p className="text-xs font-semibold text-foreground/80">{d.label}引擎</p>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
                       该域正在向统一驾驶舱迁移。完整功能当前在专页可用：
                     </p>
                     {d.legacy && (
                       <Link
                         to={d.legacy}
-                        className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-white/5"
+                        className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-foreground/5"
                         style={{ borderColor: "var(--st-border)", color: "var(--st-accent)" }}
                       >
                         前往{d.label}完整版 →
@@ -783,14 +803,14 @@ export function StudioPage() {
         {/* ═══ 中央视口 ═══ */}
         <main className="st-panel st-hud-corner relative flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* 移动端域切换 */}
-          <div className="flex gap-1.5 overflow-x-auto border-b border-white/5 p-2 lg:hidden">
+          <div className="flex gap-1.5 overflow-x-auto border-b border-border/60 p-2 lg:hidden">
             {DOMAINS.map((d) => (
               <button
                 key={d.key}
                 onClick={() => setDomain(d.key)}
                 className={cn(
-                  "shrink-0 rounded-full border border-white/10 px-3 py-1 text-[11px]",
-                  domain === d.key ? "st-chip-active border" : "text-slate-400",
+                  "shrink-0 rounded-full border border-border px-3 py-1 text-[11px]",
+                  domain === d.key ? "st-chip-active border" : "text-muted-foreground",
                 )}
               >
                 {d.label}
@@ -811,7 +831,7 @@ export function StudioPage() {
                 <p className="font-mono text-sm font-bold tracking-widest" style={accentVar}>
                   STUDIO VIEWPORT
                 </p>
-                <p className="mt-1.5 max-w-sm text-[11px] leading-relaxed text-slate-500">
+                <p className="mt-1.5 max-w-sm text-[11px] leading-relaxed text-muted-foreground">
                   {domain === "music"
                     ? "左侧选择「语音合成」或「音乐生成」，输入内容后开始创作。产出将在视口内以实时频谱回放。"
                     : "在左侧参数舱输入 Prompt 并选择风格预设，点击「渲染图像」开始创作。移动端请先在上方选择域。"}
@@ -839,7 +859,7 @@ export function StudioPage() {
                   className="max-h-[62vh] rounded-xl border shadow-2xl"
                   style={{ borderColor: "var(--st-border)" }}
                 />
-                <figcaption className="flex items-center gap-2 font-mono text-[10px] text-slate-500">
+                <figcaption className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
                   <span style={accentVar}>{task.result.provider}</span>
                   <span>·</span>
                   <span>{videoDuration}s</span>
@@ -856,7 +876,7 @@ export function StudioPage() {
                   className="max-h-[62vh] rounded-xl border object-contain shadow-2xl"
                   style={{ borderColor: "var(--st-border)" }}
                 />
-                <figcaption className="flex items-center gap-2 font-mono text-[10px] text-slate-500">
+                <figcaption className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
                   <span style={accentVar}>{task.result.provider}</span>
                   <span>·</span>
                   <span>{ratio.label}</span>
@@ -874,10 +894,10 @@ export function StudioPage() {
             {task.error && !task.busy && (
               <div className="max-w-md rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 text-center">
                 <p className="text-xs font-semibold text-rose-300">渲染失败</p>
-                <p className="mt-1 break-all text-[11px] leading-relaxed text-slate-400">{task.error}</p>
+                <p className="mt-1 break-all text-[11px] leading-relaxed text-muted-foreground">{task.error}</p>
                 <button
                   onClick={retryShown}
-                  className="mt-3 inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-white/5"
+                  className="mt-3 inline-flex items-center gap-1 rounded-lg border border-border-strong px-3 py-1.5 text-[11px] text-foreground/80 hover:bg-foreground/5"
                 >
                   <RefreshCw className="h-3 w-3" aria-hidden /> 重试
                 </button>
@@ -886,26 +906,26 @@ export function StudioPage() {
 
             {/* HUD 渲染覆盖层（真实进度驱动） */}
             {task.busy && (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 overflow-hidden bg-slate-950/80 backdrop-blur-sm">
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 overflow-hidden bg-background/80 backdrop-blur-sm">
                 <div className="st-scan-beam" aria-hidden />
                 <p className="z-10 font-mono text-4xl font-black tabular-nums" style={accentVar}>
                   {Math.round(task.progress)}%
                 </p>
-                <div className="z-10 h-1.5 w-64 overflow-hidden rounded-full bg-white/10">
+                <div className="z-10 h-1.5 w-64 overflow-hidden rounded-full bg-foreground/10">
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${task.progress}%`, background: "var(--st-accent)" }}
                   />
                 </div>
-                <p className="z-10 font-mono text-[11px] text-slate-400">{hudStep}</p>
-                <p className="z-10 font-mono text-[10px] text-slate-600">NODE GPU-01 · SAIOS RENDER FARM</p>
+                <p className="z-10 font-mono text-[11px] text-muted-foreground">{hudStep}</p>
+                <p className="z-10 font-mono text-[10px] text-muted-foreground/70">NODE GPU-01 · SAIOS RENDER FARM</p>
               </div>
             )}
           </div>
 
           {/* ═══ 底部动作条 ═══ */}
-          <footer className="flex items-center justify-between gap-2 border-t border-white/5 px-4 py-2.5">
-            <div className="flex min-w-0 items-center gap-2 font-mono text-[10px] text-slate-600">
+          <footer className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2 font-mono text-[10px] text-muted-foreground/70">
               <span className="truncate">{(() => {
                 const t = activePrompt();
                 return t ? `${t.slice(0, 48)}${t.length > 48 ? "…" : ""}` : "IDLE";
@@ -916,14 +936,14 @@ export function StudioPage() {
                 onClick={copyPrompt}
                 disabled={!activePrompt()}
                 title="复制 Prompt"
-                className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-slate-400 transition-colors hover:bg-white/5 disabled:opacity-35"
+                className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-foreground/5 disabled:opacity-35"
               >
                 <Copy className="h-3 w-3" aria-hidden /> 复制 Prompt
               </button>
               <button
                 onClick={pushToAssistant}
                 title="推送调度大厅继续对话式创作"
-                className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors hover:bg-white/5"
+                className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors hover:bg-foreground/5"
                 style={{ borderColor: "var(--st-border)", color: "var(--st-accent)" }}
               >
                 <Sparkles className="h-3 w-3" aria-hidden /> 推送助手
@@ -937,7 +957,7 @@ export function StudioPage() {
                 target={isAudioResult ? undefined : "_blank"}
                 rel="noopener"
                 className={cn(
-                  "flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-slate-400 transition-colors hover:bg-white/5",
+                  "flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-foreground/5",
                   !task.result?.assetUrl && "pointer-events-none opacity-35",
                 )}
               >
@@ -1038,7 +1058,7 @@ function AudioStage({ src, accentRgb, title }: { src: string; accentRgb: string;
 
   return (
     <div className="w-full max-w-xl">
-      <p className="mb-3 flex items-center justify-between font-mono text-[10px] text-slate-500">
+      <p className="mb-3 flex items-center justify-between font-mono text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <Music className="h-3.5 w-3.5" style={{ color: `rgb(${accentRgb})` }} aria-hidden />
           {title}
@@ -1058,7 +1078,7 @@ function AudioStage({ src, accentRgb, title }: { src: string; accentRgb: string;
           {playing ? <Pause className="h-5 w-5" aria-hidden /> : <Play className="ml-0.5 h-5 w-5" aria-hidden />}
         </button>
         <div
-          className="group relative h-2 flex-1 cursor-pointer rounded-full bg-white/10"
+          className="group relative h-2 flex-1 cursor-pointer rounded-full bg-foreground/10"
           onClick={(e) => {
             const el = audioRef.current;
             if (!el || !time.dur) return;
